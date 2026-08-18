@@ -95,7 +95,7 @@ export async function main() {
       rpc(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'glosomata', version: '0.1.0-alpha.1' },
+        serverInfo: { name: 'glosomata', version: '0.1.0-alpha.2' },
       });
     } else if (method === 'notifications/initialized') {
       // notificación: sin respuesta
