@@ -46,6 +46,49 @@ test('regexSegura: dialecto v1 rechaza constructos peligrosos', () => {
   assert.ok(dt < 100, `match tardó ${dt}ms`);
 });
 
+test('regexSegura: ")" en clase de caracteres no ciega el escáner', () => {
+  // bypass reproducido ronda 3: la ')' dentro de [)x] confundía el conteo
+  // de profundidad y el grupo cuantificado quedaba sin inspección
+  assert.throws(() => regexSegura('([)x]|(xx))*'), /template_invalid/);
+  assert.throws(() => regexSegura('([)x]|(xx))+'), /template_invalid/);
+});
+
+test('regexSegura: paréntesis escapados no rompen el pareo de grupos', () => {
+  assert.throws(() => regexSegura('(\\)|a|aa)*'), /template_invalid/);
+  // escapes literales fuera de grupos cuantificados siguen siendo válidos
+  assert.doesNotThrow(() => regexSegura('dime \\(sí\\)'));
+  assert.doesNotThrow(() => regexSegura('\\(ok\\)'));
+});
+
+test('regexSegura: desbalanceados → fail-closed', () => {
+  assert.throws(() => regexSegura('(abc'), /template_invalid/);
+  assert.throws(() => regexSegura('abc)'), /template_invalid/);
+  assert.throws(() => regexSegura('[a-z'), /template_invalid/);
+});
+
+test('regexSegura: cadenas de cuantificadores sin grupo → fail-closed', () => {
+  // ronda adversarial 4: 'a*a*a*b' aceptado → 3s con 40 chars de texto
+  assert.throws(() => regexSegura('a*a*a*b'), /template_invalid/);
+  assert.throws(() => regexSegura('.*.*b'), /template_invalid/);
+  assert.throws(() => regexSegura('a?a?a?b'), /template_invalid/);
+  assert.throws(() => regexSegura('a{0,9}a{0,9}b'), /template_invalid/);
+});
+
+test('regexSegura: un cuantificador por rama sigue siendo válido', () => {
+  assert.doesNotThrow(() => regexSegura('a*|b*'));
+  assert.doesNotThrow(() => regexSegura('(ab)*'));
+  assert.doesNotThrow(() => regexSegura('[a-z ]{1,40}'));
+});
+
+test('regexSegura: interior tokenizado no rechaza clases ni escapes', () => {
+  assert.doesNotThrow(() => regexSegura('([?!])*'));
+  assert.doesNotThrow(() => regexSegura('(\\?)*'));
+  assert.doesNotThrow(() => regexSegura('([a|b])*'));
+  assert.doesNotThrow(() => regexSegura('(?:a)*'));
+  // el salto de '(?:' exige '(' previo: un '?' real no se contrabandea
+  assert.throws(() => regexSegura('(a?:)*'), /template_invalid/);
+});
+
 test('validarTurno: función pura, plantilla confirmar', () => {
   const confirmar = { id: 'confirmar', kind: 'structured', proposed_by: 'builtin',
     turns: [{ expectation: 'exact', pattern: 'sí|no|si' }] };

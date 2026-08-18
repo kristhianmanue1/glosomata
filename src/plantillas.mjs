@@ -83,25 +83,73 @@ export function validarPlantilla(t) {
 // cuantificadores dobles, cuantificador sobre grupo con cuantificador
 // dentro, NI alternancia bajo cuantificador de grupo (con *, +, ? o {n,m}:
 // fuente de retroceso exponencial — hallazgo reproducido ronda 3).
+// Tokenizador de una pasada: escapes y clases se respetan al parear
+// grupos (el conteo hacia atrás sin tokenizar se cegaba con ')' en
+// [...] o '\)' — bypass '[)x]|(xx)' reproducido: 2s con 40 chars), y
+// ≥2 cuantificadores por rama fuera de clases se rechazan (cadenas tipo
+// 'a*a*b' retroceden catastróficamente — ronda adversarial 4: 3s con
+// 40 chars y 17 de patrón). Regla conservadora: sin análisis de
+// solapamiento de átomos; la precisión fina es NFA de v2.
 function patronPeligroso(pattern) {
   if (/\\[1-9]|\(\?[<=!]|\{\s*\d*\s*,\s*\}/.test(pattern)) return true;
   if (/[*+]\s*[*+]/.test(pattern)) return true;
+  const pila = [];
+  let enClase = false;
+  let cuantif = 0;
+  let ramaMax = 0;
   for (let i = 0; i < pattern.length; i++) {
-    if (pattern[i] !== ')') continue;
-    const q = pattern[i + 1];
-    if (q === undefined || !'*+?{'.includes(q)) continue;
-    let prof = 0;
-    for (let k = i - 1; k >= 0; k--) {
-      if (pattern[k] === ')') prof++;
-      else if (pattern[k] === '(') {
-        if (prof === 0) {
-          const interior = pattern.slice(k + 1, i);
-          if (/[*+?{}]/.test(interior)) return true;
-          if (interior.includes('|')) return true;
-        }
-        prof--;
-      }
+    const c = pattern[i];
+    if (c === '\\') { i++; continue; }
+    if (enClase) {
+      if (c === ']') enClase = false;
+      continue;
     }
+    if (c === '[') { enClase = true; continue; }
+    if (c === '|') {
+      if (pila.length === 0) {
+        ramaMax = Math.max(ramaMax, cuantif);
+        cuantif = 0;
+      }
+      continue;
+    }
+    if (c === '(') {
+      pila.push(i);
+      if (pattern[i + 1] === '?') i++; // '(?:…': sintaxis, no cuantificador
+      continue;
+    }
+    if (c === ')') {
+      const abre = pila.pop();
+      if (abre === undefined) return true; // desbalanceado: fail-closed
+      const q = pattern[i + 1];
+      if (q === undefined || !'*+?{'.includes(q)) continue;
+      if (interiorPeligroso(pattern, abre + 1, i)) return true;
+      continue;
+    }
+    if (pila.length === 0 && '*+?{'.includes(c)) cuantif++;
+  }
+  if (pila.length > 0 || enClase) return true; // sin cerrar: fail-closed
+  return Math.max(ramaMax, cuantif) >= 2;
+}
+
+// Interior de grupo cuantificado: '|' o cuantificador fuera de escapes
+// y clases ('[?!]' o '\?' son literales seguros — ronda 4, MED-1).
+function interiorPeligroso(pattern, desde, hasta) {
+  let enClase = false;
+  for (let i = desde; i < hasta; i++) {
+    const c = pattern[i];
+    if (c === '\\') { i++; continue; }
+    if (enClase) {
+      if (c === ']') enClase = false;
+      continue;
+    }
+    if (c === '[') { enClase = true; continue; }
+    // '(?:' tras el abre del grupo: sintaxis, no cuantificador (LOW ronda 4:
+    // sin exigir '(' previo se contrabandeaba un '?' real en '(a?:)*')
+    if (c === '?' && pattern[i + 1] === ':' && pattern[i - 1] === '(') {
+      i++;
+      continue;
+    }
+    if (c === '|' || '*+?{'.includes(c)) return true;
   }
   return false;
 }
