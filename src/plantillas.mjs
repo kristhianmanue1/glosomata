@@ -98,23 +98,21 @@ export function validarPlantilla(t) {
 function patronPeligroso(pattern) {
   if (/\\[1-9]|\(\?[<=!]|\{\s*\d*\s*,\s*\}/.test(pattern)) return true;
   if (/[*+]\s*[*+]/.test(pattern)) return true;
-  // cuantificador tras un grupo cuyo contenido contiene otro cuantificador
+  // grupo cuantificado: `)` en i, cuantificador en i+1 — revisa su interior
   for (let i = 0; i < pattern.length; i++) {
-    if (pattern[i] === ')') {
-      let j = i - 1;
-      if (pattern[j] === undefined) return true;
-      if (!' *+?{}'.includes(pattern[j])) continue;
-      // abre el grupo hacia atrás y mira si dentro hay cuantificador
-      let prof = 0;
-      for (let k = i - 1; k >= 0; k--) {
-        if (pattern[k] === ')') prof++;
-        else if (pattern[k] === '(') {
-          if (prof === 0) {
-            const interior = pattern.slice(k + 1, i - ('?'.includes(pattern[i-1]) ? 1 : 0));
-            if (/[*+?{}]/.test(interior)) return true;
-          }
-          prof--;
+    if (pattern[i] !== ')') continue;
+    const q = pattern[i + 1];
+    if (q === undefined || !'*+?{'.includes(q)) continue;
+    let prof = 0;
+    for (let k = i - 1; k >= 0; k--) {
+      if (pattern[k] === ')') prof++;
+      else if (pattern[k] === '(') {
+        if (prof === 0) {
+          const interior = pattern.slice(k + 1, i);
+          if (/[*+?{}]/.test(interior)) return true; // cuantificador anidado
+          if (interior.includes('|') && q === '+') return true; // ambigüedad
         }
+        prof--;
       }
     }
   }

@@ -1,5 +1,6 @@
-// Núcleo MCP stdio — JSON-RPC mínimo: initialize, tools/list, tools/call.
-import { readFileSync } from 'node:fs';
+// Núcleo MCP stdio — JSON-RPC por líneas (streaming), lectura incremental.
+import { createInterface } from 'node:readline';
+import { writeSync } from 'node:fs';
 
 const TOOLS = [
   { name: 'speak', description: 'Reproduce texto por voz localmente',
@@ -22,23 +23,23 @@ const TOOLS = [
 ];
 
 function rpc(id, result) {
-  process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
+  writeSync(1, `${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
 }
 function rpcErr(id, code, message) {
-  process.stdout.write(
-    `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`
-  );
+  writeSync(1, `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`);
 }
 
 async function llamar(name, args) {
   switch (name) {
     case 'speak': {
       const canal = await import('./canal.mjs');
-      return canal.speak(['--text', args.text]);
+      const a = ['--text', args.text];
+      if (args.engine) a.push('--engine', args.engine);
+      return canal.speak(a);
     }
     case 'listen': {
-      const canal = await import('./canal.mjs');
-      return canal.listen(['--timeout', String(args.timeout_s ?? 10)]);
+      const stt = await import('./stt.mjs');
+      return stt.listen(['--timeout', String(args.timeout_s ?? 10)]);
     }
     case 'stop': {
       const canal = await import('./canal.mjs');
@@ -54,11 +55,10 @@ async function llamar(name, args) {
     }
     case 'validate': {
       const p = await import('./plantillas.mjs');
-      // sesión inline (objeto), no archivo — mismo contrato de validación
       const out = p.validarTurno(
         args.session?.template, args.session?.turn ?? 0, args.text
       );
-      process.stdout.write(`${JSON.stringify(out)}\n`);
+      writeSync(1, `${JSON.stringify(out)}\n`);
       return out.result === 'ok' ? 0 : 1;
     }
     default:
@@ -67,8 +67,8 @@ async function llamar(name, args) {
 }
 
 export async function main() {
-  const entrada = readFileSync(0, 'utf8');
-  for (const linea of entrada.split('\n')) {
+  const rl = createInterface({ input: process.stdin });
+  for await (const linea of rl) {
     if (!linea.trim()) continue;
     let msg;
     try {
@@ -83,6 +83,8 @@ export async function main() {
         capabilities: { tools: {} },
         serverInfo: { name: 'glosomata', version: '0.1.0' },
       });
+    } else if (method === 'notifications/initialized') {
+      // notificación: sin respuesta
     } else if (method === 'tools/list') {
       rpc(id, { tools: TOOLS });
     } else if (method === 'tools/call') {

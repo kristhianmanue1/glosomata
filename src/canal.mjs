@@ -74,17 +74,47 @@ async function barrerHuerfanos() {
   }
 }
 
-// Kill-switch: flag atómico; el loop de playback lo poll-ea por chunk.
-// El handler de señal sólo setea el flag y mata al grupo de hijos.
+// kill-switch: registro global de grupos hijos activos. El handler de
+// señal (async-signal-safe: sólo kill y flag) mata a TODOS los grupos;
+// el polling de cada adaptador ve el flag y resuelve truncated.
+const grupos = new Set();
+
+export function registrarGrupo(child) {
+  grupos.add(child);
+  child.on('exit', () => grupos.delete(child));
+  return child;
+}
+
+export function matarTodosLosGrupos() {
+  for (const c of grupos) {
+    try {
+      if (c.pid) process.kill(-c.pid, 'SIGKILL');
+    } catch {}
+  }
+}
+
 let stopFlag = false;
 export function pedirStop() {
   stopFlag = true;
+  matarTodosLosGrupos();
 }
 export function stopPedido() {
   return stopFlag;
 }
 export function resetStop() {
   stopFlag = false;
+}
+
+// Handler de señal: async-signal-safe — sólo flag + kill. Nada de teardown
+// de CoreAudio/MLX aquí (hallazgo BLOCKER ronda 2).
+export function instalarSenales() {
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => {
+      stopFlag = true;
+      matarTodosLosGrupos();
+      process.exit(130);
+    });
+  }
 }
 
 // spawn en su propio grupo de proceso: kill(-pgid) alcanza a los hijos.
@@ -94,7 +124,7 @@ export function spawnGrupo(cmd, args, opts = {}) {
     detached: true,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  child.on('exit', () => {});
+  registrarGrupo(child);
   return child;
 }
 
@@ -110,31 +140,45 @@ export async function matarGrupo(child) {
   }
 }
 
-// speak/listen: stubs honestos de cascarón — F3 los implementa por motor.
-// No son placeholders "por si acaso": son la frontera verificable de F2.
+// speak: reproduce texto por el motor seleccionado (adaptadores tts/).
 export async function speak(argv) {
   await adquirirCanal();
+  resetStop();
   try {
     const idx = argv.indexOf('--text');
-    const texto = idx >= 0 ? argv[idx + 1] : null;
-    if (!texto) throw new Error('usage: speak requiere --text');
-    const { cargarMatriz } = await import('./matriz.mjs');
+    let texto = idx >= 0 ? argv[idx + 1] : null;
+    const eIdx = argv.indexOf('--engine');
     const cfg = await cargarMatriz();
-    const motor = cfg.engines.tts.find((e) => e.selected && e.available);
+    const motor =
+      (eIdx >= 0 && cfg.engines.tts.find((e) => e.id === argv[eIdx + 1] && e.available)) ||
+      cfg.engines.tts.find((e) => e.selected && e.available);
     if (!motor) {
       const err = new Error('engine_unavailable');
       err.code = 'engine_unavailable';
       throw err;
     }
-    // Reproducción real: F3 (adaptadores tts/). Cascarón: respuesta del contrato.
-    process.stdout.write(
-      `${JSON.stringify({ played: false, engine: motor.id, echo: null, truncated: false, nota: 'cascaron F2' })}\n`
-    );
-    return 0;
+    texto = canonizar(texto, cfg.constraints?.max_text_chars ?? 2000);
+    const adaptador = await import(`./tts/${motor.adapter}.mjs`);
+    let tmpWav = null;
+    if (motor.adapter !== 'say') {
+      const t = await nuevoTemporal('tts');
+      await t.handle.close();
+      tmpWav = t.ruta;
+    }
+    try {
+      const out = await adaptador.hablar(motor, texto, { tmpWav });
+      process.stdout.write(`${JSON.stringify(out)}\n`);
+      return out.played ? 0 : 1;
+    } finally {
+      if (tmpWav) await rm(tmpWav, { force: true });
+    }
   } finally {
     liberarCanal();
   }
 }
+
+import { cargarMatriz } from './matriz.mjs';
+import { canonizar } from './plantillas.mjs';
 
 export async function listen(argv) {
   await adquirirCanal();

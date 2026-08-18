@@ -25,7 +25,7 @@ export async function main(argv) {
   }
   const cmds = {
     speak: () => import('./canal.mjs').then((m) => m.speak(rest)),
-    listen: () => import('./canal.mjs').then((m) => m.listen(rest)),
+    listen: () => import('./stt.mjs').then((m) => m.listen(rest)),
     stop: () => import('./canal.mjs').then((m) => m.stop(rest)),
     engines: () => import('./matriz.mjs').then((m) => m.engines()),
     templates: () => import('./plantillas.mjs').then((m) => m.templates(rest)),

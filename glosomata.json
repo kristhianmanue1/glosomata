@@ -1,0 +1,54 @@
+{
+  "engines": {
+    "tts": [
+      {
+        "id": "say",
+        "adapter": "say",
+        "selected": false,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 200
+        }
+      },
+      {
+        "id": "piper-claude",
+        "adapter": "piper",
+        "bin": ".venv/bin/piper",
+        "model": "docs/proposal/ai_voice/voice-agent-piper-audio-prototype/models/es_MX-claude-high.onnx",
+        "selected": true,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 500
+        }
+      },
+      {
+        "id": "kokoro",
+        "adapter": "kokoro",
+        "python": ".venv/bin/python",
+        "script": "src/tts/synthesize_kokoro.py",
+        "voice": "em_alex",
+        "pitch_scale": 0.9,
+        "selected": false,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 300
+        }
+      }
+    ],
+    "stt": {
+      "whisper_bin": ".local-models/whisper.cpp/build/bin/whisper-cli",
+      "whisper_model": ".local-models/whisper.cpp/models/ggml-small.bin"
+    }
+  },
+  "constraints": {
+    "validation_floor_ms": 50,
+    "confirmation_channels": 2,
+    "session_ttl_min": 15,
+    "max_text_chars": 2000,
+    "max_pattern_chars": 200,
+    "listen_default_timeout_s": 10
+  }
+}

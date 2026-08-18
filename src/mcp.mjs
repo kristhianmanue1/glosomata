@@ -2,11 +2,14 @@
 // Contrato: docs/specs/contrato-mcp.md
 
 import { main } from './mcp-core.mjs';
+import { instalarSenales } from './canal.mjs';
+
+instalarSenales();
 
 main().then(
   () => process.exit(0),
   (err) => {
-    process.stderr.write(`glosomata-mcp: ${err.message}\n`);
+    process.stderr.write(`glosomata-mcp: ${err.code ?? err.message}\n`);
     process.exit(1);
   }
 );

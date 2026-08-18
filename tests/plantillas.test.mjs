@@ -35,8 +35,15 @@ test('regexSegura: dialecto v1 rechaza constructos peligrosos', () => {
   assert.throws(() => regexSegura('(a+)+b'), /template_invalid/); // ReDoS clásico
   assert.throws(() => regexSegura('a{2,}'), /template_invalid/);
   assert.throws(() => regexSegura('\\1'), /template_invalid/);
+  assert.throws(() => regexSegura('(a|aa)+$'), /template_invalid/); // alternancia ambigua
   assert.doesNotThrow(() => regexSegura('si|no'));
   assert.doesNotThrow(() => regexSegura('[a-z ]{1,20}'));
+  // rendimiento: patrón benigno máximo contra texto máximo, lineal
+  const re = regexSegura('[a-z ]{1,2000}');
+  const t0 = Date.now();
+  re.test('a'.repeat(2000));
+  const dt = Date.now() - t0;
+  assert.ok(dt < 100, `match tardó ${dt}ms`);
 });
 
 test('validarTurno: función pura, plantilla confirmar', () => {
