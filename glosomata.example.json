@@ -1,0 +1,53 @@
+{
+  "engines": {
+    "tts": [
+      {
+        "id": "say",
+        "adapter": "say",
+        "selected": true,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 200
+        }
+      },
+      {
+        "id": "piper",
+        "adapter": "piper",
+        "bin": "/ruta/a/piper",
+        "model": "/ruta/a/es_MX-claude-high.onnx",
+        "selected": false,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 500
+        }
+      },
+      {
+        "id": "kokoro",
+        "adapter": "kokoro",
+        "python": "/ruta/a/.venv/bin/python",
+        "voice": "em_alex",
+        "pitch_scale": 0.9,
+        "selected": false,
+        "kill_switch": {
+          "type": "audio_teardown",
+          "target": "playback_loop",
+          "max_latency_ms": 300
+        }
+      }
+    ],
+    "stt": {
+      "whisper_bin": "/ruta/a/whisper-cli",
+      "whisper_model": "/ruta/a/ggml-small.bin"
+    }
+  },
+  "constraints": {
+    "validation_floor_ms": 50,
+    "confirmation_channels": 2,
+    "session_ttl_min": 15,
+    "max_text_chars": 2000,
+    "max_pattern_chars": 200,
+    "listen_default_timeout_s": 10
+  }
+}

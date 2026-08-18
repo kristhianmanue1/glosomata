@@ -1,0 +1,10 @@
+{
+  "id": "piper-claude-natural",
+  "engine": "piper-tts",
+  "voice": "es_MX-claude-high",
+  "language": "es-MX",
+  "pitch_scale": 1.0,
+  "tempo_compensated": false,
+  "purpose": "local M2 evaluation baseline",
+  "license_note": "Piper engine GPL-3.0; local evaluation only"
+}

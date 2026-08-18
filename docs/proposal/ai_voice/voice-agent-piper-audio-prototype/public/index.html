@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voice Agent Local Audio Prototype</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Prueba local</p>
+      <h1>Conversación local con voz</h1>
+      <p>
+        Hable o escriba. Whisper transcribe localmente, Ollama responde y Piper
+        genera la voz local. Escriba si alguno de los motores no está disponible.
+      </p>
+
+      <section class="panel" aria-labelledby="conversation-title">
+        <h2 id="conversation-title">Un turno de prueba</h2>
+        <p id="agent-label" class="badge">Agente: cargando…</p>
+
+        <form id="message-form">
+          <label for="message">Su mensaje</label>
+          <textarea id="message" name="message" maxlength="2000" rows="4"
+            required></textarea>
+          <div class="actions">
+            <button id="speak" type="button">Grabar mensaje</button>
+            <button id="stop" type="button" class="secondary" disabled>
+              Finalizar grabación
+            </button>
+            <button type="submit">Enviar</button>
+          </div>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite">Listo.</p>
+
+        <article id="response-card" class="response" hidden>
+          <h3>Respuesta</h3>
+          <p id="response-text"></p>
+          <button id="listen" type="button" class="secondary">
+            Reproducir respuesta
+          </button>
+        </article>
+      </section>
+
+      <p class="notice">
+        No introduzca información personal o de salud. Esta versión no conserva
+        audio ni conversaciones.
+      </p>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
