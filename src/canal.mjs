@@ -36,7 +36,11 @@ export async function adquirirCanal() {
 export function liberarCanal() {
   const h = lockHandle;
   lockHandle = null;
-  if (h) return h.close().catch(() => {});
+  if (h) {
+    return h.truncate(0)
+      .catch(() => {})
+      .finally(() => h.close().catch(() => {}));
+  }
 }
 
 // Temporales: unlink-tras-open; barrido por edad al arranque.
@@ -114,8 +118,8 @@ export async function speak(argv) {
     const idx = argv.indexOf('--text');
     const texto = idx >= 0 ? argv[idx + 1] : null;
     if (!texto) throw new Error('usage: speak requiere --text');
-    const { matriz } = await import('./matriz.mjs');
-    const cfg = await matriz();
+    const { cargarMatriz } = await import('./matriz.mjs');
+    const cfg = await cargarMatriz();
     const motor = cfg.engines.tts.find((e) => e.selected && e.available);
     if (!motor) {
       const err = new Error('engine_unavailable');
