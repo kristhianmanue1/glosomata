@@ -1,0 +1,18 @@
+{
+  "name": "glosomata",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "description": "Canal de voz local CLI+MCP entre agentes de IA y su orquestador humano",
+  "bin": {
+    "glosomata": "src/cli.mjs"
+  },
+  "scripts": {
+    "start": "node src/cli.mjs",
+    "mcp": "node src/mcp.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

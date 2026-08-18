@@ -1,0 +1,68 @@
+{
+  "nombre": "voice-apple",
+  "version": "2.0",
+  "descripcion": "Perfiles de voz para asistente. Motor nativo macOS say + post-proceso ffmpeg. Dos familias: natural (Premium neural) y robot (Enhanced legacy).",
+  "fecha": "2026-08-17",
+  "autor": "KrisNova",
+  "perfil_activo": "marisol_p3",
+
+  "familia_natural": {
+    "voz": "Marisol",
+    "locale": "es_ES",
+    "tier": "premium",
+    "asset": "spe_marisol-ml_embedded-premium_3-0-4",
+    "rate": 165,
+    "nota": "Voz neural. IGNORA los comandos [[pmod]] y [[pbas]] porque genera prosodia desde el modelo. No aplicar chorus ni lowpass: degradan la calidad Premium.",
+    "perfiles": {
+      "marisol_natural": { "pitch": "0%", "fx": "anull" },
+      "marisol_p3": { "pitch": "+3%", "fx": "asetrate=22050*1.03,aresample=22050,atempo=0.9709", "elegido": true, "nota": "SELECCIONADO. Solo pitch shift, sin efectos. Brillo sin artefactos." },
+      "marisol_p5": { "pitch": "+5%", "fx": "asetrate=22050*1.05,aresample=22050,atempo=0.952,aecho=0.9:0.75:6:0.10,highpass=f=120,dynaudnorm" },
+      "marisol_grave": { "pitch": "-7%", "fx": "asetrate=22050*0.93,aresample=22050,atempo=1.075,aecho=0.9:0.75:6:0.10,highpass=f=110,dynaudnorm" },
+      "marisol_grave2": { "pitch": "-11%", "fx": "asetrate=22050*0.89,aresample=22050,atempo=1.1236,aecho=0.9:0.75:6:0.10,highpass=f=100,dynaudnorm" }
+    }
+  },
+
+  "familia_robot": {
+    "voz": "Carlos (Enhanced)",
+    "locale": "es_CO",
+    "tier": "enhanced",
+    "rate": 152,
+    "say_params": { "pmod": 0 },
+    "nota": "Carlos NO tiene variante Premium; Enhanced es el techo. [[pmod 0]] elimina modulacion tonal y es el factor principal del caracter robotico.",
+    "perfiles": {
+      "robot_v5": { "pitch": "-5%", "fx": "asetrate=22050*0.95,aresample=22050,atempo=1.053,chorus=0.8:0.9:28:0.10:0.20:1.2,aecho=0.85:0.72:6:0.12,highpass=f=125,lowpass=f=6800,dynaudnorm", "nota": "El mas limpio de la familia robot." },
+      "robot_v4": { "pitch": "-5%", "fx": "asetrate=22050*0.95,aresample=22050,atempo=1.053,chorus=0.75:0.9:35:0.18:0.22:1.4,aecho=0.85:0.75:7:0.16,highpass=f=130,lowpass=f=6000,dynaudnorm" },
+      "robot_v3": { "pitch": "-10%", "fx": "asetrate=22050*0.90,aresample=22050,atempo=1.11,chorus=0.7:0.9:40:0.3:0.28:1.6,aecho=0.85:0.8:8:0.22,highpass=f=140,lowpass=f=5200,dynaudnorm" },
+      "robot_v1": { "pitch": "-18%", "fx": "asetrate=22050*0.82,aresample=22050,atempo=1.22,chorus=0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3,aecho=0.8:0.85:12:0.35,highpass=f=180,lowpass=f=3400" },
+      "robot_dalek": { "pitch": "-22%", "fx": "asetrate=22050*0.78,aresample=22050,atempo=1.28,flanger=delay=4:depth=6:regen=45:speed=0.8,vibrato=f=32:d=0.45,aecho=0.85:0.9:8:0.5,highpass=f=250,lowpass=f=3000,acrusher=bits=6:mode=log", "nota": "Ring modulator. El mas agresivo." }
+    }
+  },
+
+  "catalogo_voces_es": {
+    "premium_instaladas": ["Marisol (es_ES, femenina)"],
+    "premium_pendientes": ["Angel (es_MX, masculina)", "Carmen (es_MX, femenina)"],
+    "enhanced_instaladas": ["Carlos (es_CO)", "Angelica (es_MX)"],
+    "legacy": ["Paulina (es_MX)", "Monica (es_ES)"],
+    "novelty_descartadas": ["Reed", "Flo", "Sandy", "Rocko", "Eddy", "Grandma", "Grandpa", "Shelley"],
+    "nota_novelty": "Sin assets de voz instalados. Suenan roboticas por baja calidad, no por diseno. Inservibles."
+  },
+
+  "hallazgos": [
+    "Voces Premium neurales descartan [[pmod]] y [[pbas]]: calidad O control parametrico, no ambos.",
+    "asetrate desplaza formantes ademas del tono. Sobre -10% aparece efecto 'cuerpo grande'; sobre +5% aparece efecto chipmunk. Rango seguro: -7% a +5%.",
+    "Chorus con delay menor a 30ms deja de percibirse como voz duplicada y se lee como color de timbre.",
+    "No aplicar chorus a voces Premium: introduce artefactos de fase audibles.",
+    "El caracter 'asistente' depende mas de la redaccion (trato de usted, dato concreto, pregunta de accion) que del filtro de audio.",
+    "Pasar texto inline a traves de AppleScript corrompe acentos y enie. Usar siempre -f archivo o say -f.",
+    "Ningun tier de say deletrea correctamente siglas institucionales sin preprocesamiento.",
+    "rubberband=pitch=X:formant=preserved seria superior a asetrate; requiere librubberband compilado en ffmpeg (sin verificar)."
+  ],
+
+  "pendientes": [
+    "Descargar Angel y Carmen (Premium es_MX): Ajustes > Accesibilidad > Contenido hablado > Gestionar voces. Verificar que say -v '?' las muestre con '(Premium)'.",
+    "Capa de preprocesamiento: expansion de siglas (CVOED, SAOE, DIDT, CPES, SAVER) y codigos normativos (NOM-XXX-SSAX-YYYY).",
+    "Conversion de numerales a letra antes de say: el motor lee irregular los numeros crudos.",
+    "Verificar disponibilidad de rubberband en ffmpeg local.",
+    "Evaluar envolver en servidor MCP propio."
+  ]
+}

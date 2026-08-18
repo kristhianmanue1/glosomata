@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+.venv/
+.an-kla/
+*.pyc
+__pycache__/
+*.wav
+*.aiff
+# sesiones y temporales del canal
+.glosomata/
+tmp/
+# whisper.cpp compilado y modelos: instalación local, no código del proyecto
+.local-models/
+# binarios de modelo de los prototipos (evidencia de F0: código sí, binarios no)
+docs/proposal/**/*.onnx
+docs/proposal/**/*.onnx.json
+docs/proposal/**/models/

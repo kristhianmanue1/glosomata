@@ -1,0 +1,13 @@
+{
+  "required": [],
+  "skip_dirs": [
+    "node_modules",
+    ".venv",
+    "docs/proposal",
+    ".local-models",
+    ".skevi",
+    ".an-kla"
+  ],
+  "root_markdown": ["AN-KLA.md"],
+  "limits": {}
+}

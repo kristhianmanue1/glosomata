@@ -1,0 +1,15 @@
+{
+  "name": "voice-agent-local-audio-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "start:local": "WHISPER_BIN=../.local-models/whisper.cpp/build/bin/whisper-cli WHISPER_MODEL=../.local-models/whisper.cpp/models/ggml-small.bin KOKORO_PYTHON=.venv/bin/python node src/server.mjs",
+    "start:demo": "AGENT_PROVIDER=demo node src/server.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

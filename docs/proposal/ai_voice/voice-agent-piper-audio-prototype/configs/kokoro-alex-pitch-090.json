@@ -1,0 +1,10 @@
+{
+  "id": "kokoro-alex-pitch-090",
+  "engine": "kokoro-mlx",
+  "voice": "em_alex",
+  "language": "es",
+  "pitch_scale": 0.9,
+  "tempo_compensated": true,
+  "processor": "ffmpeg asetrate+aresample+atempo",
+  "purpose": "local M2 evaluation baseline"
+}

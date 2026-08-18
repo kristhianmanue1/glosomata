@@ -1,0 +1,133 @@
+#!/bin/bash
+# aria-voice v3 - perfiles de voz macOS (say + ffmpeg)
+# Uso:
+#   ./aria-voice "texto"                        perfil activo
+#   ./aria-voice -f archivo.txt                 desde archivo (respeta acentos/n)
+#   ./aria-voice -o salida.wav "texto"          guarda WAV
+#   ./aria-voice -p robot_v5 "texto"            elige perfil
+#   ./aria-voice -v "Angel" "texto"             cualquier voz (tier autodetectado)
+#   ./aria-voice -v "Carmen" -t +3 "texto"      voz + pitch arbitrario en %
+#   ./aria-voice -l | --voices | -h
+set -euo pipefail
+
+PROFILE="marisol_p3"
+OUT=""; TEXT=""; VOICE_OVERRIDE=""; RATE_OVERRIDE=""; PITCH_OVERRIDE=""
+
+# --- catalogo de voces Premium/neurales conocidas (es) ---
+# Se ignoran [[pmod]]/[[pbas]] y NO se les aplica chorus/lowpass.
+is_premium() {
+  case "$1" in
+    *Premium*|*premium*) return 0 ;;
+    Marisol|Angel|Carmen|Luisa|Vincent) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# construye cadena ffmpeg desde un pitch en % (ej: +3, -7, 0)
+fx_from_pitch() {
+  local p="$1" ratio comp
+  p="${p#+}"
+  ratio=$(awk -v x="$p" 'BEGIN{printf "%.4f", 1 + x/100}')
+  comp=$(awk -v r="$ratio" 'BEGIN{printf "%.4f", 1/r}')
+  if [ "$(awk -v r="$ratio" 'BEGIN{print (r==1)?1:0}')" = "1" ]; then
+    echo "anull"
+  else
+    echo "asetrate=22050*${ratio},aresample=22050,atempo=${comp}"
+  fi
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    --voices)
+      echo "VOCES ES INSTALADAS (tier autodetectado):"
+      say -v '?' | grep -E 'es_(MX|ES|CO|AR|US)' | while IFS= read -r line; do
+        nm="$(echo "$line" | sed 's/  *es_.*//' | sed 's/ *$//')"
+        loc="$(echo "$line" | grep -oE 'es_[A-Z]{2}')"
+        if is_premium "$nm"; then t="PREMIUM (neural)"; else t="legacy/enhanced"; fi
+        printf '  %-32s %-6s %s\n' "$nm" "$loc" "$t"
+      done
+      exit 0 ;;
+    -l|--list)
+      echo "PERFIL              VOZ                TIPO      PITCH"
+      echo "marisol_natural     Marisol (Premium)  natural     0%"
+      echo "marisol_p3          Marisol (Premium)  natural    +3%   <- activo"
+      echo "marisol_p5          Marisol (Premium)  natural    +5%"
+      echo "marisol_grave       Marisol (Premium)  natural    -7%"
+      echo "marisol_grave2      Marisol (Premium)  natural   -11%"
+      echo "premium_auto        (usar con -v)      natural     0%   voz Premium arbitraria"
+      echo "robot_v5            Carlos (Enhanced)  robot      -5%"
+      echo "robot_v4            Carlos (Enhanced)  robot      -5%"
+      echo "robot_v3            Carlos (Enhanced)  robot     -10%"
+      echo "robot_v1            Carlos (Enhanced)  robot     -18%"
+      echo "robot_dalek         Carlos (Enhanced)  robot     -22%"
+      exit 0 ;;
+    -f) TEXT="$(cat "$2")"; shift 2 ;;
+    -o) OUT="$2"; shift 2 ;;
+    -p) PROFILE="$2"; shift 2 ;;
+    -v) VOICE_OVERRIDE="$2"; shift 2 ;;
+    -r) RATE_OVERRIDE="$2"; shift 2 ;;
+    -t|--pitch) PITCH_OVERRIDE="$2"; shift 2 ;;
+    *)  TEXT="$1"; shift ;;
+  esac
+done
+
+if [ -z "$TEXT" ]; then TEXT="$(cat)"; fi
+
+case "$PROFILE" in
+  marisol_natural) VOICE="Marisol"; RATE=165; FX="anull" ;;
+  marisol_p3)      VOICE="Marisol"; RATE=165; FX="asetrate=22050*1.03,aresample=22050,atempo=0.9709" ;;
+  marisol_p5)      VOICE="Marisol"; RATE=165; FX="asetrate=22050*1.05,aresample=22050,atempo=0.952,aecho=0.9:0.75:6:0.10,highpass=f=120,dynaudnorm" ;;
+  marisol_grave)   VOICE="Marisol"; RATE=165; FX="asetrate=22050*0.93,aresample=22050,atempo=1.075,aecho=0.9:0.75:6:0.10,highpass=f=110,dynaudnorm" ;;
+  marisol_grave2)  VOICE="Marisol"; RATE=165; FX="asetrate=22050*0.89,aresample=22050,atempo=1.1236,aecho=0.9:0.75:6:0.10,highpass=f=100,dynaudnorm" ;;
+  premium_auto)    VOICE="Marisol"; RATE=165; FX="anull" ;;
+  robot_v5)    VOICE="Carlos (Enhanced)"; RATE=152; FX="asetrate=22050*0.95,aresample=22050,atempo=1.053,chorus=0.8:0.9:28:0.10:0.20:1.2,aecho=0.85:0.72:6:0.12,highpass=f=125,lowpass=f=6800,dynaudnorm" ;;
+  robot_v4)    VOICE="Carlos (Enhanced)"; RATE=152; FX="asetrate=22050*0.95,aresample=22050,atempo=1.053,chorus=0.75:0.9:35:0.18:0.22:1.4,aecho=0.85:0.75:7:0.16,highpass=f=130,lowpass=f=6000,dynaudnorm" ;;
+  robot_v3)    VOICE="Carlos (Enhanced)"; RATE=152; FX="asetrate=22050*0.90,aresample=22050,atempo=1.11,chorus=0.7:0.9:40:0.3:0.28:1.6,aecho=0.85:0.8:8:0.22,highpass=f=140,lowpass=f=5200,dynaudnorm" ;;
+  robot_v1)    VOICE="Carlos (Enhanced)"; RATE=150; FX="asetrate=22050*0.82,aresample=22050,atempo=1.22,chorus=0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3,aecho=0.8:0.85:12:0.35,highpass=f=180,lowpass=f=3400" ;;
+  robot_dalek) VOICE="Carlos (Enhanced)"; RATE=145; FX="asetrate=22050*0.78,aresample=22050,atempo=1.28,flanger=delay=4:depth=6:regen=45:speed=0.8,vibrato=f=32:d=0.45,aecho=0.85:0.9:8:0.5,highpass=f=250,lowpass=f=3000,acrusher=bits=6:mode=log" ;;
+  *) echo "perfil desconocido: $PROFILE (usa -l)" >&2; exit 1 ;;
+esac
+
+[ -n "$RATE_OVERRIDE" ] && RATE="$RATE_OVERRIDE"
+
+# --- override de voz: autodetecta tier y ajusta la cadena ---
+if [ -n "$VOICE_OVERRIDE" ]; then
+  # resolver nombre exacto si el usuario escribio la forma corta (ej: "Angel")
+  RESOLVED="$(say -v '?' | grep -iE "^${VOICE_OVERRIDE}( |\()" | head -1 | sed 's/  *es_.*//;s/  *[a-z][a-z]_.*//;s/ *$//' || true)"
+  [ -n "$RESOLVED" ] && VOICE="$RESOLVED" || VOICE="$VOICE_OVERRIDE"
+
+  if is_premium "$VOICE"; then
+    # Premium: sin chorus/lowpass. Conserva solo pitch si el perfil lo traia.
+    case "$PROFILE" in
+      robot_*) echo "aviso: '$VOICE' es Premium; se descarta la cadena robot (chorus/lowpass degradan neural)." >&2
+               FX="anull" ;;
+    esac
+  fi
+fi
+
+# --- pitch arbitrario: manda sobre la cadena del perfil ---
+[ -n "$PITCH_OVERRIDE" ] && FX="$(fx_from_pitch "$PITCH_OVERRIDE")"
+
+TMP="$(mktemp -t ariavoice).aiff"
+TXT="$(mktemp -t ariavoice).txt"
+trap 'rm -f "$TMP" "$TXT"' EXIT
+
+printf '%s' "$TEXT" > "$TXT"
+
+# [[pmod 0]] solo en voces legacy/enhanced: las Premium neurales lo ignoran
+if ! is_premium "$VOICE"; then
+  case "$PROFILE" in
+    robot_*) { printf '[[pmod 0]] '; cat "$TXT"; } > "$TXT.p" && mv "$TXT.p" "$TXT" ;;
+  esac
+fi
+
+say -v "$VOICE" -r "$RATE" -f "$TXT" -o "$TMP"
+
+if [ -n "$OUT" ]; then
+  ffmpeg -y -loglevel error -i "$TMP" -af "$FX" "$OUT"; echo "$OUT"
+else
+  PLAY="$(mktemp -t ariavoice).wav"
+  ffmpeg -y -loglevel error -i "$TMP" -af "$FX" "$PLAY"
+  afplay "$PLAY"; rm -f "$PLAY"
+fi
