@@ -1,4 +1,6 @@
-// Núcleo MCP stdio — JSON-RPC por líneas (streaming), lectura incremental.
+// Núcleo MCP stdio — JSON-RPC por líneas, despacho concurrente.
+// TODA salida envuelta en rpc(); datos de operaciones, nunca writes sueltos.
+
 import { createInterface } from 'node:readline';
 import { writeSync } from 'node:fs';
 
@@ -25,44 +27,47 @@ const TOOLS = [
 function rpc(id, result) {
   writeSync(1, `${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
 }
-function rpcErr(id, code, message) {
-  writeSync(1, `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`);
-}
 
 async function llamar(name, args) {
+  const ops = await import('./ops.mjs');
   switch (name) {
     case 'speak': {
-      const canal = await import('./canal.mjs');
-      const a = ['--text', args.text];
-      if (args.engine) a.push('--engine', args.engine);
-      return canal.speak(a);
+      if (typeof args.text !== 'string' || !args.text) {
+        return { code: 2, data: { error: 'usage' } };
+      }
+      return ops.speakMcp(args);
     }
     case 'listen': {
-      const stt = await import('./stt.mjs');
-      return stt.listen(['--timeout', String(args.timeout_s ?? 10)]);
+      const argv = ['--timeout', String(args.timeout_s ?? 10)];
+      return ops.listenOp(argv);
     }
-    case 'stop': {
-      const canal = await import('./canal.mjs');
-      return canal.stop([]);
-    }
-    case 'list_engines': {
-      const matriz = await import('./matriz.mjs');
-      return matriz.engines();
-    }
-    case 'list_templates': {
-      const p = await import('./plantillas.mjs');
-      return p.templates(['--list']);
-    }
+    case 'stop':
+      return ops.stopOp();
+    case 'list_engines':
+      return ops.enginesOp();
+    case 'list_templates':
+      return ops.templatesOp([]);
     case 'validate': {
-      const p = await import('./plantillas.mjs');
-      const out = p.validarTurno(
-        args.session?.template, args.session?.turn ?? 0, args.text
-      );
-      writeSync(1, `${JSON.stringify(out)}\n`);
-      return out.result === 'ok' ? 0 : 1;
+      const { expirada } = await import('./sesion.mjs');
+      const { validarTurno } = await import('./plantillas.mjs');
+      if (!args.session || typeof args.session !== 'object' ||
+          typeof args.text !== 'string') {
+        return { code: 2, data: { error: 'usage' } };
+      }
+      if (expirada(args.session)) {
+        return { code: 1, data: { error: 'session_expired' } };
+      }
+      try {
+        const out = validarTurno(
+          args.session.template, args.session.turn ?? 0, args.text
+        );
+        return { code: out.result === 'ok' ? 0 : 1, data: out };
+      } catch (e) {
+        return { code: 1, data: { error: e.code ?? 'internal_error' } };
+      }
     }
     default:
-      return 2;
+      return { code: 2, data: { error: 'usage' } };
   }
 }
 
@@ -88,18 +93,21 @@ export async function main() {
     } else if (method === 'tools/list') {
       rpc(id, { tools: TOOLS });
     } else if (method === 'tools/call') {
-      try {
-        const code = await llamar(params.name, params.arguments ?? {});
-        rpc(id, {
-          content: [{ type: 'text', text: 'ok' }],
-          isError: code !== 0,
+      // despacho concurrente: stop es procesado aunque un speak esté en
+      // curso (fix BLOCKER ronda 3). rpc es un único writeSync por línea.
+      llamar(params.name, params.arguments ?? {})
+        .then((r) => {
+          rpc(id, {
+            content: [{ type: 'text', text: JSON.stringify(r.data) }],
+            isError: r.code !== 0,
+          });
+        })
+        .catch((e) => {
+          rpc(id, {
+            content: [{ type: 'text', text: e.code ?? 'internal_error' }],
+            isError: true,
+          });
         });
-      } catch (e) {
-        rpc(id, {
-          content: [{ type: 'text', text: e.code ?? 'internal_error' }],
-          isError: true,
-        });
-      }
     }
   }
 }

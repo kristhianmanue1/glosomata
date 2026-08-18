@@ -25,30 +25,25 @@ export function expirada(ses, ahora = Date.now()) {
 }
 
 export async function session(argv) {
+  const r = await sessionData(argv);
+  process.stdout.write(`${JSON.stringify(r.data, null, 2)}\n`);
+  return r.code;
+}
+
+export async function sessionData(argv) {
   const [sub, ...rest] = argv;
-  if (sub !== 'new') {
-    const err = new Error('usage: session new [--template <id>]');
-    err.code = 'usage';
-    throw err;
-  }
+  if (sub !== 'new') return { code: 2, data: { error: 'usage' } };
   const tIdx = rest.indexOf('--template');
   let template = null;
   if (tIdx >= 0) {
     const id = rest[tIdx + 1];
     if (!/^[a-z0-9-]{1,64}$/.test(id ?? '')) {
-      const err = new Error('template_invalid');
-      err.code = 'template_invalid';
-      throw err;
+      return { code: 1, data: { error: 'template_invalid' } };
     }
     const base = CATALOGO[id];
-    if (!base) {
-      const err = new Error('not_found');
-      err.code = 'not_found';
-      throw err;
-    }
+    if (!base) return { code: 1, data: { error: 'not_found' } };
     template = base;
   }
   const ses = acunar(template);
-  process.stdout.write(`${JSON.stringify(ses, null, 2)}\n`);
-  return 0;
+  return { code: 0, data: ses };
 }

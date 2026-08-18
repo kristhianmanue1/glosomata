@@ -1,26 +1,14 @@
 // Matriz de configuración v1 — carga glosomata.json y valida disponibilidad.
 // Contrato: docs/specs/contrato-matriz.md
 
-import { access, readFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
-const RUTA_CONFIG =
-  process.env.GLOSOMATA_CONFIG ?? 'glosomata.json';
+const RUTA_CONFIG = process.env.GLOSOMATA_CONFIG ?? 'glosomata.json';
 
-async function existe(ruta) {
-  try {
-    await access(ruta, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Disponibilidad por motor: probe real, no asunción (REQ-4).
 const PROBES = {
-  say: async () => process.platform === 'darwin',
-  piper: async (e) => existe(e.bin) && existe(e.model),
-  kokoro: async (e) => existe(e.python),
+  say: () => import('./tts/say.mjs').then((m) => m.disponible()),
+  piper: (e) => import('./tts/piper.mjs').then((m) => m.disponible(e)),
+  kokoro: (e) => import('./tts/kokoro.mjs').then((m) => m.disponible(e)),
 };
 
 export async function cargarMatriz(ruta = RUTA_CONFIG) {
@@ -28,7 +16,9 @@ export async function cargarMatriz(ruta = RUTA_CONFIG) {
   try {
     cfg = JSON.parse(await readFile(ruta, 'utf8'));
   } catch {
-    throw new Error('config_unreadable');
+    const err = new Error('config_unreadable');
+    err.code = 'config_unreadable';
+    throw err;
   }
   for (const e of cfg.engines?.tts ?? []) {
     // fail-closed: sin kill_switch declarado, el motor no es seleccionable
@@ -37,19 +27,7 @@ export async function cargarMatriz(ruta = RUTA_CONFIG) {
       continue;
     }
     const probe = PROBES[e.adapter];
-    e.available = probe ? await probe(e) : false;
+    e.available = probe ? await probe(e).catch(() => false) : false;
   }
   return cfg;
-}
-
-export async function engines() {
-  const cfg = await cargarMatriz();
-  const tts = cfg.engines.tts.map((e) => ({
-    id: e.id,
-    adapter: e.adapter,
-    available: e.available,
-    selected: e.selected && e.available,
-  }));
-  process.stdout.write(`${JSON.stringify({ tts, stt: cfg.engines.stt }, null, 2)}\n`);
-  return 0;
 }

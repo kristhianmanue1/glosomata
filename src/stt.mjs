@@ -1,24 +1,22 @@
-// STT: captura con ffmpeg (avfoundation, macOS) → WAV 16 kHz mono →
-// whisper-cli. Contrato: listen [--timeout s] → {transcript} | mic_denied |
-// mic_timeout | stt_failed. Temporales borrados siempre.
+// STT: ffmpeg (avfoundation) → WAV 16 kHz mono → whisper-cli.
+// Retorna {code, data}; nunca escribe stdout.
 
 import { cargarMatriz } from './matriz.mjs';
 import {
   adquirirCanal, liberarCanal, resetStop, stopPedido,
   spawnGrupo, matarGrupo, nuevoTemporal,
 } from './canal.mjs';
-import { rm } from 'node:fs/promises';
+import { rm, stat, readFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 
-const FFMPEG = '/opt/homebrew/bin/ffmpeg';
+const FFMPEG = process.env.GLOSOMATA_FFMPEG ?? '/opt/homebrew/bin/ffmpeg';
+const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
 
 async function correr(cmd, args) {
   return new Promise((resolve, reject) => {
     const child = spawnGrupo(cmd, args);
     let stderr = '';
     let stdout = '';
-    child.stderr.on('data', (d) => {
-      if (stderr.length < 2000) stderr += d.toString();
-    });
     child.stdout.on('data', (d) => {
       if (stdout.length < 200_000) stdout += d.toString();
     });
@@ -29,76 +27,94 @@ async function correr(cmd, args) {
         reject(Object.assign(new Error('stopped'), { code: 'stopped' }));
       }
     }, 50);
-    child.on('error', (e) => {
+    child.on('error', () => {
       clearInterval(poll);
-      reject(Object.assign(new Error('spawn_failed'), { code: 'spawn_failed', cause: e.code }));
+      reject(Object.assign(new Error('spawn'), { code: 'spawn' }));
     });
-    child.on('exit', (code) => {
+    child.on('close', (code) => {
       clearInterval(poll);
-      resolve({ code, stderr, stdout });
+      resolve({ code, stdout });
     });
   });
 }
 
+function rmsS16(buf) {
+  let suma = 0;
+  const n = buf.length / 2;
+  for (let i = 0; i < n; i++) {
+    const v = buf.readInt16LE(i * 2);
+    suma += v * v;
+  }
+  return n ? Math.sqrt(suma / n) : 0;
+}
+
 export async function listen(argv) {
   const cfg = await cargarMatriz();
-  const idx = argv.indexOf('--timeout');
-  const timeout = idx >= 0 ? Number(argv[idx + 1]) : cfg.constraints?.listen_default_timeout_s ?? 10;
-  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 120) {
-    throw Object.assign(new Error('usage: timeout inválido'), { code: 'usage' });
+  let timeout = cfg.constraints?.listen_default_timeout_s ?? 10;
+  const i = argv.indexOf('--timeout');
+  if (i >= 0) {
+    const v = Number(argv[i + 1]);
+    if (!Number.isFinite(v) || v <= 0 || v > 120) {
+      return { code: 2, data: { error: 'usage' } };
+    }
+    timeout = v;
   }
-  await adquirirCanal();
+  try {
+    await access(FFMPEG);
+  } catch {
+    return { code: 1, data: { error: 'audio_device_error', causa: 'ffmpeg ausente' } };
+  }
+  try {
+    await adquirirCanal();
+  } catch (e) {
+    return { code: 1, data: { error: e.code ?? 'internal_error' } };
+  }
   resetStop();
   const t = await nuevoTemporal('stt');
   await t.handle.close();
   try {
-    // 1) capturar
+    let captura;
     try {
-      const r = await correr(FFMPEG, [
+      captura = await correr(FFMPEG, [
         '-y', '-loglevel', 'error',
         '-f', 'avfoundation', '-i', ':0',
         '-t', String(timeout),
         '-ar', '16000', '-ac', '1', '-sample_fmt', 's16',
         t.ruta,
       ]);
-      if (r.code !== 0) {
-        const causa = r.stderr.toLowerCase();
-        if (causa.includes('permission') || causa.includes('not authorized') || causa.includes('tcc')) {
-          throw Object.assign(new Error('mic_denied'), { code: 'mic_denied' });
-        }
-        throw Object.assign(new Error('mic_denied'), { code: 'mic_denied', cause: 'captura fallo' });
-      }
     } catch (e) {
-      if (e.code === 'stopped') return { stopped: true };
-      throw e;
+      if (e.code === 'stopped') return { code: 1, data: { error: 'stopped' } };
+      return { code: 1, data: { error: 'audio_device_error' } };
     }
-    // 2) transcribir
-    const { stat } = await import('node:fs/promises');
-    const s = await stat(t.ruta);
-    if (s.size < 1024) {
-      // captura sin voz útil: archivo minúsculo
-      process.stdout.write(`${JSON.stringify({ transcript: '', nota: 'mic_timeout' })}\n`);
-      return 0;
+    if (captura.code !== 0) {
+      return { code: 1, data: { error: 'mic_denied' } };
     }
-    const r2 = await correr(cfg.engines.stt.whisper_bin, [
-      '-m', cfg.engines.stt.whisper_model,
-      '-f', t.ruta,
-      '-l', 'es',
-      '-nt', // sin timestamps
-      '-np', // sin progreso
-    ]);
-    if (r2.code !== 0) {
-      throw Object.assign(new Error('stt_failed'), { code: 'stt_failed' });
+    // silencio: RMS del archivo completo por debajo del umbral
+    const { buffer } = await readFile(t.ruta);
+    const pcm = buffer.subarray(44);
+    if (pcm.length < 3200 || rmsS16(pcm) < UMBRAL_RMS) {
+      return { code: 1, data: { error: 'mic_timeout' } };
     }
-    const transcript = r2.stdout
+    let trans;
+    try {
+      trans = await correr(cfg.engines.stt.whisper_bin, [
+        '-m', cfg.engines.stt.whisper_model,
+        '-f', t.ruta, '-l', 'es', '-nt', '-np',
+      ]);
+    } catch (e) {
+      if (e.code === 'stopped') return { code: 1, data: { error: 'stopped' } };
+      return { code: 1, data: { error: 'stt_failed' } };
+    }
+    if (trans.code !== 0) return { code: 1, data: { error: 'stt_failed' } };
+    const transcript = trans.stdout
       .split('\n').map((l) => l.trim())
       .filter((l) => l && !/^(whisper_|main:|system_info|read_audio_data)/.test(l))
       .join(' ')
+      .replace(/\s+/g, ' ')
       .trim();
-    process.stdout.write(`${JSON.stringify({ transcript })}\n`);
-    return 0;
+    return { code: 0, data: { transcript } };
   } finally {
-    await rm(t.ruta, { force: true });
-    liberarCanal();
+    await rm(t.ruta, { force: true }).catch(() => {});
+    await liberarCanal();
   }
 }

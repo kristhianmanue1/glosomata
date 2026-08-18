@@ -16,6 +16,7 @@
         "adapter": "piper",
         "bin": ".venv/bin/piper",
         "model": "docs/proposal/ai_voice/voice-agent-piper-audio-prototype/models/es_MX-claude-high.onnx",
+        "sample_rate": 22050,
         "selected": true,
         "kill_switch": {
           "type": "subprocess_kill",

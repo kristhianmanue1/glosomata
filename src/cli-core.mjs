@@ -1,5 +1,8 @@
-// Despacho CLI v1 — contrato en docs/specs/contrato-cli.md
+// Despacho CLI v1 — imprime lo que las operaciones retornan.
 // Exit codes: 0 ok; 1 error con código en stderr; 2 usage.
+
+import { speakOp, listenOp, stopOp, enginesOp, templatesOp, sessionOp,
+  validateOp } from './ops.mjs';
 
 const USO = `uso: glosomata <comando> [opciones]
 
@@ -14,8 +17,22 @@ comandos:
                                        evalúa texto contra plantilla+turno
 
 errores: engine_unavailable tts_failed stt_failed mic_denied mic_timeout
-  template_invalid session_invalid session_expired channel_busy not_supported
-  internal_error`;
+  template_invalid not_found text_too_long session_invalid session_expired
+  session_abandoned channel_busy not_supported config_unreadable usage
+  internal_error audio_device_error`;
+
+const COMANDOS = Object.create(null);
+Object.assign(COMANDOS, {
+  speak: (a) => speakOp(a),
+  listen: (a) => listenOp(a),
+  stop: () => stopOp(),
+  engines: () => enginesOp(),
+  templates: (a) => (a[0] === '--list' || a.includes('--list') || a.length === 0 || a[0]?.startsWith('--')
+    ? templatesOp(a.filter((x) => x !== '--list'))
+    : { code: 2, data: { error: 'usage' } }),
+  session: (a) => sessionOp(a),
+  validate: (a) => validateOp(a),
+});
 
 export async function main(argv) {
   const [cmd, ...rest] = argv;
@@ -23,19 +40,28 @@ export async function main(argv) {
     process.stdout.write(`${USO}\n`);
     return 0;
   }
-  const cmds = {
-    speak: () => import('./canal.mjs').then((m) => m.speak(rest)),
-    listen: () => import('./stt.mjs').then((m) => m.listen(rest)),
-    stop: () => import('./canal.mjs').then((m) => m.stop(rest)),
-    engines: () => import('./matriz.mjs').then((m) => m.engines()),
-    templates: () => import('./plantillas.mjs').then((m) => m.templates(rest)),
-    session: () => import('./sesion.mjs').then((m) => m.session(rest)),
-    validate: () => import('./plantillas.mjs').then((m) => m.validate(rest)),
-  };
-  const fn = cmds[cmd];
+  const fn = Object.prototype.hasOwnProperty.call(COMANDOS, cmd)
+    ? COMANDOS[cmd]
+    : null;
   if (!fn) {
     process.stderr.write(`glosomata: comando desconocido: ${cmd}\n\n${USO}\n`);
     return 2;
   }
-  return fn();
+  const r = await fn(rest);
+  if (r.code === 2) {
+    process.stderr.write(`glosomata: ${r.data.error}\n`);
+    return 2;
+  }
+  if (r.code === 0) {
+    if (r.data !== undefined) process.stdout.write(`${JSON.stringify(r.data, null, 2)}\n`);
+    return 0;
+  }
+  if (r.data?.error) {
+    const { error, ...resto } = r.data;
+    process.stderr.write(`glosomata: ${error}${Object.keys(resto).length ? ` (${JSON.stringify(resto)})` : ''}\n`);
+    return r.code;
+  }
+  // resultado no-ok sin campo error (p.ej. interrupted): datos por stdout
+  process.stdout.write(`${JSON.stringify(r.data, null, 2)}\n`);
+  return r.code;
 }

@@ -1,39 +1,30 @@
 // Plantillas v1 — catálogo base, validación RE2-style + NFC, echo-back.
-// Contrato: docs/specs/contrato-plantilla.md
-// v1 EXCLUYE expectation intent-free → not_supported (ADR-003/round-2).
+// Contrato: docs/specs/contrato-plantilla.md. v1 EXCLUYE intent-free.
 
 export const CATALOGO = {
   confirmar: {
-    id: 'confirmar',
-    kind: 'structured',
-    proposed_by: 'builtin',
+    id: 'confirmar', kind: 'structured', proposed_by: 'builtin',
     description: 'Confirmación sí/no del orquestador',
     turns: [{ expectation: 'exact', pattern: 'sí|no|si' }],
   },
   informar: {
-    id: 'informar',
-    kind: 'structured',
-    proposed_by: 'builtin',
+    id: 'informar', kind: 'structured', proposed_by: 'builtin',
     description: 'Reporte de un hecho; espera acuse',
     turns: [{ expectation: 'exact', pattern: 'recibido|ok|enterado' }],
   },
   preguntar: {
-    id: 'preguntar',
-    kind: 'structured',
-    proposed_by: 'builtin',
+    id: 'preguntar', kind: 'structured', proposed_by: 'builtin',
     description: 'Pregunta cerrada con opciones declaradas en pattern',
-    turns: [{ expectation: 'exact', pattern: '[a-z0-9 ]{1,40}' }],
+    turns: [{ expectation: 'exact', pattern: '[a-záéíóúñ ]{1,40}' }],
   },
   libre: {
-    id: 'libre',
-    kind: 'free',
-    proposed_by: 'builtin',
+    id: 'libre', kind: 'free', proposed_by: 'builtin',
     description: 'Modo libre: sin validación',
     turns: [],
   },
 };
 
-// Canonización: NFC → strip inaudibles → límite (docs/specs/contrato-plantilla.md)
+// Canonización: NFC → strip inaudibles → límite
 const INAUDIBLES =
   /[\u200B-\u200D\uFEFF\u202A-\u202E\u0000-\u0008\u000B-\u001F]/g;
 
@@ -52,7 +43,6 @@ const CLAVES_PLANTILLA = new Set(
   ['id', 'kind', 'proposed_by', 'description', 'turns']
 );
 
-// Validación de plantilla cerrada (schema) — rechaza lo no declarado.
 export function validarPlantilla(t) {
   const err = new Error('template_invalid');
   err.code = 'template_invalid';
@@ -72,13 +62,11 @@ export function validarPlantilla(t) {
     if (turno.expectation === 'intent-free') {
       const ns = new Error('not_supported');
       ns.code = 'not_supported';
-      ns.detalle = 'expectation intent-free excluida de v1';
       throw ns;
     }
     if (!['exact', 'regex'].includes(turno.expectation)) throw err;
-    if (turno.expectation === 'regex') {
-      if (typeof turno.pattern !== 'string' || turno.pattern.length > 200) throw err;
-    }
+    if (typeof turno.pattern !== 'string' || turno.pattern.length === 0) throw err;
+    if (turno.pattern.length > 200) throw err;
     if (turno.objections !== undefined) {
       if (
         !Array.isArray(turno.objections) ||
@@ -91,14 +79,13 @@ export function validarPlantilla(t) {
   return true;
 }
 
-// RE2-style: prohíbe constructos de retroceso catastrófico y captura peligrosa.
-// Dialecto v1: subconjunto lineal de JS RegExp sin backreferences,
-// lookaround, ni cuantificadores anidados sobre grupos (grupo con cuantificador
-// dentro, cuantificado otra vez por fuera), ni cuantificador abierto {n,}.
+// Dialecto v1 (lineal): sin backreferences, lookaround, {n,} abierto,
+// cuantificadores dobles, cuantificador sobre grupo con cuantificador
+// dentro, NI alternancia bajo cuantificador de grupo (con *, +, ? o {n,m}:
+// fuente de retroceso exponencial — hallazgo reproducido ronda 3).
 function patronPeligroso(pattern) {
   if (/\\[1-9]|\(\?[<=!]|\{\s*\d*\s*,\s*\}/.test(pattern)) return true;
   if (/[*+]\s*[*+]/.test(pattern)) return true;
-  // grupo cuantificado: `)` en i, cuantificador en i+1 — revisa su interior
   for (let i = 0; i < pattern.length; i++) {
     if (pattern[i] !== ')') continue;
     const q = pattern[i + 1];
@@ -109,8 +96,8 @@ function patronPeligroso(pattern) {
       else if (pattern[k] === '(') {
         if (prof === 0) {
           const interior = pattern.slice(k + 1, i);
-          if (/[*+?{}]/.test(interior)) return true; // cuantificador anidado
-          if (interior.includes('|') && q === '+') return true; // ambigüedad
+          if (/[*+?{}]/.test(interior)) return true;
+          if (interior.includes('|')) return true;
         }
         prof--;
       }
@@ -123,13 +110,20 @@ export function regexSegura(pattern) {
   if (patronPeligroso(pattern)) {
     const err = new Error('template_invalid');
     err.code = 'template_invalid';
-    err.detalle = 'patrón usa constructo fuera del dialecto v1';
     throw err;
   }
-  return new RegExp(`^(?:${pattern})$`, 'i');
+  try {
+    return new RegExp(`^(?:${pattern})$`, 'i');
+  } catch {
+    // el message de SyntaxError embebe el patrón: se descarta (política logs)
+    const err = new Error('template_invalid');
+    err.code = 'template_invalid';
+    throw err;
+  }
 }
 
-// Validación de turno — función pura (plantilla, turno, texto) → resultado.
+// Validación de turno — función pura. turn fuera de rango → session_invalid
+// (antes: clamp que enmascaraba bugs del agente).
 export function validarTurno(plantilla, turn, textoCrudo, maxChars = 2000) {
   validarPlantilla(plantilla);
   if (!Number.isInteger(turn) || turn < 0) {
@@ -141,13 +135,12 @@ export function validarTurno(plantilla, turn, textoCrudo, maxChars = 2000) {
   if (plantilla.kind === 'free' || plantilla.turns.length === 0) {
     return { result: 'ok', next_turn: turn + 1 };
   }
-  const spec = plantilla.turns[Math.min(turn, plantilla.turns.length - 1)];
-  if (spec.expectation === 'exact') {
-    const re = regexSegura(spec.pattern);
-    return re.test(texto)
-      ? { result: 'ok', next_turn: turn + 1 }
-      : { result: 'fail', expected: spec.pattern, next_turn: turn };
+  if (turn > plantilla.turns.length - 1) {
+    const err = new Error('session_invalid');
+    err.code = 'session_invalid';
+    throw err;
   }
+  const spec = plantilla.turns[turn];
   const re = regexSegura(spec.pattern);
   return re.test(texto)
     ? { result: 'ok', next_turn: turn + 1 }
@@ -155,46 +148,47 @@ export function validarTurno(plantilla, turn, textoCrudo, maxChars = 2000) {
 }
 
 export function validarObjecion(plantilla, turn, texto) {
-  const spec = plantilla.turns[Math.min(turn, plantilla.turns.length - 1)];
+  if (turn > plantilla.turns.length - 1) return null;
+  const spec = plantilla.turns[turn];
   const obj = spec?.objections?.find((o) => texto.includes(canonizar(o)));
   return obj ? { result: 'objection', objection: obj, next_turn: turn } : null;
 }
 
-export async function templates(argv) {
+// —— datos (nunca imprimen) ——
+
+export async function templatesData(argv) {
   const showIdx = argv.indexOf('--show');
   if (showIdx >= 0) {
     const id = argv[showIdx + 1];
     if (!/^[a-z0-9-]{1,64}$/.test(id ?? '')) {
-      const err = new Error('template_invalid');
-      err.code = 'template_invalid';
-      throw err;
+      return { code: 1, data: { error: 'template_invalid' } };
     }
     const t = CATALOGO[id];
-    if (!t) {
-      const err = new Error('not_found');
-      err.code = 'not_found';
-      throw err;
-    }
-    process.stdout.write(`${JSON.stringify(t, null, 2)}\n`);
-    return 0;
+    if (!t) return { code: 1, data: { error: 'not_found' } };
+    return { code: 0, data: t };
   }
-  process.stdout.write(
-    `${JSON.stringify(Object.values(CATALOGO).map(({ turns, ...t }) => t), null, 2)}\n`
-  );
-  return 0;
+  const lista = Object.values(CATALOGO).map(({ turns, ...t }) => t);
+  return { code: 0, data: lista };
 }
 
-export async function validate(argv) {
+export async function validateData(argv) {
   const sIdx = argv.indexOf('--session');
   const tIdx = argv.indexOf('--text');
-  if (sIdx < 0 || tIdx < 0) {
-    const err = new Error('usage: validate requiere --session y --text');
-    err.code = 'usage';
-    throw err;
-  }
+  if (sIdx < 0 || tIdx < 0) return { code: 2, data: { error: 'usage' } };
   const { readFile } = await import('node:fs/promises');
-  const ses = JSON.parse(await readFile(argv[sIdx + 1], 'utf8'));
-  const out = validarTurno(ses.template, ses.turn ?? 0, argv[tIdx + 1]);
-  process.stdout.write(`${JSON.stringify(out)}\n`);
-  return out.result === 'ok' ? 0 : 1;
+  let ses;
+  try {
+    ses = JSON.parse(await readFile(argv[sIdx + 1], 'utf8'));
+  } catch {
+    // el message embebe fragmentos del archivo: se descarta
+    return { code: 1, data: { error: 'session_invalid' } };
+  }
+  const { expirada } = await import('./sesion.mjs');
+  if (expirada(ses)) return { code: 1, data: { error: 'session_expired' } };
+  try {
+    const out = validarTurno(ses.template, ses.turn ?? 0, argv[tIdx + 1]);
+    return { code: out.result === 'ok' ? 0 : 1, data: out };
+  } catch (e) {
+    return { code: 1, data: { error: e.code ?? 'internal_error' } };
+  }
 }
