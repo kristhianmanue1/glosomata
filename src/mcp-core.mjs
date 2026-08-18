@@ -4,22 +4,31 @@
 import { createInterface } from 'node:readline';
 import { writeSync } from 'node:fs';
 
+// Schemas cerrados (additionalProperties:false) y rangos alineados con la
+// validación interna: el servidor sigue validando fail-closed aunque el
+// cliente no respete el schema (LOW ronda 3).
 const TOOLS = [
   { name: 'speak', description: 'Reproduce texto por voz localmente',
     inputSchema: { type: 'object', required: ['text'],
+      additionalProperties: false,
       properties: { text: { type: 'string', maxLength: 2000 },
         engine: { type: 'string' } } } },
   { name: 'listen', description: 'Captura micrófono y devuelve transcripción',
-    inputSchema: { type: 'object',
-      properties: { timeout_s: { type: 'number', default: 10 } } } },
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: { timeout_s: { type: 'number', default: 10,
+        exclusiveMinimum: 0, maximum: 120 } } } },
   { name: 'stop', description: 'Interrumpe la operación de canal activa',
-    inputSchema: { type: 'object', properties: {} } },
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: {} } },
   { name: 'list_engines', description: 'Matriz de disponibilidad TTS/STT',
-    inputSchema: { type: 'object', properties: {} } },
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: {} } },
   { name: 'list_templates', description: 'Plantillas base por tipo',
-    inputSchema: { type: 'object', properties: {} } },
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: {} } },
   { name: 'validate', description: 'Evalúa texto contra plantilla+turno',
     inputSchema: { type: 'object', required: ['session', 'text'],
+      additionalProperties: false,
       properties: { session: { type: 'object' },
         text: { type: 'string', maxLength: 2000 } } } },
 ];
