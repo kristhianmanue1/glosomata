@@ -90,8 +90,8 @@ export async function listen(argv) {
       return { code: 1, data: { error: 'mic_denied' } };
     }
     // silencio: RMS del archivo completo por debajo del umbral
-    const { buffer } = await readFile(t.ruta);
-    const pcm = buffer.subarray(44);
+    const wav = await readFile(t.ruta);
+    const pcm = wav.subarray(44);
     if (pcm.length < 3200 || rmsS16(pcm) < UMBRAL_RMS) {
       return { code: 1, data: { error: 'mic_timeout' } };
     }
