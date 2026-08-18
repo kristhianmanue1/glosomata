@@ -1,5 +1,5 @@
-// STT: ffmpeg (avfoundation) → WAV 16 kHz mono → whisper-cli.
-// Retorna {code, data}; nunca escribe stdout.
+// STT: ffmpeg (avfoundation darwin / alsa linux) → WAV 16 kHz mono →
+// whisper-cli. Retorna {code, data}; nunca escribe stdout.
 
 import { cargarMatriz } from './matriz.mjs';
 import {
@@ -9,8 +9,22 @@ import {
 import { rm, stat, readFile } from 'node:fs/promises';
 import { access } from 'node:fs/promises';
 
-const FFMPEG = process.env.GLOSOMATA_FFMPEG ?? '/opt/homebrew/bin/ffmpeg';
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
+
+// Captura por plataforma (LOW ronda 3): backend de entrada de ffmpeg.
+// darwin→avfoundation :0, linux→alsa default; el resto fail-closed.
+// Función pura para testear sin micrófono ni binario.
+export function argsCaptura(plataforma) {
+  if (plataforma === 'darwin') {
+    return { bin: '/opt/homebrew/bin/ffmpeg',
+      input: ['-f', 'avfoundation', '-i', ':0'] };
+  }
+  if (plataforma === 'linux') {
+    return { bin: '/usr/bin/ffmpeg',
+      input: ['-f', 'alsa', '-i', 'default'] };
+  }
+  return null;
+}
 
 async function correr(cmd, args) {
   return new Promise((resolve, reject) => {
@@ -59,8 +73,13 @@ export async function listen(argv) {
     }
     timeout = v;
   }
+  const cap = argsCaptura(process.platform);
+  if (!cap) {
+    return { code: 1, data: { error: 'audio_device_error' } };
+  }
+  const ffmpeg = process.env.GLOSOMATA_FFMPEG ?? cap.bin;
   try {
-    await access(FFMPEG);
+    await access(ffmpeg);
   } catch {
     return { code: 1, data: { error: 'audio_device_error', causa: 'ffmpeg ausente' } };
   }
@@ -75,9 +94,9 @@ export async function listen(argv) {
   try {
     let captura;
     try {
-      captura = await correr(FFMPEG, [
+      captura = await correr(ffmpeg, [
         '-y', '-loglevel', 'error',
-        '-f', 'avfoundation', '-i', ':0',
+        ...cap.input,
         '-t', String(timeout),
         '-ar', '16000', '-ac', '1', '-sample_fmt', 's16',
         t.ruta,
