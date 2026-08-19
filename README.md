@@ -37,7 +37,7 @@ node src/cli.mjs listen --timeout 10
 node src/cli.mjs stop
 node src/cli.mjs engines
 node src/cli.mjs templates --list
-node src/cli.mjs session new --template confirm
+node src/cli.mjs session new --template confirmar
 node src/cli.mjs validate --session ses.json --text "sí"
 ```
 
@@ -46,6 +46,9 @@ Servidor MCP (stdio):
 ```bash
 npm run mcp
 ```
+
+Guía de consumo (registro en clientes, tools, códigos de error):
+`docs/guia-mcp.md`.
 
 ## Configuración
 
@@ -96,3 +99,9 @@ F0–F3 cerradas y mergeadas a main (v0.1.0-alpha.2): motores reales,
 ronda adversarial de código cerrada — incluye el escáner regex
 tokenizado (dialecto lineal, bypasses ReDoS reproducidos y cerrados).
 Historia de decisión en `docs/adr/`.
+
+## Licencia
+
+Apache-2.0 (`LICENSE`). Los binarios y modelos que glosomata invoca por
+subprocess conservan sus propias licencias (Piper es GPL-3.0; ver
+ADR-005 para la frontera).
