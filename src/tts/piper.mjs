@@ -9,6 +9,10 @@ const MAX_PCM = 8 * 1024 * 1024;
 
 export async function disponible(cfg) {
   try {
+    // probe honesto (ronda 5, L-1): la reproducción es afplay (darwin) —
+    // sintetizar en otra plataforma para morir en playback no es "disponible"
+    if (process.platform !== 'darwin') return false;
+    await access('/usr/bin/afplay', constants.F_OK);
     await access(cfg.bin, constants.F_OK);
     await access(cfg.model, constants.F_OK);
     return true;

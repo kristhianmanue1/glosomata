@@ -1,5 +1,5 @@
 // Servidor MCP v1 — stdio únicamente (ADR-round-2). Logs a stderr, jamás stdout.
-// Contrato: docs/specs/contrato-mcp.md
+// Contrato: docs/specs/specs-y-contratos-v1.md (§ MCP)
 
 import { main } from './mcp-core.mjs';
 import { instalarSenales } from './canal.mjs';

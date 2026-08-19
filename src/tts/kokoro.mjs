@@ -1,5 +1,7 @@
 // Adaptador kokoro (MLX) — subprocess python, JSON por stdin, WAV por el
 // script, afplay. Códigos del script mapeados a la taxonomía cerrada.
+// model (dir local del modelo) es OBLIGATORIO: from_pretrained sin él
+// descargaría ~330MB de HuggingFace (ronda 5, M-4 — 100% local).
 
 import { access, constants } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -19,8 +21,11 @@ const MAPEO = {
 
 export async function disponible(cfg) {
   try {
+    if (process.platform !== 'darwin') return false;
+    await access('/usr/bin/afplay', constants.F_OK);
     await access(cfg.python, constants.F_OK);
     await access(cfg.script ?? join(AQUI, 'synthesize_kokoro.py'), constants.F_OK);
+    await access(cfg.model, constants.F_OK);
     return true;
   } catch {
     return false;
@@ -62,6 +67,7 @@ export async function hablar(cfg, texto, { tmpWav }) {
     });
     child.stdin.write(JSON.stringify({
       texto,
+      model: cfg.model,
       voice: cfg.voice,
       pitch_scale: cfg.pitch_scale,
       out: tmpWav,

@@ -47,9 +47,35 @@ async function correr(cmd, args) {
     });
     child.on('close', (code) => {
       clearInterval(poll);
+      // SIGKILL de stop y close compiten: sin este guard, close ganaba
+      // ~5% de las veces y reportaba mic_denied en vez de stopped
+      // (ronda 5, M-1 — el fix equivalente de ronda 3 sólo cubrió TTS)
+      if (stopPedido()) {
+        reject(Object.assign(new Error('stopped'), { code: 'stopped' }));
+        return;
+      }
       resolve({ code, stdout });
     });
   });
+}
+
+// PCM desde WAV caminando chunks RIFF. El header de ffmpeg NO es de 44
+// bytes fijos: escribe LIST INFOISFT y 'data' queda en offset 70 —
+// asumir 44 contaminaba el RMS con texto del header (176 vs 0 real en
+// silencio: mic_timeout jamás disparaba — ronda 5, H-1). Fail-closed:
+// WAV ilegible → null (quien llama lo trata como silencio).
+export function pcmDesdeWav(buf) {
+  if (buf.length < 12
+      || buf.toString('latin1', 0, 4) !== 'RIFF'
+      || buf.toString('latin1', 8, 12) !== 'WAVE') return null;
+  let pos = 12;
+  for (let i = 0; i < 64 && pos + 8 <= buf.length; i++) {
+    const id = buf.toString('latin1', pos, pos + 4);
+    const size = buf.readUInt32LE(pos + 4);
+    if (id === 'data') return buf.subarray(pos + 8, pos + 8 + size);
+    pos += 8 + size + (size % 2); // chunks alineados a byte par
+  }
+  return null;
 }
 
 function rmsS16(buf) {
@@ -108,10 +134,10 @@ export async function listen(argv) {
     if (captura.code !== 0) {
       return { code: 1, data: { error: 'mic_denied' } };
     }
-    // silencio: RMS del archivo completo por debajo del umbral
+    // silencio: RMS del PCM real por debajo del umbral
     const wav = await readFile(t.ruta);
-    const pcm = wav.subarray(44);
-    if (pcm.length < 3200 || rmsS16(pcm) < UMBRAL_RMS) {
+    const pcm = pcmDesdeWav(wav);
+    if (!pcm || pcm.length < 3200 || rmsS16(pcm) < UMBRAL_RMS) {
       return { code: 1, data: { error: 'mic_timeout' } };
     }
     let trans;
