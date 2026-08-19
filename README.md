@@ -92,5 +92,7 @@ scripts/check_sizes.py` (copiado de Skevi, configurable con
 
 ## Estado
 
-F2 cerrada: cascarón verificable. F3 (implementación completa de motores,
-ronda adversarial de código) pendiente. Historia de decisión en `docs/adr/`.
+F0–F3 cerradas y mergeadas a main (v0.1.0-alpha.2): motores reales,
+ronda adversarial de código cerrada — incluye el escáner regex
+tokenizado (dialecto lineal, bypasses ReDoS reproducidos y cerrados).
+Historia de decisión en `docs/adr/`.

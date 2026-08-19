@@ -33,8 +33,25 @@ const TOOLS = [
         text: { type: 'string', maxLength: 2000 } } } },
 ];
 
+// Error JSON-RPC 2.0 estándar. id null cuando es indetectable (parse).
+// Sin esto, un método desconocido dejaba al cliente esperando para siempre
+// (hallazgo #1, verificación 2026-08-18).
+// Escritura por línea con reintento: stdout no-bloqueante puede aceptar
+// escrituras parciales; el retorno de writeSync no se ignora. Form Buffer:
+// (fd, buf, offset, length) — el form string trata el 3er arg como position
+// y lanza ESPIPE contra un pipe.
+function escribirLinea(obj) {
+  const b = Buffer.from(`${JSON.stringify(obj)}\n`);
+  let off = 0;
+  while (off < b.length) off += writeSync(1, b, off, b.length - off);
+}
+
 function rpc(id, result) {
-  writeSync(1, `${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
+  escribirLinea({ jsonrpc: '2.0', id, result });
+}
+
+function rpcError(id, code, message) {
+  escribirLinea({ jsonrpc: '2.0', id, error: { code, message } });
 }
 
 async function llamar(name, args) {
@@ -88,9 +105,20 @@ export async function main() {
     try {
       msg = JSON.parse(linea);
     } catch {
+      rpcError(null, -32700, 'Parse error');
       continue;
     }
-    const { id, method, params } = msg;
+    // Envelope válido = objeto plano con method. null, primitivos y arrays
+    // (batch, no soportado en MCP 2024-11-05) son Invalid Request; sin
+    // esto, `null` o `{id}` reventaban el loop (ronda adversarial).
+    const esObjeto = msg !== null && typeof msg === 'object'
+      && !Array.isArray(msg);
+    const { id, method, params } = esObjeto ? msg : {};
+    if (typeof method !== 'string') {
+      rpcError(esObjeto && id !== undefined ? id : null,
+        -32600, 'Invalid Request');
+      continue;
+    }
     if (method === 'initialize') {
       rpc(id, {
         protocolVersion: '2024-11-05',
@@ -102,6 +130,13 @@ export async function main() {
     } else if (method === 'tools/list') {
       rpc(id, { tools: TOOLS });
     } else if (method === 'tools/call') {
+      // params debe ser objeto con name string: si no, TypeError síncrono
+      // fuera de la promesa mataba el servidor (ronda adversarial).
+      if (params === null || typeof params !== 'object'
+          || typeof params.name !== 'string') {
+        rpcError(id, -32602, 'Invalid params');
+        continue;
+      }
       // despacho concurrente: stop es procesado aunque un speak esté en
       // curso (fix BLOCKER ronda 3). rpc es un único writeSync por línea.
       llamar(params.name, params.arguments ?? {})
@@ -117,6 +152,12 @@ export async function main() {
             isError: true,
           });
         });
+    } else if (method === 'ping') {
+      if (id !== undefined) rpc(id, {});
+    } else if (id !== undefined) {
+      // request desconocido → error estándar; notificación (sin id) →
+      // silencio, como manda JSON-RPC 2.0.
+      rpcError(id, -32601, 'Method not found');
     }
   }
 }

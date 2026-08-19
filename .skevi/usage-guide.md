@@ -1,7 +1,8 @@
 # Uso de Skevi en este proyecto
 
 **Proyecto:** glosomata
-**Fase actual:** F2 (cascarón verificado; F3 pendiente)
+**Fase actual:** F3 cerrada (v0.1.0-alpha.2; motores TTS/STT reales,
+ronda adversarial 4 cerrada — ver `.skevi/architecture-overview.md`)
 **Fuente del método:** skevi (repo hermano en el ecosistema aria)
 
 ## Qué leer primero
@@ -17,6 +18,11 @@
   previos, 1.3G con .venv y binarios: evidencia histórica de F0, no código
   del proyecto) y `.local-models/` (whisper.cpp compilado, 542M).
 - El proyecto hereda los límites de tamaño por defecto del estándar.
+- Deuda heredada del template: `docs/ai-agent-guide/00-INDICE.md` cita como
+  procedencia `docs/history/piloto-skopos.md` y
+  `../adr/ADR-005-resultado-por-linea-de-evidencia.md`, que viven en el repo
+  skevi fuente, no aquí. Se anotan, no se corrigen: no le toca a este repo
+  reescribir la guía del método.
 
 ## Verificación local
 

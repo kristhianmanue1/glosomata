@@ -2,6 +2,8 @@
 node_modules/
 .venv/
 .an-kla/
+# estado local de herramientas del agente
+.qwen/
 *.pyc
 __pycache__/
 *.wav
