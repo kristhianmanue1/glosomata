@@ -6,6 +6,17 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- fix: ronda adversarial 5 — RMS de silencio sobre WAV real (el header de
+  ffmpeg escribe `data` en offset 70, no 44: `mic_timeout` nunca disparaba
+  con silencio real); guard de stop en la captura STT (reportaba
+  `mic_denied` en vez de `stopped` ~5% de las veces); robo del lock
+  atómico con `rename` (3 procesos podían dejar dos holders); kokoro
+  exige `model` local (sin él, `from_pretrained` descargaba de red);
+  config sin `engines` → `config_unreadable` (antes TypeError fuera de
+  taxonomía); texto legítimo que inicia con `--` rechazado como `usage`
+  falso vía MCP; probes honestos (piper/kokoro/say verifican plataforma y
+  binario); TTL de sesión desde `constraints.session_ttl_min`; EPIPE de
+  stdout MCP termina limpio; `list_engines` no expone rutas del STT.
 - fix: MCP — errores JSON-RPC estándar (`-32601` método desconocido,
   `-32700` parse, `-32600` envelope, `-32602` params; antes colgaban al
   cliente o mataban el servidor), `ping`, escritura con reintento;

@@ -1,5 +1,6 @@
 // Plantillas v1 — catálogo base, validación RE2-style + NFC, echo-back.
-// Contrato: docs/specs/contrato-plantilla.md. v1 EXCLUYE intent-free.
+// Contrato: docs/specs/specs-y-contratos-v1.md (§ plantilla). v1 EXCLUYE
+// intent-free.
 
 export const CATALOGO = {
   confirmar: {
@@ -125,6 +126,9 @@ function patronPeligroso(pattern) {
       if (interiorPeligroso(pattern, abre + 1, i)) return true;
       continue;
     }
+    // El cuantificador tras ')' se re-escanea AQUÍ como suelto: es lo que
+    // bloquea '(a)?(a)?…' (retroceso lineal acumulado). La defensa es este
+    // doble conteo — "simplificarlo" reabriría el ReDoS (ronda 5, NIT).
     if (pila.length === 0 && '*+?{'.includes(c)) cuantif++;
   }
   if (pila.length > 0 || enClase) return true; // sin cerrar: fail-closed
@@ -193,13 +197,6 @@ export function validarTurno(plantilla, turn, textoCrudo, maxChars = 2000) {
   return re.test(texto)
     ? { result: 'ok', next_turn: turn + 1 }
     : { result: 'fail', expected: spec.pattern, next_turn: turn };
-}
-
-export function validarObjecion(plantilla, turn, texto) {
-  if (turn > plantilla.turns.length - 1) return null;
-  const spec = plantilla.turns[turn];
-  const obj = spec?.objections?.find((o) => texto.includes(canonizar(o)));
-  return obj ? { result: 'objection', objection: obj, next_turn: turn } : null;
 }
 
 // —— datos (nunca imprimen) ——

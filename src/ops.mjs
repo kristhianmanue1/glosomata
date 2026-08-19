@@ -30,6 +30,13 @@ export function parseArgs(argv, spec) {
 export async function speakOp(argv) {
   const args = parseArgs(argv, { '--text': 'text', '--engine': 'engine' });
   if (!args?.text) return { code: 2, data: { error: 'usage' } };
+  return speakCore(args);
+}
+
+// Núcleo de speak con objeto directo {text, engine?}. MCP inyecta aquí:
+// re-serializar a argv re-parseaba y rechazaba texto legítimo que inicia
+// con '--' como usage falso (ronda 5, M-5).
+export async function speakCore(args) {
   const cfg = await cargarMatriz();
   let motor;
   if (args.engine) {
@@ -84,11 +91,20 @@ export async function stopOp() {
 
 export async function enginesOp() {
   const cfg = await cargarMatriz();
+  const { access, constants } = await import('node:fs/promises');
   const tts = cfg.engines.tts.map((e) => ({
     id: e.id, adapter: e.adapter, available: e.available,
     selected: e.selected && e.available,
   }));
-  return { code: 0, data: { tts, stt: cfg.engines.stt } };
+  // STT curado como TTS: disponibilidad, no rutas del filesystem
+  // (ronda 5: exponía whisper_bin/whisper_model al consumidor MCP)
+  let sttOk = false;
+  try {
+    await access(cfg.engines.stt.whisper_bin, constants.F_OK);
+    await access(cfg.engines.stt.whisper_model, constants.F_OK);
+    sttOk = true;
+  } catch {}
+  return { code: 0, data: { tts, stt: { available: sttOk } } };
 }
 
 export async function templatesOp(argv) {
@@ -108,7 +124,5 @@ export async function validateOp(argv) {
 
 // variante para MCP con argumentos ya parseados
 export async function speakMcp(args) {
-  const argv = ['--text', args.text];
-  if (args.engine) argv.push('--engine', args.engine);
-  return speakOp(argv);
+  return speakCore(args);
 }

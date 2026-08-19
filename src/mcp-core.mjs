@@ -43,7 +43,14 @@ const TOOLS = [
 function escribirLinea(obj) {
   const b = Buffer.from(`${JSON.stringify(obj)}\n`);
   let off = 0;
-  while (off < b.length) off += writeSync(1, b, off, b.length - off);
+  try {
+    while (off < b.length) off += writeSync(1, b, off, b.length - off);
+  } catch {
+    // stdout roto (cliente muerto): sin lector no hay protocolo; salida
+    // limpia por stderr en vez de unhandled con stack (ronda 5, L-5)
+    process.stderr.write('glosomata-mcp: stdout roto, terminando\n');
+    process.exit(1);
+  }
 }
 
 function rpc(id, result) {

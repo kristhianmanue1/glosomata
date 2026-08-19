@@ -27,12 +27,13 @@
         "id": "kokoro",
         "adapter": "kokoro",
         "python": "/ruta/a/.venv/bin/python",
+        "model": "/ruta/a/Kokoro-82M-bf16-snapshot-local",
         "voice": "em_alex",
         "pitch_scale": 0.9,
         "selected": false,
         "kill_switch": {
-          "type": "audio_teardown",
-          "target": "playback_loop",
+          "type": "subprocess_kill",
+          "target": "process_group",
           "max_latency_ms": 300
         }
       }

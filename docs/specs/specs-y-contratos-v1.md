@@ -92,18 +92,24 @@ cuantificador sobre grupo que contiene cuantificador. Match anclado
 ## CONTRATO: sesión efímera v1
 
 `{schema: glosomata/sesion-v1, id: uuid-v4, template|null, turn: Nat≥0,
-created_at: ISO-8601, ttl_min: default 15}`. La posee el agente. Expirada
-si `now - created_at > ttl_min*60s` o created_at ilegible (fail-closed).
+created_at: ISO-8601, ttl_min}` — `ttl_min` al acuñar viene de
+`constraints.session_ttl_min` de la matriz (15 si falta). La posee el
+agente. Expirada si `now - created_at > ttl_min*60s` o created_at
+ilegible (fail-closed).
 
 ## CONTRATO: matriz de configuración v1
 
 `glosomata.json` (ruta override: GLOSOMATA_CONFIG): engines.tts[]
 {id, adapter, selected, kill_switch{type,target,max_latency_ms},
-bin?/model?/python?/voice?/pitch_scale?}, engines.stt {whisper_bin,
-whisper_model}, constraints {validation_floor_ms, confirmation_channels,
-session_ttl_min, max_text_chars, max_pattern_chars,
-listen_default_timeout_s}. Motor sin kill_switch declarado → no
-seleccionable (fail-closed). Selección apunta sólo a available=true.
+bin?/model?/python?/voice?/pitch_scale?} — para el adaptador kokoro
+`model` (dir local del modelo MLX) es obligatorio: `from_pretrained`
+sin él descargaría de HuggingFace (prohibido: 100% local).
+engines.stt {whisper_bin, whisper_model}, constraints {validation_floor_ms,
+confirmation_channels, session_ttl_min, max_text_chars, max_pattern_chars,
+listen_default_timeout_s}. Config sin engines.tts[] o engines.stt →
+`config_unreadable` (fail-closed estructural). Motor sin kill_switch
+declarado → no seleccionable (fail-closed). Selección apunta sólo a
+available=true.
 
 ## Máquina de estados (por invocación)
 

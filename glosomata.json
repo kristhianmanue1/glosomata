@@ -29,6 +29,7 @@
         "adapter": "kokoro",
         "python": ".venv/bin/python",
         "script": "src/tts/synthesize_kokoro.py",
+        "model": "/Users/krisnova/.cache/huggingface/hub/models--mlx-community--Kokoro-82M-bf16/snapshots/a71e4d38b236d968966a2002c4c895dbd12b1c3c",
         "voice": "em_alex",
         "pitch_scale": 0.9,
         "selected": false,

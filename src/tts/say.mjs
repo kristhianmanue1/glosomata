@@ -1,10 +1,18 @@
 // Adaptador say (macOS) — subprocess en grupo, texto por stdin.
 // `say` lee de stdin con `-f -`.
 
+import { access, constants } from 'node:fs/promises';
 import { reproducirSubprocess } from './base.mjs';
 
-export function disponible(cfg) {
-  return process.platform === 'darwin';
+// probe honesto (ronda 5, L-1): plataforma Y binario real
+export async function disponible() {
+  if (process.platform !== 'darwin') return false;
+  try {
+    await access('/usr/bin/say', constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function argv(cfg) {

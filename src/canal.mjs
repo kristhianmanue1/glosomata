@@ -1,12 +1,16 @@
 // Canal half-duplex v1 — lockfile atómico (O_EXCL), temporales 0700,
 // kill-switch por señal cross-process. Contrato: docs/specs/.
 
-import { open, mkdir, rm, readdir, stat, readFile, unlink } from 'node:fs/promises';
+import { open, mkdir, rm, readdir, rename, stat, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 
-const RUNTIME = join(tmpdir(), `glosomata-${process.getuid?.() ?? 'u'}`);
+// GLOSOMATA_RUNTIME aísla el dir de lock/temporales (tests paralelos de la
+// suite comparten $TMPDIR con otros procesos de la misma corrida).
+const RUNTIME = process.env.GLOSOMATA_RUNTIME
+  ? join(process.env.GLOSOMATA_RUNTIME, `glosomata-${process.getuid?.() ?? 'u'}`)
+  : join(tmpdir(), `glosomata-${process.getuid?.() ?? 'u'}`);
 const LOCK = join(RUNTIME, 'canal.lock');
 
 let lockRuta = null;
@@ -36,7 +40,17 @@ export async function adquirirCanal() {
         } catch {}
       }
       if (!vivo) {
-        await unlink(LOCK).catch(() => {});
+        // robo atómico: rename gana un solo ladrón. unlink ciego borraba
+        // el lock de un C vivo que robó legítimamente entre nuestro
+        // readFile y el unlink (ronda 5, M-2: 3 procesos → dos holders).
+        const robo = join(RUNTIME,
+          `robo-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
+        try {
+          await rename(LOCK, robo);
+          await unlink(robo).catch(() => {});
+        } catch {
+          // ENOENT: otro lo robó primero — el wx del loop decide
+        }
         continue; // reintenta una vez
       }
       const err = new Error('channel_busy');

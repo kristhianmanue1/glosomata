@@ -25,6 +25,12 @@ El texto pasa por subprocesses locales: `say`, `piper`,
 amenaza asume máquina de un solo usuario: no hay aislamiento entre
 procesos del mismo usuario.
 
+Limitación conocida del lock del canal: identifica al holder sólo por
+pid. Un pid reciclado por otro proceso del usuario puede recibir la
+señal de stop inocente o bloquear la adquisición (`channel_busy`
+persistente). Mitigación manual: borrar
+`$TMPDIR/glosomata-<uid>/canal.lock` cuando esté stale.
+
 ## Reportar una vulnerabilidad
 
 Abre un **Security Advisory privado** en este repo (GitHub → Security →

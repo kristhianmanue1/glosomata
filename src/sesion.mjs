@@ -24,12 +24,6 @@ export function expirada(ses, ahora = Date.now()) {
   return ahora - created > (ses.ttl_min ?? TTL_MIN_DEF) * 60_000;
 }
 
-export async function session(argv) {
-  const r = await sessionData(argv);
-  process.stdout.write(`${JSON.stringify(r.data, null, 2)}\n`);
-  return r.code;
-}
-
 export async function sessionData(argv) {
   const [sub, ...rest] = argv;
   if (sub !== 'new') return { code: 2, data: { error: 'usage' } };
@@ -44,6 +38,11 @@ export async function sessionData(argv) {
     if (!base) return { code: 1, data: { error: 'not_found' } };
     template = base;
   }
-  const ses = acunar(template);
+  // TTL desde la matriz (ronda 5, L-3): el 15 estaba duplicado en código
+  // y config, con drift silencioso si la config cambiaba. Fail-closed:
+  // config rota → config_unreadable, no default oculto.
+  const { cargarMatriz } = await import('./matriz.mjs');
+  const cfg = await cargarMatriz();
+  const ses = acunar(template, cfg.constraints?.session_ttl_min ?? TTL_MIN_DEF);
   return { code: 0, data: ses };
 }
