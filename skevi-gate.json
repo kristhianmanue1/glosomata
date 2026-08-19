@@ -8,6 +8,11 @@
     ".skevi",
     ".an-kla"
   ],
-  "root_markdown": ["AN-KLA.md"],
+  "root_markdown": [
+    "AN-KLA.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
   "limits": {}
 }

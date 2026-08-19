@@ -4,6 +4,22 @@
   "private": true,
   "type": "module",
   "description": "Canal de voz local CLI+MCP entre agentes de IA y su orquestador humano",
+  "license": "Apache-2.0",
+  "author": "kristhianmanue1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kristhianmanue1/glosomata.git"
+  },
+  "keywords": [
+    "mcp",
+    "tts",
+    "stt",
+    "voice",
+    "local",
+    "whisper-cpp",
+    "piper",
+    "kokoro"
+  ],
   "bin": {
     "glosomata": "src/cli.mjs"
   },

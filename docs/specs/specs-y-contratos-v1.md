@@ -33,8 +33,12 @@ sesión. `validate` evalúa texto contra plantilla+turno.
 
 Casos:
 - DADO plantilla confirmar CUANDO validate "sí" ENTONCES ok, next_turn+1.
-- DADO plantilla con objections CUANDO el humano objeta ENTONCES
-  result=objection, el turno NO avanza; 3 reintentos → session_abandoned.
+- DADO plantilla con objections CUANDO el humano objeta ENTONCES el
+  agente lo detecta contra `objections` (dato consultivo) y decide su
+  política de reintento; `validate` responde sólo ok|fail. Glosomata NO
+  cuenta reintentos NI emite session_abandoned por sí mismo (ADR-001:
+  la sesión es metadata del agente); el código queda en la taxonomía
+  para que el agente lo reporte al abandonar.
 - DADO sesión libre CUANDO validate ENTONCES ok siempre (no-op declarada;
   REQ-11 conserva sólo echo-back en modo libre).
 - DADO plantilla con expectation intent-free CUANDO validarla ENTONCES
@@ -100,8 +104,10 @@ seleccionable (fail-closed). Selección apunta sólo a available=true.
 
 idle → speaking → done | failed → cleanup → idle (speak);
 idle → listening → validating → done|failed → cleanup → idle (listen).
-Timeout → failed explícito, nunca éxito inferido. Objection → mismo
-turno, reintento (máx 3 → session_abandoned).
+Timeout → failed explícito, nunca éxito inferido. Objection → el
+agente repite el turno según su propia política (mismo turno, sin
+contador en el núcleo); session_abandoned lo emite el agente, no
+glosomata (ADR-001).
 
 ## No objetivos v1 (declarados)
 
