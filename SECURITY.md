@@ -11,6 +11,8 @@ Propiedades declaradas (no negociables en PRs):
 
 - **Sin retención**: lo que pasa por el canal no se guarda ni se loguea.
   Los logs llevan ids, códigos y duraciones — nunca texto del usuario.
+  Los temporales viven en un directorio 0700 por usuario, se borran al
+  cerrar cada operación y se barren por edad (`src/canal.mjs`).
 - **Fail-closed**: motor sin `kill_switch` declarado no es seleccionable;
   sesión corrupta o expirada → error explícito, nunca éxito inferido.
 - **Frontera GPL**: Piper corre como subprocess con texto por stdin;
@@ -18,9 +20,10 @@ Propiedades declaradas (no negociables en PRs):
 - **Superficie mínima**: MCP escucha stdio heredado del orquestador; sin
   socket, sin HTTP.
 
-El texto pasa por subprocesses locales (`say`, `piper`, `python`+Kokoro,
-`whisper-cli`, `ffmpeg`). El modelo de amenaza asume máquina de un solo
-usuario: no hay aislamiento entre procesos del mismo usuario.
+El texto pasa por subprocesses locales: `say`, `piper`,
+`python`+Kokoro, `whisper-cli`, `ffmpeg` y `afplay`. El modelo de
+amenaza asume máquina de un solo usuario: no hay aislamiento entre
+procesos del mismo usuario.
 
 ## Reportar una vulnerabilidad
 

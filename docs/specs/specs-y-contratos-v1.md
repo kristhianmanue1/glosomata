@@ -4,9 +4,10 @@
 
 Comportamiento: `speak` reproduce texto por el motor seleccionado y
 devuelve `{played, engine, echo, truncated}` — `echo` = texto
-canonicalizado, sólo con reproducción completa; `played:false` ante
-cualquier interrupción. `listen` bloquea hasta voz o timeout y devuelve
-transcripción.
+canonicalizado, sólo con reproducción completa (`null` en caso
+contrario); `played:false` ante cualquier interrupción. `listen`
+captura una ventana fija de hasta timeout (la voz no corta la captura),
+clasifica silencio post-hoc por RMS (`mic_timeout`) y transcribe.
 
 Casos:
 - DADO motor disponible CUANDO speak ENTONCES audio en ≤5s de cola, exit 0.
@@ -20,9 +21,10 @@ Casos:
 - DADO dos operaciones de canal concurrentes (intra o cross-process)
   CUANDO la segunda arriva ENTONCES `channel_busy` (flock global).
 
-Invariantes: 100% local; temporales unlink-tras-open en dir 0700 per-user
-con barrido por edad; logs sólo ids/códigos/duraciones, JAMÁS texto,
-patrón, transcripción ni echo; logs MCP a stderr.
+Invariantes: 100% local; temporales en dir 0700 per-user, borrados al
+cierre de cada operación y barridos por edad; logs sólo
+ids/códigos/duraciones, JAMÁS texto, patrón, transcripción ni echo;
+logs MCP a stderr.
 
 ## SPEC-2: negociación de plantilla (REQ-3, 7)
 
@@ -56,9 +58,11 @@ templates [--list|--show id]; session new [--template id]; validate
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage.
 
 Errores (taxonomía cerrada): engine_unavailable, tts_failed, stt_failed,
-mic_denied, mic_timeout, template_invalid, not_found, text_too_long,
-session_invalid, session_expired, session_abandoned, channel_busy,
-not_supported, config_unreadable, usage, internal_error.
+mic_denied, mic_timeout, audio_device_error, template_invalid,
+not_found, text_too_long, session_invalid, session_expired,
+session_abandoned, channel_busy, not_supported, config_unreadable,
+usage, internal_error. `stopped` no es de la taxonomía: señala
+exclusivamente la interrupción de un `listen` por `stop`.
 
 ## CONTRATO: MCP v1
 
@@ -67,7 +71,8 @@ Logs a stderr, jamás stdout (corrompería el protocolo).
 
 Tools: speak(text, engine?), listen(timeout_s?), stop(), list_engines(),
 list_templates(), validate(session, text). Mismos códigos de error que
-CLI. `validate` recibe la sesión inline como objeto.
+CLI; un `listen` interrumpido por `stop` se resuelve con `stopped`.
+`validate` recibe la sesión inline como objeto.
 
 ## CONTRATO: plantilla v1 (esquema cerrado)
 
