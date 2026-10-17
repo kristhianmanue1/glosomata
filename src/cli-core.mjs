@@ -3,7 +3,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { speakOp, listenOp, stopOp, enginesOp, templatesOp, sessionOp,
-  validateOp } from './ops.mjs';
+  validateOp, doctorOp } from './ops.mjs';
 
 // Fuente única de versión: package.json (C0.1). Lectura diferida y
 // cacheada; sin hardcode en CLI ni en el serverInfo de MCP.
@@ -22,6 +22,7 @@ comandos:
   stop                                 interrumpe la operación de canal activa
   engines                              lista disponibilidad y selección
   version                              nombre y versión del paquete
+  doctor                               diagnóstico de instalación (JSON)
   templates [--list | --show <id>]     plantillas base
   session new [--template <id>]        acuña sesión efímera (stdout)
   validate --session <archivo> --text <str>
@@ -38,6 +39,7 @@ Object.assign(COMANDOS, {
   listen: (a) => listenOp(a),
   stop: () => stopOp(),
   engines: () => enginesOp(),
+  doctor: () => doctorOp(),
   version: async () => {
     const pkg = await leerManifiesto();
     return { code: 0, data: { name: pkg.name, version: pkg.version } };

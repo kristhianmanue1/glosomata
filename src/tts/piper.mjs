@@ -7,18 +7,31 @@ import { spawnGrupo, matarGrupo, stopPedido } from '../canal.mjs';
 
 const MAX_PCM = 8 * 1024 * 1024;
 
-export async function disponible(cfg) {
-  try {
-    // probe honesto (ronda 5, L-1): la reproducción es afplay (darwin) —
-    // sintetizar en otra plataforma para morir en playback no es "disponible"
-    if (process.platform !== 'darwin') return false;
-    await access('/usr/bin/afplay', constants.F_OK);
-    await access(cfg.bin, constants.F_OK);
-    await access(cfg.model, constants.F_OK);
-    return true;
-  } catch {
-    return false;
+// Diagnóstico cerrado (doctor, C0.2): una causa por paso fallido,
+// verificadas en orden de dependencia. Fuente única: disponible() la envuelve.
+export async function diagnostico(cfg) {
+  // probe honesto (ronda 5, L-1): la reproducción es afplay (darwin) —
+  // sintetizar en otra plataforma para morir en playback no es "disponible"
+  if (process.platform !== 'darwin') {
+    return { ok: false, causa: 'plataforma_no_soportada' };
   }
+  const pasos = [
+    ['/usr/bin/afplay', 'afplay_ausente'],
+    [cfg.bin, 'binario_ausente'],
+    [cfg.model, 'modelo_ausente'],
+  ];
+  for (const [ruta, causa] of pasos) {
+    try {
+      await access(ruta, constants.F_OK);
+    } catch {
+      return { ok: false, causa };
+    }
+  }
+  return { ok: true };
+}
+
+export async function disponible(cfg) {
+  return (await diagnostico(cfg)).ok;
 }
 
 function wavDesdePcm(raw, sampleRate) {

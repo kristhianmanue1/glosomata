@@ -14,7 +14,7 @@ tres perfiles de consumidor:
 | Perfil | Superficie | Estado v1 |
 |---|---|---|
 | Agente con cliente MCP | MCP stdio (6 tools) | Contratado |
-| Agente/script con shell | CLI v1 (8 comandos) | Contratado |
+| Agente/script con shell | CLI v1 (9 comandos) | Contratado |
 | Programa Node (import directo) | `src/ops.mjs` etc. | **NO contratado** |
 | Cliente HTTP/remoto | — | No-objetivo declarado |
 
@@ -120,7 +120,7 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   (existe; misma fuente que el `serverInfo.version` de MCP).
 - `glosomata doctor` — diagnóstico completo: node ≥20, config legible,
   cada motor con causa de indisponibilidad, whisper bin/model, ffmpeg por
-  plataforma (propuesto, plan C0).
+  plataforma (existe; causas cerradas).
 
 ## 8. Huecos conocidos del contrato v1 (en plan)
 

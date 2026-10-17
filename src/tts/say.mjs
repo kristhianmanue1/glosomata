@@ -4,15 +4,22 @@
 import { access, constants } from 'node:fs/promises';
 import { reproducirSubprocess } from './base.mjs';
 
-// probe honesto (ronda 5, L-1): plataforma Y binario real
-export async function disponible() {
-  if (process.platform !== 'darwin') return false;
+// probe honesto (ronda 5, L-1): plataforma Y binario real.
+// Diagnóstico cerrado (doctor, C0.2): causas en conjunto cerrado.
+export async function diagnostico() {
+  if (process.platform !== 'darwin') {
+    return { ok: false, causa: 'plataforma_no_soportada' };
+  }
   try {
     await access('/usr/bin/say', constants.F_OK);
-    return true;
+    return { ok: true };
   } catch {
-    return false;
+    return { ok: false, causa: 'binario_ausente' };
   }
+}
+
+export async function disponible() {
+  return (await diagnostico()).ok;
 }
 
 export function argv(cfg) {

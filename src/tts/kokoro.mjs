@@ -19,17 +19,29 @@ const MAPEO = {
   ffmpeg_missing: 'tts_failed',
 };
 
-export async function disponible(cfg) {
-  try {
-    if (process.platform !== 'darwin') return false;
-    await access('/usr/bin/afplay', constants.F_OK);
-    await access(cfg.python, constants.F_OK);
-    await access(cfg.script ?? join(AQUI, 'synthesize_kokoro.py'), constants.F_OK);
-    await access(cfg.model, constants.F_OK);
-    return true;
-  } catch {
-    return false;
+// Diagnóstico cerrado (doctor, C0.2): mismo orden que el probe histórico.
+export async function diagnostico(cfg) {
+  if (process.platform !== 'darwin') {
+    return { ok: false, causa: 'plataforma_no_soportada' };
   }
+  const pasos = [
+    ['/usr/bin/afplay', 'afplay_ausente'],
+    [cfg.python, 'python_ausente'],
+    [cfg.script ?? join(AQUI, 'synthesize_kokoro.py'), 'script_ausente'],
+    [cfg.model, 'modelo_ausente'],
+  ];
+  for (const [ruta, causa] of pasos) {
+    try {
+      await access(ruta, constants.F_OK);
+    } catch {
+      return { ok: false, causa };
+    }
+  }
+  return { ok: true };
+}
+
+export async function disponible(cfg) {
+  return (await diagnostico(cfg)).ok;
 }
 
 export async function hablar(cfg, texto, { tmpWav }) {

@@ -4,6 +4,7 @@
 
 import { cargarMatriz } from './matriz.mjs';
 import { canonizar } from './plantillas.mjs';
+import { argsCaptura } from './stt.mjs';
 import {
   adquirirCanal, liberarCanal, resetStop, detenerCanalRemoto, nuevoTemporal,
 } from './canal.mjs';
@@ -105,6 +106,68 @@ export async function enginesOp() {
     sttOk = true;
   } catch {}
   return { code: 0, data: { tts, stt: { available: sttOk } } };
+}
+
+// Diagnóstico de adopción (doctor, C0.2): checks cerrados, causas del
+// conjunto cerrado de los adaptadores + esta sección. Salida contractual
+// por stdout; exit 0 sólo si TODO está operativo. El `detalle` de config
+// es la causa textual de matriz (ruta local, no secreto).
+export async function doctorOp() {
+  const { access, constants } = await import('node:fs/promises');
+  const mayorNode = Number(process.versions.node.split('.')[0]);
+  const node = { version: process.versions.node, ok: mayorNode >= 20 };
+  if (!node.ok) node.causa = 'node_viejo';
+
+  let config = { ok: true };
+  let cfg = null;
+  try {
+    cfg = await cargarMatriz();
+  } catch (e) {
+    config = { ok: false, code: 'config_unreadable', detalle: String(e.cause ?? e.code) };
+  }
+
+  const tts = (cfg?.engines?.tts ?? []).map((e) => ({
+    id: e.id, adapter: e.adapter, available: !!e.available,
+    ...(e.available ? {} : { causa: e.causa ?? 'probe_fallido' }),
+  }));
+
+  const cap = argsCaptura(process.platform);
+  const rutaFfmpeg = process.env.GLOSOMATA_FFMPEG ?? cap?.bin;
+  let ffmpeg;
+  if (!rutaFfmpeg) {
+    ffmpeg = { ok: false, causa: 'plataforma_no_soportada' };
+  } else {
+    try {
+      await access(rutaFfmpeg, constants.F_OK);
+      ffmpeg = { ok: true };
+    } catch {
+      ffmpeg = { ok: false, causa: 'ffmpeg_ausente' };
+    }
+  }
+
+  let whisper;
+  if (!cfg) {
+    whisper = { ok: false, causa: 'config_unreadable' };
+  } else {
+    try {
+      await access(cfg.engines.stt.whisper_bin, constants.F_OK);
+      whisper = { ok: true };
+    } catch {
+      whisper = { ok: false, causa: 'whisper_bin_ausente' };
+    }
+    if (whisper.ok) {
+      try {
+        await access(cfg.engines.stt.whisper_model, constants.F_OK);
+      } catch {
+        whisper = { ok: false, causa: 'whisper_model_ausente' };
+      }
+    }
+  }
+
+  const data = { node, config, tts, stt: { whisper, ffmpeg } };
+  const operativo = node.ok && config.ok && tts.length > 0
+    && tts.every((t) => t.available) && whisper.ok && ffmpeg.ok;
+  return { code: operativo ? 0 : 1, data };
 }
 
 export async function templatesOp(argv) {

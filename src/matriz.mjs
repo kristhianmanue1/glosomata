@@ -6,9 +6,9 @@ import { readFile } from 'node:fs/promises';
 const RUTA_CONFIG = process.env.GLOSOMATA_CONFIG ?? 'glosomata.json';
 
 const PROBES = {
-  say: () => import('./tts/say.mjs').then((m) => m.disponible()),
-  piper: (e) => import('./tts/piper.mjs').then((m) => m.disponible(e)),
-  kokoro: (e) => import('./tts/kokoro.mjs').then((m) => m.disponible(e)),
+  say: (e) => import('./tts/say.mjs').then((m) => m.diagnostico(e)),
+  piper: (e) => import('./tts/piper.mjs').then((m) => m.diagnostico(e)),
+  kokoro: (e) => import('./tts/kokoro.mjs').then((m) => m.diagnostico(e)),
 };
 
 function errConfig(cause) {
@@ -36,10 +36,15 @@ export async function cargarMatriz(ruta = RUTA_CONFIG) {
     // fail-closed: sin kill_switch declarado, el motor no es seleccionable
     if (!e.kill_switch?.type || !e.kill_switch?.max_latency_ms) {
       e.available = false;
+      e.causa = 'sin_kill_switch'; // cerrado, para doctor (C0.2)
       continue;
     }
     const probe = PROBES[e.adapter];
-    e.available = probe ? await probe(e).catch(() => false) : false;
+    const d = probe
+      ? await probe(e).catch(() => ({ ok: false, causa: 'probe_fallido' }))
+      : { ok: false, causa: 'adapter_desconocido' };
+    e.available = d.ok;
+    if (!d.ok) e.causa = d.causa;
   }
   return cfg;
 }

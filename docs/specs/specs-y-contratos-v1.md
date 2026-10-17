@@ -52,8 +52,8 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 ## CONTRATO: CLI v1
 
 Operaciones: speak --text [--engine]; listen [--timeout]; stop; engines;
-version; templates [--list|--show id]; session new [--template id];
-validate --session archivo --text str.
+version; doctor; templates [--list|--show id]; session new
+[--template id]; validate --session archivo --text str.
 
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage.
 
