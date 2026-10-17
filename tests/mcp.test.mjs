@@ -124,7 +124,7 @@ test('MCP: initialize y tools/list por stdio', async () => {
     const pkg = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     assert.equal(init.result.serverInfo.version, pkg.version);
-    assert.equal(lista.result.tools.length, 7);
+    assert.equal(lista.result.tools.length, 8);
   });
 });
 
@@ -348,6 +348,50 @@ test('MCP: validate sin schema / schema ajeno / array → session_invalid (C1.3)
       assert.equal(r.result.isError, true);
       assert.equal(JSON.parse(r.result.content[0].text).error, 'session_invalid');
     }
+  });
+});
+
+// —— P2.1: get_config sana (frontera de divulgación) ——
+
+test('MCP: get_config devuelve la matriz saneada — forma exacta', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'get_config'));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, false);
+    const cfg = JSON.parse(r.result.content[0].text);
+    assert.ok(Array.isArray(cfg.engines.tts) && cfg.engines.tts.length > 0);
+    for (const m of cfg.engines.tts) {
+      // whitelist: nada más que esto
+      assert.deepEqual(Object.keys(m).sort(),
+        ['adapter', 'available', 'id', 'kill_switch', 'selected']);
+      assert.deepEqual(Object.keys(m.kill_switch), ['max_latency_ms']);
+      assert.equal(typeof m.kill_switch.max_latency_ms, 'number');
+    }
+    assert.deepEqual(Object.keys(cfg.engines.stt), ['available']);
+    assert.ok(cfg.constraints && typeof cfg.constraints === 'object');
+  });
+});
+
+test('MCP: get_config NO expone ni una ruta del disco (config real con rutas)', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'get_config'));
+    const r = await c.esperar(1);
+    const plano = r.result.content[0].text;
+    // la config real del repo declara bin/python/model/script/whisper_*:
+    // ninguna de esas claves ni valores puede viajar
+    for (const prohibida of ['"bin"', '"model"', '"python"', '"script"',
+      'whisper_bin', 'whisper_model', '.venv', '/Users/']) {
+      assert.equal(plano.includes(prohibida), false, prohibida);
+    }
+  });
+});
+
+test('MCP: get_config con args inesperados → usage (schema cerrado)', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'get_config', { todo: true }));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, true);
+    assert.equal(JSON.parse(r.result.content[0].text).error, 'usage');
   });
 });
 

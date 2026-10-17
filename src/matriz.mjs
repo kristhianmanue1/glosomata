@@ -136,6 +136,30 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
   return { code: ok ? 0 : 1, data: veredicto };
 }
 
+// P2.1: matriz SANEADA para agentes (tool MCP get_config): whitelist
+// estricta — disponibilidad, selección y constraints; JAMÁS rutas del
+// filesystem (curación de ronda 5 intacta: el agente MCP puede ser
+// remoto). La config completa es canal del operador (CLI / proyecto
+// externo autenticado).
+export async function configSaneada() {
+  const cfg = await cargarMatriz();
+  const { diagnosticoWhisper } = await import('./stt.mjs');
+  const sttOk = (await diagnosticoWhisper(cfg)).ok;
+  return {
+    engines: {
+      tts: cfg.engines.tts.map((e) => ({
+        id: e.id,
+        adapter: e.adapter,
+        selected: !!(e.selected && e.available),
+        available: !!e.available,
+        kill_switch: { max_latency_ms: e.kill_switch?.max_latency_ms },
+      })),
+      stt: { available: sttOk },
+    },
+    constraints: cfg.constraints ?? {},
+  };
+}
+
 // —— datos (nunca imprimen) ——
 
 const rand6 = () => Math.random().toString(36).slice(2, 8);

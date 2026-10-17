@@ -6,6 +6,16 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **tool MCP `get_config`** (P2.1, octava tool) — matriz
+  SANEADA con whitelist estricta: `engines.tts[{id, adapter,
+  selected, available, kill_switch:{max_latency_ms}}]`,
+  `engines.stt{available}` y `constraints` — JAMÁS rutas del
+  filesystem (curación de ronda 5 intacta: el agente MCP puede ser
+  remoto; la config completa es canal del operador por CLI). Schema
+  cerrado validado también en server (args inesperados → `usage`).
+  Spec §MCP (8 tools), guía, contrato §1 y conteo en el mismo commit.
+  Criterio: un agente MCP-only conoce disponibilidad y constraints
+  sin ver una sola ruta del disco.
 - feat: **`config set <archivo-json>`** (P1.2, ADR-008) — replace
   atómico de la matriz completa: candidato a temporal 0600 en el
   directorio del destino, validación completa sobre el temporal

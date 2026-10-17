@@ -48,6 +48,7 @@ inválidos → `-32600`.
 | `stop` | — | interrumpe la operación de canal activa (kill-switch) |
 | `session_new` | `template_id?` | acuña sesión efímera v1 (la posee el agente); sin template → `template:null`; id desconocido → `not_found` |
 | `list_engines` | — | matriz de disponibilidad TTS/STT |
+| `get_config` | — | matriz **saneada**: disponibilidad, selección y `constraints` — sin rutas del filesystem (la config COMPLETA es canal del operador: CLI `config get` / proyecto externo autenticado) |
 | `list_templates` | — | catálogo de plantillas base **con `turns`** |
 | `validate` | `session` (objeto inline), `text` | evalúa texto contra plantilla+turno |
 

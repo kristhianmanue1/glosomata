@@ -39,6 +39,11 @@ const TOOLS = [  { name: 'speak', description: 'Reproduce texto por voz localmen
   { name: 'list_engines', description: 'Matriz de disponibilidad TTS/STT',
     inputSchema: { type: 'object', additionalProperties: false,
       properties: {} } },
+  { name: 'get_config', description: 'Matriz de configuración SANEADA: '
+      + 'disponibilidad, selección y constraints — sin rutas del filesystem '
+      + '(la config completa es canal del operador por CLI)',
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: {} } },
   { name: 'list_templates', description: 'Plantillas base por tipo',
     inputSchema: { type: 'object', additionalProperties: false,
       properties: {} } },
@@ -104,6 +109,17 @@ async function llamar(name, args) {
     }
     case 'list_engines':
       return ops.enginesOp();
+    case 'get_config': {
+      // P2.1: sana igual que engines (curación ronda 5 intacta):
+      // disponibilidad y constraints, JAMÁS rutas — el agente MCP
+      // puede ser remoto. Schema cerrado validado también en server.
+      if (args === null || typeof args !== 'object'
+          || Object.keys(args).length > 0) {
+        return { code: 2, data: { error: 'usage' } };
+      }
+      const { configSaneada } = await import('./matriz.mjs');
+      return { code: 0, data: await configSaneada() };
+    }
     case 'list_templates': {
       // el agente MCP-only necesita los turns para saber qué espera cada
       // plantilla (C1.2); el CLI conserva su --list sin turns
