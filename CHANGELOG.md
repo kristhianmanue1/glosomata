@@ -6,6 +6,9 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: `version` en CLI y `serverInfo.version` del servidor MCP leídos
+  de `package.json` — fuente única de versión, sin hardcode ni drift
+  (C0.1 del plan de consumo).
 - fix: ronda adversarial 5 — RMS de silencio sobre WAV real (el header de
   ffmpeg escribe `data` en offset 70, no 44: `mic_timeout` nunca disparaba
   con silencio real); guard de stop en la captura STT (reportaba

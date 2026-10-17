@@ -3,6 +3,16 @@
 
 import { createInterface } from 'node:readline';
 import { writeSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+
+// Fuente única de versión: package.json (C0.1). El serverInfo de
+// initialize la toma de aquí; el CLI (`version`) comparte la fuente.
+let manifiesto = null;
+async function leerManifiesto() {
+  manifiesto ??= JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  return manifiesto;
+}
 
 // Schemas cerrados (additionalProperties:false) y rangos alineados con la
 // validación interna: el servidor sigue validando fail-closed aunque el
@@ -127,10 +137,11 @@ export async function main() {
       continue;
     }
     if (method === 'initialize') {
+      const pkg = await leerManifiesto();
       rpc(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'glosomata', version: '0.1.0-alpha.2' },
+        serverInfo: { name: pkg.name, version: pkg.version },
       });
     } else if (method === 'notifications/initialized') {
       // notificación: sin respuesta

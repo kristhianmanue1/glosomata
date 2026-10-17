@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { CATALOGO } from '../src/plantillas.mjs';
 
 const RAIZ = new URL('..', import.meta.url).pathname;
@@ -118,6 +119,11 @@ test('MCP: initialize y tools/list por stdio', async () => {
     const [init, lista] = await Promise.all([c.esperar(1), c.esperar(2)]);
     assert.equal(init.result.protocolVersion, '2024-11-05');
     assert.equal(init.result.serverInfo.name, 'glosomata');
+    // serverInfo.version desde package.json: misma fuente que CLI version
+    // (C0.1 — sin hardcode ni drift)
+    const pkg = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.equal(init.result.serverInfo.version, pkg.version);
     assert.equal(lista.result.tools.length, 6);
   });
 });

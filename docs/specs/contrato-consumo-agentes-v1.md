@@ -14,7 +14,7 @@ tres perfiles de consumidor:
 | Perfil | Superficie | Estado v1 |
 |---|---|---|
 | Agente con cliente MCP | MCP stdio (6 tools) | Contratado |
-| Agente/script con shell | CLI v1 (7 comandos) | Contratado |
+| Agente/script con shell | CLI v1 (8 comandos) | Contratado |
 | Programa Node (import directo) | `src/ops.mjs` etc. | **NO contratado** |
 | Cliente HTTP/remoto | — | No-objetivo declarado |
 
@@ -116,7 +116,8 @@ Toda variable futura se documentará aquí antes de existir en código.
 Un consumidor nuevo debe poder validar su instalación sin leer código:
 
 - `glosomata engines` — probes reales de TTS y STT (existe).
-- `glosomata version` — versión del paquete (propuesto, plan C0).
+- `glosomata version` — versión del paquete, desde `package.json`
+  (existe; misma fuente que el `serverInfo.version` de MCP).
 - `glosomata doctor` — diagnóstico completo: node ≥20, config legible,
   cada motor con causa de indisponibilidad, whisper bin/model, ffmpeg por
   plataforma (propuesto, plan C0).

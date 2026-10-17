@@ -1,8 +1,18 @@
 // Despacho CLI v1 — imprime lo que las operaciones retornan.
 // Exit codes: 0 ok; 1 error con código en stderr; 2 usage.
 
+import { readFile } from 'node:fs/promises';
 import { speakOp, listenOp, stopOp, enginesOp, templatesOp, sessionOp,
   validateOp } from './ops.mjs';
+
+// Fuente única de versión: package.json (C0.1). Lectura diferida y
+// cacheada; sin hardcode en CLI ni en el serverInfo de MCP.
+let manifiesto = null;
+async function leerManifiesto() {
+  manifiesto ??= JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  return manifiesto;
+}
 
 const USO = `uso: glosomata <comando> [opciones]
 
@@ -11,6 +21,7 @@ comandos:
   listen [--timeout <s>]               captura micrófono, imprime transcripción
   stop                                 interrumpe la operación de canal activa
   engines                              lista disponibilidad y selección
+  version                              nombre y versión del paquete
   templates [--list | --show <id>]     plantillas base
   session new [--template <id>]        acuña sesión efímera (stdout)
   validate --session <archivo> --text <str>
@@ -27,6 +38,10 @@ Object.assign(COMANDOS, {
   listen: (a) => listenOp(a),
   stop: () => stopOp(),
   engines: () => enginesOp(),
+  version: async () => {
+    const pkg = await leerManifiesto();
+    return { code: 0, data: { name: pkg.name, version: pkg.version } };
+  },
   templates: (a) => (a[0] === '--list' || a.includes('--list') || a.length === 0 || a[0]?.startsWith('--')
     ? templatesOp(a.filter((x) => x !== '--list'))
     : { code: 2, data: { error: 'usage' } }),
