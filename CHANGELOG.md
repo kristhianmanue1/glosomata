@@ -6,6 +6,19 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: plan de playground v3 — absorbe el análisis contra código
+  2026-10-17: premisa de `pitch_scale` corregida (el rango 0.8–1.2 ya
+  se aplica en el script, tarde y opaco), unificación de
+  `max_text_chars` (H1) decidida en P0.2 y ejecutada en P1.3, enums y
+  piso de `kill_switch`, endgame de las claves deprecated (remover, no
+  cablear), forma exacta de `get_config` saneada (P2.1), precisiones
+  de implementación de `serve` (P3.1: stdout contractual, `Host` sin
+  puerto, self-SIGINT de `/stop`), rechazo de ids duplicados y
+  política de `selected` en `config set` (P1.2), orden C2.5→P3.2 y
+  decisión doctor todos-vs-≥1 antes de P5.1.
+- docs: contrato de consumo §10 honesto — el `max_latency_ms` se
+  declara, no se evalúa (el corte real es SIGKILL al grupo con poll de
+  ~50 ms); antes prometía una latencia máxima verificada.
 - ci: workflow de integración (`ci.yml`) — suite `node --test` en Node
   20 (mínimo contratado) y 24 (verificado) + gate de estructura
   `check_sizes.py` en cada PR y push a main. La verificación previa de

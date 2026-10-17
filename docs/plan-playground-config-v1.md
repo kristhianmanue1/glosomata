@@ -1,7 +1,8 @@
 # Plan de playground y configuración — v1
 
-> **Estado:** PROPUESTA (v2 tras ronda adversarial). Ejecución sólo con
-> aceptación del humano, tarea por tarea. Complementa
+> **Estado:** PROPUESTA (v3: ronda adversarial + análisis contra código
+> 2026-10-17 absorbido). Ejecución sólo con aceptación del humano, tarea
+> por tarea. Complementa
 > `docs/adr/ADR-008-servidor-local-playground.md` (reabre el no-objetivo
 > HTTP de forma acotada) y `docs/specs/contrato-consumo-agentes-v1.md`.
 > Sigue el estándar de `docs/estandar-diseno-software-github.md`.
@@ -51,14 +52,37 @@ actualizan en el mismo commit:
 - `docs/schemas/glosomata-config-v1.schema.json`: esquema cerrado con el
   conjunto de claves CERRADO CONTRA EL CÓDIGO (no contra el ejemplo):
   `{id, adapter (enum say|piper|kokoro), selected, kill_switch,
-  bin?, model?, python?, script?, voice?, rate?, pitch_scale?
-  (CONTRATO NUEVO — hoy el código no valida rango; propuesta 0.8–1.2),
+  bin?, model?, python?, script?, voice?, rate?, pitch_scale?,
   sample_rate?}` — `script` (kokoro.mjs), `rate` (say.mjs) y
   `sample_rate` (piper.mjs) existen en código y faltaban en el borrador.
+  - `pitch_scale`: el rango 0.8–1.2 YA se aplica en runtime
+    (`synthesize_kokoro.py` → `pitch_invalid`, colapsado a `tts_failed`
+    por el MAPEO) — pero tarde y opaco: el motor figura `available` y
+    muere en el primer `speak`. El schema DECLARA el rango vigente y lo
+    mueve a tiempo de config (rechazo en set/validate, no en playback).
+  - `rate`: hoy sin validación alguna (pasa crudo a `say -r`); el
+    schema fija rango (entero 50–500) como CONTRATO NUEVO.
 - `constraints`: los rangos son CONTRATO NUEVO (hoy `matriz.mjs` no
   valida constraints); las claves sin lector en `src/`
   (`validation_floor_ms`, `confirmation_channels`, `max_pattern_chars`)
-  se marcan `deprecated` en el schema hasta que el código las lea.
+  se marcan `deprecated` en el schema. Matiz por clave (análisis
+  2026-10-17): `max_pattern_chars` duplica un límite DURO del contrato
+  §plantilla (200 en `validarPlantilla`) — su endgame es removerla del
+  example, no cablearla jamás; `validation_floor_ms` y
+  `confirmation_channels` son reliquias de F1 sin lector.
+- `max_text_chars` HOY diverge por superficie (H1): `speak` lee la
+  config (`ops.mjs`), `validate` CLI/MCP usa 2000 fijo (`plantillas.mjs`
+  no recibe `maxChars`) y el inputSchema MCP declara 2000 fijo — con un
+  valor menor, el agente recibe `validate` ok y luego `speak`
+  `text_too_long` (misma clase que L-3). Decisión P0.2: el valor de
+  config aplica en TODAS las superficies con 2000 como tope duro (el
+  script kokoro no acepta más); la ejecución se agenda en P1.3.
+- `kill_switch`: `type`/`target` como enum cerrado
+  (`subprocess_kill`/`process_group`) y `max_latency_ms` con piso
+  (≥100): HOY `target` jamás se lee y `max_latency_ms` sólo se chequea
+  por presencia — el mecanismo real es grupo+SIGKILL con poll de 50 ms
+  (§10 del contrato de consumo ya corregido en este sentido: el valor
+  se declara, no se evalúa).
 - `matriz.mjs` sigue siendo la autoridad en runtime; el schema es
   referencia formal y base del editor (P4.2).
 - Tests: `glosomata.example.json` valida Y una config que ejerza TODAS
@@ -102,7 +126,10 @@ actualizan en el mismo commit:
   últimas 5.
 - Tests: set válido, set inválido (no muta), set sin kill_switch
   (rechazado), backup creado y podado, config sondeada no persiste
-  campos derivados.
+  campos derivados. Del análisis 2026-10-17: set rechaza ids
+  duplicados en `engines.tts` (hoy `speak --engine` resuelve el
+  primero en silencio) y fija política de `selected` (propuesta:
+  exactamente uno `true`).
 - **Criterio**: jamás queda una config rota en disco tras un `set`.
 
 ### P1.3 `config validate` — S
@@ -124,7 +151,12 @@ actualizan en el mismo commit:
   loopback del operador (`GET /config` COMPLETA + `PUT /config`, P3):
   mismo nivel de confianza que editar el archivo a mano.
 - Docs y tests en el MISMO commit: spec §MCP (8 tools), guía, contrato
-  §1, conteo de tests 7→8, schema cerrado de la tool.
+  §1, conteo de tools 7→8, schema cerrado de la tool.
+- Forma exacta de la salida (whitelist; `bin`, `model`, `python` y
+  `script` son rutas y NO viajan): `{engines: {tts: [{id, adapter,
+  selected, available, kill_switch: {max_latency_ms}}], stt:
+  {available}}, constraints}`. `max_latency_ms` sí viaja: es número,
+  no ruta, y el contrato §10 lo ofrece al consumidor.
 - **Criterio**: un agente MCP-only conoce disponibilidad y constraints
   sin ver una sola ruta del disco.
 
@@ -151,6 +183,15 @@ actualizan en el mismo commit:
   del lock — puede ser el pid del servidor. Por tanto: SIGINT durante
   operación = SOLO truncar (semántica de canal, no morir); shutdown
   real = SIGTERM, segunda SIGINT en <2s, o `POST /shutdown` con token.
+  Se apoya en el fix de señales ya fusionado (SIGTERM → exit 143 con
+  gracia; sin él, la primera tarea de P3 es igualarlo).
+- Precisiones de implementación (análisis 2026-10-17): logs del
+  servidor a stderr — stdout es UNA línea contractual `{token, port,
+  pid}` y nada más; el check de `Host` compara el hostname SIN puerto
+  (`localhost:8123`); y el `/stop` en-server OMITE la señal remota
+  cuando el pid del lock es el propio — `detenerCanalRemoto` hoy se
+  enviaría SIGINT a sí mismo, y ese self-SIGINT puede formar el par
+  «doble SIGINT <2s» y apagar el servidor por accidente.
 - Errores de transporte ≠ taxonomía: HTTP 401/413/404/405/503 son
   estados de transporte; los códigos de taxonomía viajan en el payload
   de operación (igual que MCP). Puerto ocupado → exit 1 con razón en
@@ -221,6 +262,11 @@ actualizan en el mismo commit:
 - `POST /selftest` (token, tope 300s): suite ligera en vivo — probes de
   motores, eco mic→texto→voz con latencias, validate de plantillas —
   resultado JSON por ítem; la UI lo muestra como checklist.
+- Previo (análisis 2026-10-17): resolver la semántica de `doctor` —
+  HOY exige TODOS los motores `available` para exit 0 (`ops.mjs`
+  `tts.every`) mientras §7.1 sugiere «≥1»: un motor roto NO
+  seleccionado apaga el veredicto completo. El checklist hereda esa
+  semántica: decidir todos-vs-≥1 (y documentar) antes de P5.1.
 - **Criterio**: «¿mi instalación funciona?» se responde desde el
   navegador en un clic.
 
@@ -250,6 +296,12 @@ P3.1 → P3.2 → P3.3      (serve: API loopback)
 P4.1 → P4.2             (playground UI)
 P5.1                    (modo pruebas)
 ```
+
+Coordinación con el plan de consumo (análisis 2026-10-17): P3.2
+depende de la codificación de errores — si C2.5 (codificación única)
+no aterrizó antes, `serve` hereda la dualidad semántico/pelado en una
+TERCERA superficie. Orden recomendado: **C2.5 (idealmente C2.3) antes
+de P3.2**, o decisión explícita escrita de aplazarla.
 
 Cada tarea = un PR independiente. Si el plan se corta en cualquier
 punto, lo entregado es estable y contractado. El servidor no existe
