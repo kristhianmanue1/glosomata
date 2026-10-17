@@ -6,6 +6,16 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **cambio de alcance del plan de playground (v4, decisión del
+  operador)** — el servidor HTTP, la UI y el selftest (P3–P5) migran a
+  un proyecto aparte que consume glosomata por superficies
+  contratadas (CLI/MCP); hogar por decidir. ADR-008 reescrito como
+  «configuración gobernada» (renombrado; sin reapertura HTTP): el
+  no-objetivo «sin servidor HTTP/socket» queda intacto y ningún
+  documento canónico necesita barrido — el P0.1 de la v1 queda sin
+  objeto. El plan reduce su alcance vigente a P0–P2; P3–P5 se
+  conservan como especificación semilla para el plan del proyecto
+  nuevo (la dependencia C2.5→serve migra con él).
 - docs: plan de playground v3 — absorbe el análisis contra código
   2026-10-17: premisa de `pitch_scale` corregida (el rango 0.8–1.2 ya
   se aplica en el script, tarde y opaco), unificación de
