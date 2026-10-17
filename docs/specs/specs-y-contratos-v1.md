@@ -67,8 +67,10 @@ Errores (taxonomía cerrada): engine_unavailable, tts_failed, stt_failed,
 mic_denied, mic_timeout, audio_device_error, template_invalid,
 not_found, text_too_long, session_invalid, session_expired,
 session_abandoned, channel_busy, not_supported, config_unreadable,
-usage, internal_error. `stopped` no es de la taxonomía: señala
-exclusivamente la interrupción de un `listen` por `stop`.
+config_write_failed, usage, internal_error. `stopped` no es de la
+taxonomía: señala exclusivamente la interrupción de un `listen` por
+`stop`. `config_write_failed`: fallo de la escritura gobernada de
+config (comandos `config`, plan de configuración P1).
 
 ## CONTRATO: MCP v1
 

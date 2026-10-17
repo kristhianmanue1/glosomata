@@ -22,10 +22,13 @@ tres perfiles de consumidor:
 
 Dentro de la misma versión mayor (`v1.x`):
 
-1. **Taxonomía de errores cerrada**: los 17 códigos de
-   `specs-y-contratos-v1.md` §CLI v1 nunca se renombran ni se eliminan;
-   sólo se añaden códigos nuevos. Un consumidor que conozca la lista de
-   2026-08-18 sigue siendo compatible.
+1. **Taxonomía de errores cerrada**: los códigos de
+   `specs-y-contratos-v1.md` §CLI v1 (17 originales más
+   `config_write_failed`, alta 2026-10-17 — fallo de la escritura
+   gobernada de config, comandos `config` del plan de configuración)
+   nunca se renombran ni se eliminan; sólo se añaden códigos nuevos.
+   Un consumidor que conozca la lista de 2026-08-18 sigue siendo
+   compatible.
 2. **Formas de respuesta**: `speak → {played, engine, echo, truncated}`,
    `listen → {transcript}`, `validate → {result, next_turn[, expected]}`,
    `engines → {tts[], stt{available}}`. Añadir campos es compatible;
