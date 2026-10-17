@@ -10,6 +10,10 @@ generadas desde commits/PRs reales.
   20 (mínimo contratado) y 24 (verificado) + gate de estructura
   `check_sizes.py` en cada PR y push a main. La verificación previa de
   los planes deja de depender de la disciplina manual del agente.
+  Primera captura: skip de darwin sin `return` en ronda5 seguía
+  corriendo el cuerpo en Node 20/Linux y envenenaba el exit del runner
+  (Node ≥24 aborta el cuerpo en `t.skip`; el 20 no) — corregido al
+  patrón `return t.skip` del resto de la suite.
 - fix: SIGTERM termina el proceso — el handler sustituía la
   terminación por defecto y el servidor MCP sobrevivía a su propio
   shutdown. Trunca (flag + kill de grupos) con gracia de 250 ms: la

@@ -129,7 +129,7 @@ test('ronda5/L-1: kokoro sin model no está disponible (sin red)', async () => {
 });
 
 test('ronda5/L-1: kokoro con model local (dir) disponible en darwin', async (t) => {
-  if (process.platform !== 'darwin') t.skip('afplay es darwin');
+  if (process.platform !== 'darwin') return t.skip('afplay es darwin');
   const dirModelo = mkdtempSync(join(tmpdir(), 'r5-modelo-'));
   const r = await kokoro.disponible({
     python: process.execPath, // cualquier ejecutable existente sirve al probe
