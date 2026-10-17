@@ -128,6 +128,24 @@ test('MCP: initialize y tools/list por stdio', async () => {
   });
 });
 
+test('MCP: initialize negocia protocolVersion (eco soportada, tope si no)', async () => {
+  await conCliente(async (c) => {
+    c.enviar({ jsonrpc: '2.0', id: 1, method: 'initialize',
+      params: { protocolVersion: '2024-11-05' } });
+    c.enviar({ jsonrpc: '2.0', id: 2, method: 'initialize',
+      params: { protocolVersion: '1999-01-01' } });
+    c.enviar({ jsonrpc: '2.0', id: 3, method: 'initialize',
+      params: { protocolVersion: '2026-01-01' } });
+    c.enviar({ jsonrpc: '2.0', id: 4, method: 'initialize' }); // sin params
+    const [r1, r2, r3, r4] = await Promise.all([
+      c.esperar(1), c.esperar(2), c.esperar(3), c.esperar(4)]);
+    assert.equal(r1.result.protocolVersion, '2024-11-05'); // eco
+    assert.equal(r2.result.protocolVersion, '2024-11-05'); // tope
+    assert.equal(r3.result.protocolVersion, '2024-11-05'); // tope
+    assert.equal(r4.result.protocolVersion, '2024-11-05'); // default
+  });
+});
+
 test('MCP: session_new sin template → sesión v1 con template null', async () => {
   await conCliente(async (c) => {
     c.enviar(llamada(1, 'session_new'));

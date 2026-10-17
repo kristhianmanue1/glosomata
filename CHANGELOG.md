@@ -6,6 +6,9 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: negociación de `protocolVersion` en `initialize` — eco de la
+  versión pedida si está soportada (`2024-11-05`), máximo soportado si
+  no (C1.4; cierra el incremento C1 del plan de consumo).
 - fix: forma de sesión v1 verificada en validate CLI y MCP — `schema`
   exacto obligatorio, objeto plano (JSON `null` ya no explota con
   TypeError fuera de taxonomía) y `ttl_min` malformado fail-closed

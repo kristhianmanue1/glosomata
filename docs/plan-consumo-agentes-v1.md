@@ -1,7 +1,8 @@
 # Plan de consumo para agentes — v1
 
-> **Estado:** PROPUESTA. Ejecución sólo con aceptación del humano,
-> tarea por tarea. Complementa `docs/specs/contrato-consumo-agentes-v1.md`
+> **Estado:** PROPUESTA en ejecución. C0 y C1 cerrados (2026-10-17,
+> PRs #6–#13). Ejecución sólo con aceptación del humano, tarea por
+> tarea. Complementa `docs/specs/contrato-consumo-agentes-v1.md`
 > (el contrato que este plan hace real) y sigue el estándar de
 > `docs/estandar-diseno-software-github.md`.
 
@@ -90,9 +91,8 @@ Leyenda de tamaño: S ≤ media sesión; M ≤ una sesión; L requiere partirse.
   2. `schema !== 'glosomata/sesion-v1'` → `session_invalid`
      (`acunar()` escribió `schema` desde el commit inicial `b837277`:
      sin sesiones legítimas rotas);
-  3. `ttl_min` no numérico o negativo → fail-closed. Hoy
-     `ttl_min:'para_siempre'` compara contra `NaN` y la sesión nunca
-     expira (contrato §8.6).
+  3. `ttl_min` no numérico o negativo → fail-closed (antes comparaba
+     contra `NaN` y la sesión nunca expiraba).
 - Compat: documentar en CHANGELOG; sin sesiones legítimas afectadas.
 - Tests: sin schema → `session_invalid`; `ttl_min` malformado →
   fail-closed; JSON `null` → `session_invalid` sin `TypeError`; schema
