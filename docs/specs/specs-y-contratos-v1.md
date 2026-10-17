@@ -95,9 +95,13 @@ cuantificador sobre grupo que contiene cuantificador. Match anclado
 
 `{schema: glosomata/sesion-v1, id: uuid-v4, template|null, turn: Nat≥0,
 created_at: ISO-8601, ttl_min}` — `ttl_min` al acuñar viene de
-`constraints.session_ttl_min` de la matriz (15 si falta). La posee el
-agente. Expirada si `now - created_at > ttl_min*60s` o created_at
-ilegible (fail-closed).
+`constraints.session_ttl_min` de la matriz (15 si falta; malformado →
+`config_unreadable`, no default oculto). La posee el agente. Expirada si
+`now - created_at > ttl_min*60s`, si `created_at` es ilegible, o si
+`ttl_min` no es numérico finito ≥ 0 (fail-closed, sin coerción de
+strings). `validate` verifica además la FORMA v1 antes de expiración y
+turno: objeto plano con `schema` exacto `glosomata/sesion-v1` — sesión
+sin forma → `session_invalid`.
 
 ## CONTRATO: matriz de configuración v1
 

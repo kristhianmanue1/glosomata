@@ -19,9 +19,21 @@ export function acunar(template = null, ttlMin = TTL_MIN_DEF) {
 }
 
 export function expirada(ses, ahora = Date.now()) {
-  const created = Date.parse(ses.created_at ?? '');
+  const created = Date.parse(ses?.created_at ?? '');
   if (!Number.isFinite(created)) return true;
-  return ahora - created > (ses.ttl_min ?? TTL_MIN_DEF) * 60_000;
+  // fail-closed (C1.3): ttl malformado nunca vuelve a abrir la sesión —
+  // 'para_siempre' comparaba contra NaN y no expiraba jamás
+  const ttl = ses.ttl_min ?? TTL_MIN_DEF;
+  if (!Number.isFinite(ttl) || ttl < 0) return true;
+  return ahora - created > ttl * 60_000;
+}
+
+// Forma v1 cerrada (C1.3): objeto plano con schema exacto. El CLI y el
+// servidor MCP comparten esta única definición; sin ella, cualquier
+// objeto con created_at legible pasaba por sesión.
+export function formaValida(ses) {
+  return !!ses && typeof ses === 'object' && !Array.isArray(ses)
+    && ses.schema === 'glosomata/sesion-v1';
 }
 
 export async function sessionData(argv) {
@@ -40,9 +52,14 @@ export async function sessionData(argv) {
   }
   // TTL desde la matriz (ronda 5, L-3): el 15 estaba duplicado en código
   // y config, con drift silencioso si la config cambiaba. Fail-closed:
-  // config rota → config_unreadable, no default oculto.
+  // config rota → config_unreadable, no default oculto. (C1.3: un ttl
+  // malformado acuñaba sesiones muertas al nacer — mint falla fuerte.)
   const { cargarMatriz } = await import('./matriz.mjs');
   const cfg = await cargarMatriz();
-  const ses = acunar(template, cfg.constraints?.session_ttl_min ?? TTL_MIN_DEF);
+  const ttl = cfg.constraints?.session_ttl_min ?? TTL_MIN_DEF;
+  if (typeof ttl !== 'number' || !Number.isFinite(ttl) || ttl < 0) {
+    return { code: 1, data: { error: 'config_unreadable' } };
+  }
+  const ses = acunar(template, ttl);
   return { code: 0, data: ses };
 }

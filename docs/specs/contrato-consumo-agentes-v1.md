@@ -153,23 +153,19 @@ Estos huecos están DECLARADOS, con plan de cierre incremental
    fijo, sin eco de la versión pedida por el cliente (C1.4).
 2. **`channel_busy` sin datos**: no informa `busy_pid` ni estimado de
    reintento; el consumidor no puede backoff informado.
-3. **Validación de sesión incompleta**: template y turn SÍ se validan
-   hoy (`template_invalid` / `session_invalid`); NO se verifican el
-   campo `schema` ni la forma de `ttl_min`.
-4. **CLI `validate` con JSON `null`**: escapa un `TypeError` crudo
-   fuera de la taxonomía (exit 1, mensaje de excepción en stderr). La
-   vía MCP está guardada (`usage`).
-5. **Causas de audio poco granulares**: `mic_denied` agrupa permiso,
+3. **Causas de audio poco granulares**: `mic_denied` agrupa permiso,
    dispositivo ausente y fallo de captura; `audio_device_error` lleva
    `causa` sólo en un caso (ffmpeg ausente en STT); las causas TTS se
    descartan.
-6. **Plantillas propias**: "el agente crea la propia" exige fabricar el
+4. **Plantillas propias**: "el agente crea la propia" exige fabricar el
    JSON de sesión a mano; no hay superficie de plantillas del
    orquestador (CATALOGO builtin únicamente).
 
 Cerrados y sacados de esta lista: agente MCP-only no autónomo
-(session_new + list_templates con turns, C1.1/C1.2) y sesión libre no
-validable (plantilla `null` = modo libre, C1.5).
+(session_new + list_templates con turns, C1.1/C1.2); sesión libre no
+validable (plantilla `null` = modo libre, C1.5); forma de sesión sin
+verificar — `schema`, shape y `ttl_min` malformado fail-closed, JSON
+`null` sin TypeError (C1.3).
 
 Ninguno es bloqueante para el consumo actual; todos tienen tarea
 asignada en el plan. Mientras no se cierren: lo no contratado no se

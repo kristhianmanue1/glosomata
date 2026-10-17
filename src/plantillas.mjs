@@ -237,7 +237,10 @@ export async function validateData(argv) {
     // el message embebe fragmentos del archivo: se descarta
     return { code: 1, data: { error: 'session_invalid' } };
   }
-  const { expirada } = await import('./sesion.mjs');
+  const { expirada, formaValida } = await import('./sesion.mjs');
+  // forma v1 antes de expiración (C1.3): JSON null llegaba a explotar
+  // con TypeError crudo fuera de la taxonomía
+  if (!formaValida(ses)) return { code: 1, data: { error: 'session_invalid' } };
   if (expirada(ses)) return { code: 1, data: { error: 'session_expired' } };
   try {
     const out = validarTurno(ses.template, ses.turn ?? 0, argv[tIdx + 1]);

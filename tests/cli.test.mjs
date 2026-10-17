@@ -58,6 +58,49 @@ test('CLI: session new sin template → validate ok (SPEC-2, C1.5)', () => {
   assert.equal(execFileSyncStatus(['validate', '--session', ruta, '--text', 'lo que sea']), 0);
 });
 
+test('CLI: validate JSON null / sin schema → session_invalid, sin TypeError (C1.3)', () => {
+  const { writeFileSync, mkdtempSync } = require('node:fs');
+  const { tmpdir } = require('node:os');
+  const { join } = require('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'glosomata-test-'));
+  const nula = join(dir, 'null.json');
+  writeFileSync(nula, 'null');
+  // null.json antes explotaba con TypeError crudo fuera de la taxonomía
+  assert.throws(
+    () => execFileSync('node', [CLI, 'validate', '--session', nula, '--text', 'x'], {
+      cwd: new URL('..', import.meta.url).pathname,
+    }),
+    (e) => e.status === 1 && /session_invalid/.test(e.stderr)
+      && !/TypeError/.test(e.stderr));
+  const ses = JSON.parse(cli(['session', 'new', '--template', 'confirmar']));
+  delete ses.schema;
+  const sinSchema = join(dir, 'sin-schema.json');
+  writeFileSync(sinSchema, JSON.stringify(ses));
+  assert.throws(
+    () => execFileSync('node', [CLI, 'validate', '--session', sinSchema, '--text', 'sí'], {
+      cwd: new URL('..', import.meta.url).pathname,
+    }),
+    (e) => e.status === 1 && /session_invalid/.test(e.stderr));
+});
+
+test('CLI: session new con session_ttl_min malformado → config_unreadable (C1.3)', () => {
+  const { writeFileSync, mkdtempSync } = require('node:fs');
+  const { tmpdir } = require('node:os');
+  const { join } = require('node:path');
+  const ruta = join(mkdtempSync(join(tmpdir(), 'glosomata-test-')), 'g.json');
+  // string numérico: antes la coerción acuñaba sesiones muertas al nacer
+  writeFileSync(ruta, JSON.stringify({
+    engines: { tts: [], stt: {} },
+    constraints: { session_ttl_min: '30' },
+  }));
+  assert.throws(
+    () => execFileSync('node', [CLI, 'session', 'new'], {
+      cwd: new URL('..', import.meta.url).pathname,
+      env: { ...process.env, GLOSOMATA_CONFIG: ruta },
+    }),
+    (e) => e.status === 1 && /config_unreadable/.test(e.stderr));
+});
+
 test('CLI: validate ok exit 0 / fail exit 1', () => {
   const { writeFileSync, mkdtempSync } = require('node:fs');
   const { tmpdir } = require('node:os');
