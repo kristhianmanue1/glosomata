@@ -6,6 +6,9 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- fix: sesión acuñada sin plantilla (`template:null`) es modo libre —
+  `validate` responde ok siempre (SPEC-2); antes `template_invalid`.
+  El contador de turno se valida antes que la plantilla (C1.5).
 - feat: MCP-only de primera clase (C1.1/C1.2) — tool `session_new`
   (misma acuñación que el CLI, TTL desde constraints) y
   `list_templates` con `turns`; un agente que sólo habla MCP completa

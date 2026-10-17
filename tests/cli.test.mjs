@@ -47,6 +47,17 @@ test('CLI: session new --template confirmar incrusta plantilla', () => {
   assert.equal(ses.template.id, 'confirmar');
 });
 
+test('CLI: session new sin template → validate ok (SPEC-2, C1.5)', () => {
+  const { writeFileSync, mkdtempSync } = require('node:fs');
+  const { tmpdir } = require('node:os');
+  const { join } = require('node:path');
+  const ses = JSON.parse(cli(['session', 'new']));
+  assert.equal(ses.template, null);
+  const ruta = join(mkdtempSync(join(tmpdir(), 'glosomata-test-')), 's.json');
+  writeFileSync(ruta, JSON.stringify(ses));
+  assert.equal(execFileSyncStatus(['validate', '--session', ruta, '--text', 'lo que sea']), 0);
+});
+
 test('CLI: validate ok exit 0 / fail exit 1', () => {
   const { writeFileSync, mkdtempSync } = require('node:fs');
   const { tmpdir } = require('node:os');
