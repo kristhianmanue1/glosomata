@@ -136,6 +136,52 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
   return { code: ok ? 0 : 1, data: veredicto };
 }
 
+// P2.1: matriz SANEADA para agentes (tool MCP get_config): whitelist
+// estricta — disponibilidad, selección y constraints; JAMÁS rutas del
+// filesystem (curación de ronda 5 intacta: el agente MCP puede ser
+// remoto). La config completa es canal del operador (CLI / proyecto
+// externo autenticado). Ronda adversarial: fail-closed SOBRE LA
+// FORMA — una config editada a mano (canal vigente, sin schema) no
+// cuela nada: claves fuera de whitelist y valores no numéricos
+// viajan como null, nunca verbatim.
+const CLAVES_CONSTRAINTS = new Set([
+  'session_ttl_min', 'max_text_chars', 'listen_default_timeout_s',
+  'validation_floor_ms', 'confirmation_channels', 'max_pattern_chars',
+]);
+const PATRON_ID = /^[a-z0-9-]{1,64}$/;
+const ADAPTADORES = new Set(['say', 'piper', 'kokoro']);
+
+const numeroONull = (v) => (typeof v === 'number' && Number.isFinite(v)
+  ? v : null);
+
+export async function configSaneada() {
+  const cfg = await cargarMatriz();
+  const { diagnosticoWhisper } = await import('./stt.mjs');
+  const sttOk = (await diagnosticoWhisper(cfg)).ok;
+  const constraints = {};
+  for (const [k, v] of Object.entries(cfg.constraints ?? {})) {
+    if (CLAVES_CONSTRAINTS.has(k)) {
+      const n = numeroONull(v);
+      if (n !== null) constraints[k] = n;
+    }
+  }
+  return {
+    engines: {
+      tts: cfg.engines.tts.map((e) => ({
+        id: PATRON_ID.test(e.id ?? '') ? e.id : null,
+        adapter: ADAPTADORES.has(e.adapter) ? e.adapter : null,
+        selected: !!(e.selected && e.available),
+        available: !!e.available,
+        kill_switch: {
+          max_latency_ms: numeroONull(e.kill_switch?.max_latency_ms),
+        },
+      })),
+      stt: { available: sttOk },
+    },
+    constraints,
+  };
+}
+
 // —— datos (nunca imprimen) ——
 
 const rand6 = () => Math.random().toString(36).slice(2, 8);

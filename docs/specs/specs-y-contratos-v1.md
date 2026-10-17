@@ -110,9 +110,11 @@ proceso si ésta se adelanta (p. ej. EOF de stdin del orquestador), o
 `exit 143` si decide la gracia.
 
 Tools: speak(text, engine?), listen(timeout_s?), stop(), session_new(template_id?),
-list_engines(), list_templates() — incluye turns —, validate(session, text).
-Mismos códigos de error que CLI; un `listen` interrumpido por `stop` se
-resuelve con `stopped`. `validate` recibe la sesión inline como objeto.
+list_engines(), get_config() — matriz SANEADA: disponibilidad, selección
+y constraints, sin rutas del filesystem —, list_templates() — incluye
+turns —, validate(session, text). Mismos códigos de error que CLI; un
+`listen` interrumpido por `stop` se resuelve con `stopped`. `validate`
+recibe la sesión inline como objeto.
 
 ## CONTRATO: plantilla v1 (esquema cerrado)
 
