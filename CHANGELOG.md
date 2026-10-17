@@ -18,6 +18,12 @@ generadas desde commits/PRs reales.
   (example, config real del operador, config que ejerce TODAS las
   claves opcionales) y negativos (once rechazos) + vigilancia meta:
   el schema sólo usa palabras clave que el validador implementa.
+  Ronda adversarial absorbida: schemas booleanos (true/false) y
+  `items` tupla manejados fail-closed en el validador (antes puntos
+  ciegos silenciosos), pattern sin flag (ECMA-262 como draft-07), y
+  notas de `model` kokoro (exigido por el probe, no expresable como
+  condicional) y `sample_rate` (debe coincidir con la tasa del
+  modelo piper — sólo rotula el header WAV) en schema y spec.
 - docs: alta de `config_write_failed` en la taxonomía cerrada (P0.3)
   — spec §CLI v1 y contrato §2.1: 17 originales + 1. Destinado a los
   fallos de la escritura gobernada de config (`config set`, P1.2);

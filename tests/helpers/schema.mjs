@@ -8,6 +8,14 @@ export function validar(instancia, schema, raiz = schema, ruta = '$') {
   const errores = [];
   const anota = (m) => errores.push(`${ruta}: ${m}`);
 
+  // Schemas booleanos (draft-07): true acepta todo, false rechaza todo
+  // (ronda adversarial: antes se ignoraban en silencio)
+  if (schema === true) return errores;
+  if (schema === false) {
+    anota('schema false: nada es válido aquí');
+    return errores;
+  }
+
   // $ref local a definitions (única forma que el schema usa)
   if (schema.$ref) {
     const m = /^#\/definitions\/([a-zA-Z0-9_-]+)$/.exec(schema.$ref);
@@ -52,7 +60,7 @@ export function validar(instancia, schema, raiz = schema, ruta = '$') {
     if (schema.maxLength !== undefined && instancia.length > schema.maxLength) {
       anota(`largo ${instancia.length} > maxLength ${schema.maxLength}`);
     }
-    if (schema.pattern && !new RegExp(schema.pattern, 'u').test(instancia)) {
+    if (schema.pattern && !new RegExp(schema.pattern).test(instancia)) {
       anota(`no matchea ${schema.pattern}`);
     }
   }
@@ -62,7 +70,11 @@ export function validar(instancia, schema, raiz = schema, ruta = '$') {
     if (schema.minItems !== undefined && instancia.length < schema.minItems) {
       anota(`items ${instancia.length} < minItems ${schema.minItems}`);
     }
-    if (schema.items) {
+    if (Array.isArray(schema.items)) {
+      // forma tupla NO soportada por este subconjunto: fallar cerrado y
+      // ruidoso, jamás validar en silencio (ronda adversarial, hallazgo 2)
+      anota('items en forma tupla no está soportado por el validador');
+    } else if (schema.items) {
       instancia.forEach((item, i) => {
         errores.push(...validar(item, schema.items, raiz, `${ruta}[${i}]`));
       });

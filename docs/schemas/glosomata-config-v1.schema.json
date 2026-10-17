@@ -31,7 +31,11 @@
         "adapter": { "enum": ["say", "piper", "kokoro"] },
         "selected": { "type": "boolean" },
         "bin": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Obligatorio en la práctica para kokoro: sin model el probe lo declara no disponible (fail-closed, modelo_ausente) y el script lo exige — el schema común de motor no puede expresar el condicional sin if/then (fuera del subconjunto)."
+        },
         "python": { "type": "string", "minLength": 1 },
         "script": { "type": "string", "minLength": 1 },
         "voice": { "type": "string", "minLength": 1 },
@@ -47,7 +51,12 @@
           "maximum": 1.2,
           "description": "El rango ya se aplica en runtime (synthesize_kokoro.py, pitch_invalid → tts_failed): el schema lo declara a tiempo de config, no de playback."
         },
-        "sample_rate": { "type": "integer", "minimum": 8000, "maximum": 48000 },
+        "sample_rate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 48000,
+          "description": "Sólo rotula el header WAV que piper.mjs escribe: la tasa REAL es la del modelo. Debe coincidir con la del modelo configurado (22050 en el ejemplo) o el playback queda acelerado/ralentizado."
+        },
         "kill_switch": {
           "type": "object",
           "additionalProperties": false,

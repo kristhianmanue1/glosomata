@@ -121,9 +121,12 @@ sin forma → `session_invalid`.
 `glosomata.json` (ruta override: GLOSOMATA_CONFIG): engines.tts[]
 {id, adapter, selected, kill_switch{type,target,max_latency_ms},
 bin?/model?/python?/script?/voice?/rate?/pitch_scale?/sample_rate?} —
-para el adaptador kokoro `model` (dir local del modelo MLX) es
-obligatorio: `from_pretrained` sin él descargaría de HuggingFace
-(prohibido: 100% local). engines.stt {whisper_bin?, whisper_model?} —
+para el adaptador kokoro `model` es obligatorio en la práctica: el
+probe lo declara no disponible si falta (fail-closed,
+`modelo_ausente`) y el script de síntesis lo exige —
+`from_pretrained` sin él descargaría de HuggingFace (prohibido: 100%
+local); el schema común de motor no expresa el condicional (nota en
+el propio schema). engines.stt {whisper_bin?, whisper_model?} —
 sin claves el STT queda no disponible (fail-closed), el TTS sigue.
 constraints {validation_floor_ms*, confirmation_channels*,
 session_ttl_min, max_text_chars, max_pattern_chars*,

@@ -153,6 +153,22 @@ test('schema: sin engines.stt → rechazo (estructura de matriz)', () => {
   assert.notEqual(errores.length, 0);
 });
 
+// —— ronda adversarial: puntos ciegos del validador ——
+
+test('validador: schema booleano false rechaza TODO (draft-07)', () => {
+  const errores = validar('cualquiera', false);
+  assert.notEqual(errores.length, 0);
+});
+
+test('validador: schema booleano true acepta todo', () => {
+  assert.deepEqual(validar({ lo: 'que sea' }, true), []);
+});
+
+test('validador: items en forma tupla → rechazo ruidoso, no silencio', () => {
+  const errores = validar(['x', 3], { type: 'array', items: [{ type: 'integer' }] });
+  assert.notEqual(errores.length, 0);
+});
+
 // —— vigilancia meta: schema y validador crecen juntos ——
 
 test('schema: sólo usa palabras clave que el validador implementa', () => {
