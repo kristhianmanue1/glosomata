@@ -192,9 +192,12 @@ Garantías que el consumidor puede ofrecer a SUS usuarios por apoyarse en
 glosomata: 100% local (sin red en turnos de voz), sin retención
 (temporales en directorio 0700 y archivos 0600, borrados por operación
 y barridos por edad), logs sólo
-ids/códigos/duraciones, kill-switch por motor declarado en matriz y
-verificado en arranque (fail-closed), y `stop` con latencia máxima
-declarada (`max_latency_ms`). Detalles de amenaza: `SECURITY.md`.
+ids/códigos/duraciones, kill-switch por motor declarado en matriz —
+la declaración se verifica en arranque (fail-closed: sin `kill_switch`
+el motor no es seleccionable) y el corte es SIGKILL al grupo del
+subprocess, efectivo en la ventana del poll (~50 ms). El
+`max_latency_ms` declarado es documentación de la operación, no un
+valor evaluado en runtime. Detalles de amenaza: `SECURITY.md`.
 
 ## 11. Reporte de incidencias y mejoras en GitHub
 
