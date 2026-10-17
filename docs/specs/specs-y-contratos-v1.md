@@ -71,10 +71,10 @@ exclusivamente la interrupción de un `listen` por `stop`.
 Transporte: stdio únicamente, heredado del orquestador. Sin socket/HTTP.
 Logs a stderr, jamás stdout (corrompería el protocolo).
 
-Tools: speak(text, engine?), listen(timeout_s?), stop(), list_engines(),
-list_templates(), validate(session, text). Mismos códigos de error que
-CLI; un `listen` interrumpido por `stop` se resuelve con `stopped`.
-`validate` recibe la sesión inline como objeto.
+Tools: speak(text, engine?), listen(timeout_s?), stop(), session_new(template_id?),
+list_engines(), list_templates() — incluye turns —, validate(session, text).
+Mismos códigos de error que CLI; un `listen` interrumpido por `stop` se
+resuelve con `stopped`. `validate` recibe la sesión inline como objeto.
 
 ## CONTRATO: plantilla v1 (esquema cerrado)
 

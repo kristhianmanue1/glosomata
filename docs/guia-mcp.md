@@ -46,8 +46,9 @@ inválidos → `-32600`.
 | `speak` | `text` (requerido), `engine?` | reproduce por voz localmente; `{played, engine, echo, truncated}` |
 | `listen` | `timeout_s?` (0<v≤120) | captura una **ventana fija** de hasta `timeout_s` y transcribe; la voz NO corta la captura — espera el timeout completo |
 | `stop` | — | interrumpe la operación de canal activa (kill-switch) |
+| `session_new` | `template_id?` | acuña sesión efímera v1 (la posee el agente); sin template → `template:null`; id desconocido → `not_found` |
 | `list_engines` | — | matriz de disponibilidad TTS/STT |
-| `list_templates` | — | catálogo de plantillas base |
+| `list_templates` | — | catálogo de plantillas base **con `turns`** |
 | `validate` | `session` (objeto inline), `text` | evalúa texto contra plantilla+turno |
 
 Notas: el `≤2000` del schema de `speak` es sobre el texto crudo; el
@@ -72,8 +73,9 @@ de la matriz rige sólo el CLI.
 
 ## Flujo de turno con plantilla (típico)
 
-1. `session new --template confirmar` vía CLI (la sesión la posee el
-   agente; el servidor MCP sólo la recibe inline en `validate`).
+1. `session_new` (tool MCP; equivalente CLI: `session new --template
+   confirmar`) — la sesión la posee el agente; el servidor MCP sólo la
+   recibe inline en `validate`.
 2. `speak` con la pregunta al humano.
 3. `listen` → transcripción del humano.
 4. `validate {session, text: transcripción}` →

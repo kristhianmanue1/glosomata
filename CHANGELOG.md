@@ -6,6 +6,10 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: MCP-only de primera clase (C1.1/C1.2) — tool `session_new`
+  (misma acuñación que el CLI, TTL desde constraints) y
+  `list_templates` con `turns`; un agente que sólo habla MCP completa
+  un turno sin tocar el CLI.
 - feat: `doctor` en CLI — diagnóstico de instalación con causas cerradas
   (node, config, motores TTS con `diagnostico()` por adaptador, whisper
   bin/model, ffmpeg por plataforma); `matriz` adjunta causa cerrada a

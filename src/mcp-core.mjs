@@ -30,6 +30,9 @@ const TOOLS = [
   { name: 'stop', description: 'Interrumpe la operación de canal activa',
     inputSchema: { type: 'object', additionalProperties: false,
       properties: {} } },
+  { name: 'session_new', description: 'Acuña sesión efímera (la posee el agente)',
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: { template_id: { type: 'string' } } } },
   { name: 'list_engines', description: 'Matriz de disponibilidad TTS/STT',
     inputSchema: { type: 'object', additionalProperties: false,
       properties: {} } },
@@ -86,10 +89,24 @@ async function llamar(name, args) {
     }
     case 'stop':
       return ops.stopOp();
+    case 'session_new': {
+      const id = args.template_id;
+      if (id !== undefined
+          && (typeof id !== 'string' || !/^[a-z0-9-]{1,64}$/.test(id))) {
+        return { code: 1, data: { error: 'template_invalid' } };
+      }
+      // misma acuñación que el CLI: sesión nueva + TTL de la matriz
+      return ops.sessionOp(['new',
+        ...(id === undefined ? [] : ['--template', id])]);
+    }
     case 'list_engines':
       return ops.enginesOp();
-    case 'list_templates':
-      return ops.templatesOp([]);
+    case 'list_templates': {
+      // el agente MCP-only necesita los turns para saber qué espera cada
+      // plantilla (C1.2); el CLI conserva su --list sin turns
+      const { templatesData } = await import('./plantillas.mjs');
+      return templatesData([], { conTurnos: true });
+    }
     case 'validate': {
       const { expirada } = await import('./sesion.mjs');
       const { validarTurno } = await import('./plantillas.mjs');
