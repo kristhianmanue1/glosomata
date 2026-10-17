@@ -6,6 +6,13 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **`config list` y `config get <sección>`** (P1.1) — lectura
+  CRUDA de la matriz por CLI (JSON tal cual en disco, sin probes ni
+  campos derivados; la sección es lista cerrada
+  `engines|constraints`, sin traversal — misma regla que
+  `templates --show`). Criterio: un agente lee la config sin tocar
+  el archivo. Spec §CLI v1, contrato §1 (10 comandos) y §3, README
+  §Comandos en el mismo commit.
 - feat: **schema formal de `glosomata.json`** (P0.2, ADR-008):
   `docs/schemas/glosomata-config-v1.schema.json`, cerrado contra el
   código — incorpora `script`/`rate`/`sample_rate` que el spec §matriz

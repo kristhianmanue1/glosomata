@@ -153,3 +153,8 @@ export async function validateOp(argv) {
 export async function speakMcp(args) {
   return speakCore(args);
 }
+
+export async function configOp(argv) {
+  const { configData } = await import('./matriz.mjs');
+  return configData(argv);
+}

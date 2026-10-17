@@ -14,7 +14,7 @@ tres perfiles de consumidor:
 | Perfil | Superficie | Estado v1 |
 |---|---|---|
 | Agente con cliente MCP | MCP stdio (7 tools) | Contratado |
-| Agente/script con shell | CLI v1 (9 comandos) | Contratado |
+| Agente/script con shell | CLI v1 (10 comandos) | Contratado |
 | Programa Node (import directo) | `src/ops.mjs` etc. | **NO contratado** |
 | Cliente HTTP/remoto | — | No-objetivo declarado |
 
@@ -62,7 +62,8 @@ Un consumidor automatizado debe leer ambas salidas cuando exit≠0 en
 estas dos operaciones.
 
 Comandos: `speak`, `listen`, `stop`, `engines`, `templates`,
-`session new`, `validate` — semántica en §CLI v1 del spec canónico.
+`session new`, `validate`, `config list`, `config get
+engines|constraints` — semántica en §CLI v1 del spec canónico.
 
 ## 4. Superficie MCP (S2)
 
