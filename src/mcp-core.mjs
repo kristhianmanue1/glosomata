@@ -112,9 +112,10 @@ async function llamar(name, args) {
     case 'get_config': {
       // P2.1: sana igual que engines (curación ronda 5 intacta):
       // disponibilidad y constraints, JAMÁS rutas — el agente MCP
-      // puede ser remoto. Schema cerrado validado también en server.
+      // puede ser remoto. Schema cerrado validado también en server
+      // (arrays no son objetos: ronda adversarial H-6).
       if (args === null || typeof args !== 'object'
-          || Object.keys(args).length > 0) {
+          || Array.isArray(args) || Object.keys(args).length > 0) {
         return { code: 2, data: { error: 'usage' } };
       }
       const { configSaneada } = await import('./matriz.mjs');

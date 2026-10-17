@@ -12,8 +12,9 @@ Numeración: 006 y 007 quedan reservados por el plan de consumo
 
 La configuración (`glosomata.json`) hoy se edita a mano: sin schema
 formal, sin validación previa, sin copia de seguridad, y fuera del
-alcance de los consumidores (los 7 tools MCP no tocan config; el CLI
-tampoco). El operador pidió gestionarla por comandos consumibles por
+alcance de los consumidores (los 7 tools MCP del momento no tocaban
+config; desde P2.1, `get_config` expone la matriz SANEADA — sin
+rutas). El operador pidió gestionarla por comandos consumibles por
 agentes (CLI/MCP).
 
 La primera versión de este ADR (mismo día) proponía reabrir el

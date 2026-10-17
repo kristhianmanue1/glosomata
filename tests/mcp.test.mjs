@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { CATALOGO } from '../src/plantillas.mjs';
 
 const RAIZ = new URL('..', import.meta.url).pathname;
@@ -9,8 +11,11 @@ const RAIZ = new URL('..', import.meta.url).pathname;
 // Cliente stdio real: un proceso por test, respuestas correladas por id.
 // Sin mocks internos: el contrato es observable por proceso (política repo).
 class Cliente {
-  constructor() {
-    this.child = spawn('node', ['src/mcp.mjs'], { cwd: RAIZ });
+  constructor(extra = {}) {
+    this.child = spawn('node', ['src/mcp.mjs'], {
+      cwd: RAIZ,
+      env: { ...process.env, ...extra },
+    });
     this.respuestas = [];
     this.orden = [];
     this.esperas = new Map();
@@ -84,8 +89,8 @@ class Cliente {
 }
 
 // limpieza garantizada aunque el cuerpo falle (ronda adversarial M1)
-async function conCliente(fn) {
-  const c = new Cliente();
+async function conCliente(fn, extra = {}) {
+  const c = new Cliente(extra);
   try {
     await fn(c);
   } finally {
@@ -376,13 +381,71 @@ test('MCP: get_config NO expone ni una ruta del disco (config real con rutas)', 
   await conCliente(async (c) => {
     c.enviar(llamada(1, 'get_config'));
     const r = await c.esperar(1);
+    // sin esto, un fallo del servidor pasaría el test en vacío (ADV H-4)
+    assert.equal(r.result.isError, false);
     const plano = r.result.content[0].text;
     // la config real del repo declara bin/python/model/script/whisper_*:
-    // ninguna de esas claves ni valores puede viajar
+    // ninguna de esas claves ni valores puede viajar — incluidas las
+    // rutas RELATIVAS de la config real, no sólo las absolutas
     for (const prohibida of ['"bin"', '"model"', '"python"', '"script"',
-      'whisper_bin', 'whisper_model', '.venv', '/Users/']) {
+      'whisper_bin', 'whisper_model', '.venv', '/Users/',
+      'docs/proposal', 'whisper-cli', 'ggml', '.local-models']) {
       assert.equal(plano.includes(prohibida), false, prohibida);
     }
+  });
+});
+
+test('MCP: get_config ante config envenenada a mano — null, nunca verbatim', async () => {
+  // canal vigente según ADR-008 §Contexto: config editada a mano, sin
+  // schema. Basura en id/adapter/max_latency_ms y rutas coladas en
+  // constraints → el saneador fail-closed viaja con nulls/omisiones.
+  const dir = mkdtempSync(join(tmpdir(), 'glo-adv-gc-'));
+  const rutaCfg = join(dir, 'glosomata.json');
+  writeFileSync(rutaCfg, JSON.stringify({
+    engines: {
+      tts: [
+        { id: '/Users/victima/.ssh/id_ed25519', adapter: '/bin/sh',
+          selected: true, available: false,
+          kill_switch: { type: 'subprocess_kill', target: 'process_group',
+            max_latency_ms: '/Users/victima/secreto/planta' } },
+        { id: 'sin-ks', adapter: 'say', selected: false },
+      ],
+      stt: {},
+    },
+    constraints: {
+      session_ttl_min: 15,
+      nota_interna: '/Users/victima/.local-models/ggml-small.bin',
+      stt_extra: { whisper_bin: '.local-models/whisper-cli' },
+      max_text_chars: 'dos mil',
+    },
+  }));
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'get_config'));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, false);
+    const cfg = JSON.parse(r.result.content[0].text);
+    assert.equal(cfg.engines.tts[0].id, null);
+    assert.equal(cfg.engines.tts[0].adapter, null);
+    assert.equal(cfg.engines.tts[0].kill_switch.max_latency_ms, null);
+    // motor sin kill_switch: forma estable, valor null (ADV H-5)
+    assert.deepEqual(cfg.engines.tts[1].kill_switch, { max_latency_ms: null });
+    // constraints: sólo claves conocidas con número finito
+    assert.deepEqual(cfg.constraints, { session_ttl_min: 15 });
+    const plano = r.result.content[0].text;
+    for (const prohibida of ['.ssh', 'secreto', 'ggml', 'whisper',
+      'nota_interna', 'stt_extra']) {
+      assert.equal(plano.includes(prohibida), false, prohibida);
+    }
+  }, { GLOSOMATA_CONFIG: rutaCfg });
+});
+
+test('MCP: get_config con arguments array → usage (no es objeto)', async () => {
+  await conCliente(async (c) => {
+    c.enviar({ jsonrpc: '2.0', id: 1, method: 'tools/call',
+      params: { name: 'get_config', arguments: [] } });
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, true);
+    assert.equal(JSON.parse(r.result.content[0].text).error, 'usage');
   });
 });
 
