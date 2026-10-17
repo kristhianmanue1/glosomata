@@ -1,7 +1,8 @@
 // Matriz de configuración v1 — carga glosomata.json y valida disponibilidad.
 // Contrato: docs/specs/specs-y-contratos-v1.md (§ matriz)
 
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, rm, rename } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 
 const RUTA_CONFIG = process.env.GLOSOMATA_CONFIG ?? 'glosomata.json';
 
@@ -96,7 +97,23 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
     throw err;
   }
   veredicto.estructura = validar(cfg, schema);
-  if (veredicto.estructura.length > 0) {
+  // semántica de matriz (P1.2): ids únicos y exactamente un selected
+  // (el schema no puede expresarlo; config validate y config set
+  // comparten la misma barrera)
+  if (veredicto.estructura.length === 0) {
+    const ids = cfg.engines.tts.map((e) => e.id);
+    const dup = [...new Set(ids.filter((x, i) => ids.indexOf(x) !== i))];
+    if (dup.length > 0) {
+      veredicto.estructura.push(`ids duplicados en engines.tts: ${dup.join(', ')}`);
+    }
+    const nSel = cfg.engines.tts.filter((e) => e.selected === true).length;
+    if (nSel !== 1) {
+      veredicto.estructura.push(`selected: exactamente 1 motor en true (hay ${nSel})`);
+    }
+    if (veredicto.estructura.length > 0) {
+      return { code: 1, data: veredicto };
+    }
+  } else {
     return { code: 1, data: veredicto };
   }
 
@@ -120,6 +137,71 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
 }
 
 // —— datos (nunca imprimen) ——
+
+const rand6 = () => Math.random().toString(36).slice(2, 8);
+const fechaCompacta = () => new Date().toISOString()
+  .replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+
+// P1.2: config set — replace atómico de la matriz COMPLETA (sin
+// parches por clave). El candidato se copia a un temporal 0600 EN el
+// directorio del destino (rename atómico exige mismo filesystem), se
+// valida TODO sobre el temporal (estructura + semántica + probes) y
+// sólo entonces: backup del actual → rename. Cualquier fallo deja el
+// original intacto y responde config_write_failed con el veredicto.
+// El schema (additionalProperties:false) garantiza que jamás se
+// persistan campos derivados (available/causa): un candidato que los
+// traiga es rechazado.
+export async function escribirConfig(rutaCandidata, destino = RUTA_CONFIG) {
+  let contenido;
+  try {
+    contenido = await readFile(rutaCandidata, 'utf8');
+  } catch {
+    return { code: 1, data: { error: 'config_write_failed',
+      estructura: [`candidato ilegible: ${rutaCandidata}`] } };
+  }
+  const tmp = join(dirname(destino),
+    `.glosomata-set-${process.pid}-${rand6()}.tmp`);
+  try {
+    await writeFile(tmp, contenido, { mode: 0o600 });
+    const v = await validarConfig(tmp);
+    if (v.code !== 0) {
+      return { code: 1, data: { error: 'config_write_failed',
+        estructura: v.data.estructura, motores: v.data.motores,
+        stt: v.data.stt } };
+    }
+    // backup del actual (si existe): junto al lock, 0600, últimas 5
+    const { rutaBackups } = await import('./canal.mjs');
+    const bdir = rutaBackups();
+    await mkdir(bdir, { recursive: true, mode: 0o700 });
+    let actual = null;
+    try {
+      actual = await readFile(destino);
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e; // sin actual: sin backup
+    }
+    let backup = null;
+    if (actual !== null) {
+      backup = `glosomata-${fechaCompacta()}-${rand6()}.json`;
+      await writeFile(join(bdir, backup), actual, { mode: 0o600 });
+    }
+    const entradas = (await readdir(bdir))
+      .filter((f) => f.startsWith('glosomata-') && f.endsWith('.json'))
+      .sort();
+    for (const vieja of entradas.slice(0, -5)) {
+      await rm(join(bdir, vieja), { force: true });
+    }
+    await rename(tmp, destino);
+    return { code: 0, data: { ok: true,
+      ...(backup ? { backup } : {}), motores: v.data.motores,
+      stt: v.data.stt } };
+  } catch (e) {
+    return { code: 1, data: { error: 'config_write_failed',
+      causa: String(e.code ?? e.message) } };
+  } finally {
+    await rm(tmp, { force: true }).catch(() => {});
+  }
+}
+
 export async function configData(argv) {
   const [sub, ...rest] = argv;
   if (sub === 'list') {
@@ -133,6 +215,13 @@ export async function configData(argv) {
     }
     const cfg = await leerConfigCruda();
     return { code: 0, data: cfg[seccion] ?? null };
+  }
+  if (sub === 'set') {
+    const rutaCand = rest[0];
+    if (rest.length !== 1 || !rutaCand || rutaCand.startsWith('--')) {
+      return { code: 2, data: { error: 'usage' } };
+    }
+    return escribirConfig(rutaCand);
   }
   if (sub === 'validate') {
     const i = rest.indexOf('--file');

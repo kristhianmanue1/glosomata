@@ -59,7 +59,14 @@ probes ni campos derivados; `config validate` juzga, la lectura no).
 Sección: lista cerrada, sin traversal. `config validate [--file ruta]`:
 veredicto estilo `doctor` — estructura (schema formal) + probes +
 kill_switch; JSON por stdout y stderr vacío; exit 0 sólo si todo lo
-declarado pasa (stt sin claves declaradas no invalida).
+declarado pasa (stt sin claves declaradas no invalida). Estructura
+incluye la semántica de matriz: ids únicos en engines.tts y
+exactamente un motor `selected:true`. `config set <archivo>`: replace
+atómico de la matriz completa — candidato a temporal 0600 en el
+directorio del destino, validación completa sobre el temporal, backup
+previo (retención: últimas 5) y `rename`; cualquier fallo →
+`config_write_failed` con el veredicto y el original intacto. El
+schema garantiza que no se persistan campos derivados.
 
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage. Excepción
 `doctor`: exit 1 = no operativo, con veredicto JSON por stdout y stderr

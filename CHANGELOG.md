@@ -6,6 +6,16 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **`config set <archivo-json>`** (P1.2, ADR-008) — replace
+  atómico de la matriz completa: candidato a temporal 0600 en el
+  directorio del destino, validación completa sobre el temporal
+  (schema + semántica + probes), backup previo junto al lock del
+  canal (retención: últimas 5) y `rename`. Cualquier fallo →
+  `config_write_failed` con el veredicto y el original intacto; el
+  schema garantiza que jamás se persistan campos derivados. Semántica
+  nueva compartida por `config validate`: ids únicos en engines.tts y
+  exactamente un motor `selected:true` (el schema no puede
+  expresarlo). Criterio: jamás queda una config rota tras un set.
 - feat: **`config validate [--file <ruta>]`** (P1.3) — veredicto
   estilo `doctor`: estructura contra el schema formal (P0.2) + probes
   + kill_switch sobre la MISMA ruta que usará `config set`; JSON por
