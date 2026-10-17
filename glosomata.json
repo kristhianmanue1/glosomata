@@ -38,6 +38,20 @@
           "target": "process_group",
           "max_latency_ms": 300
         }
+      },
+      {
+        "id": "kokoro-fem",
+        "adapter": "kokoro",
+        "python": ".venv/bin/python",
+        "model": "/Users/krisnova/.cache/huggingface/hub/models--mlx-community--Kokoro-82M-bf16/snapshots/a71e4d38b236d968966a2002c4c895dbd12b1c3c",
+        "voice": "ef_dora",
+        "pitch_scale": 1.1,
+        "selected": false,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 300
+        }
       }
     ],
     "stt": {
