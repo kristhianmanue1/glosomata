@@ -69,7 +69,9 @@ exclusivamente la interrupción de un `listen` por `stop`.
 ## CONTRATO: MCP v1
 
 Transporte: stdio únicamente, heredado del orquestador. Sin socket/HTTP.
-Logs a stderr, jamás stdout (corrompería el protocolo).
+Logs a stderr, jamás stdout (corrompería el protocolo). `initialize`
+hace eco del `protocolVersion` pedido si está soportado (`2024-11-05`);
+si no, responde el máximo soportado.
 
 Tools: speak(text, engine?), listen(timeout_s?), stop(), session_new(template_id?),
 list_engines(), list_templates() — incluye turns —, validate(session, text).

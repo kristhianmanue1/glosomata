@@ -14,11 +14,14 @@ async function leerManifiesto() {
   return manifiesto;
 }
 
+// Versiones de protocolo MCP soportadas (C1.4): initialize hace eco de
+// la pedida por el cliente si está aquí; si no, la máxima soportada.
+const PROTOCOLOS = ['2024-11-05'];
+
 // Schemas cerrados (additionalProperties:false) y rangos alineados con la
 // validación interna: el servidor sigue validando fail-closed aunque el
 // cliente no respete el schema (LOW ronda 3).
-const TOOLS = [
-  { name: 'speak', description: 'Reproduce texto por voz localmente',
+const TOOLS = [  { name: 'speak', description: 'Reproduce texto por voz localmente',
     inputSchema: { type: 'object', required: ['text'],
       additionalProperties: false,
       properties: { text: { type: 'string', maxLength: 2000 },
@@ -159,8 +162,11 @@ export async function main() {
     }
     if (method === 'initialize') {
       const pkg = await leerManifiesto();
+      const pedida = params?.protocolVersion;
       rpc(id, {
-        protocolVersion: '2024-11-05',
+        protocolVersion: PROTOCOLOS.includes(pedida)
+          ? pedida
+          : PROTOCOLOS[PROTOCOLOS.length - 1],
         capabilities: { tools: {} },
         serverInfo: { name: pkg.name, version: pkg.version },
       });
