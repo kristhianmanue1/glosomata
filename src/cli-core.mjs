@@ -3,7 +3,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { speakOp, listenOp, stopOp, enginesOp, templatesOp, sessionOp,
-  validateOp, doctorOp } from './ops.mjs';
+  validateOp, doctorOp, configOp } from './ops.mjs';
 
 // Fuente única de versión: package.json (C0.1). Lectura diferida y
 // cacheada; sin hardcode en CLI ni en el serverInfo de MCP.
@@ -28,6 +28,9 @@ comandos:
   validate --session <archivo> --text <str>
                                        evalúa texto contra plantilla+turno
 
+  config list                          matriz tal cual en disco (JSON crudo)
+  config get <engines|constraints>     sección de la matriz
+
 errores: engine_unavailable tts_failed stt_failed mic_denied mic_timeout
   template_invalid not_found text_too_long session_invalid session_expired
   session_abandoned channel_busy not_supported config_unreadable usage
@@ -49,6 +52,7 @@ Object.assign(COMANDOS, {
     : { code: 2, data: { error: 'usage' } }),
   session: (a) => sessionOp(a),
   validate: (a) => validateOp(a),
+  config: (a) => configOp(a),
 });
 
 export async function main(argv) {

@@ -51,3 +51,35 @@ export async function cargarMatriz(ruta = RUTA_CONFIG) {
   }
   return cfg;
 }
+
+// Lectura cruda (P1.1): JSON tal cual en disco, SIN probes ni campos
+// derivados — `config list/get` muestra lo que HAY; validar es
+// `config validate` (P1.3), la lectura no juzga.
+export async function leerConfigCruda(ruta = RUTA_CONFIG) {
+  try {
+    return JSON.parse(await readFile(ruta, 'utf8'));
+  } catch {
+    throw errConfig(`ilegible: ${ruta}`);
+  }
+}
+
+// Secciones cerradas, sin traversal (misma regla que templates --show)
+const SECCIONES = new Set(['engines', 'constraints']);
+
+// —— datos (nunca imprimen) ——
+export async function configData(argv) {
+  const [sub, ...rest] = argv;
+  if (sub === 'list') {
+    if (rest.length > 0) return { code: 2, data: { error: 'usage' } };
+    return { code: 0, data: await leerConfigCruda() };
+  }
+  if (sub === 'get') {
+    const seccion = rest[0];
+    if (rest.length !== 1 || !SECCIONES.has(seccion)) {
+      return { code: 2, data: { error: 'usage' } };
+    }
+    const cfg = await leerConfigCruda();
+    return { code: 0, data: cfg[seccion] ?? null };
+  }
+  return { code: 2, data: { error: 'usage' } };
+}

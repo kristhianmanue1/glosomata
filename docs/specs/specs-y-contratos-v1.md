@@ -53,7 +53,10 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 
 Operaciones: speak --text [--engine]; listen [--timeout]; stop; engines;
 version; doctor; templates [--list|--show id]; session new
-[--template id]; validate --session archivo --text str.
+[--template id]; validate --session archivo --text str; config list;
+config get engines|constraints — lectura CRUDA de la matriz (sin
+probes ni campos derivados; `config validate` juzga, la lectura no).
+Sección: lista cerrada, sin traversal.
 
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage. Excepción
 `doctor`: exit 1 = no operativo, con veredicto JSON por stdout y stderr
