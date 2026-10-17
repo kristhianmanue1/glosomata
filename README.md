@@ -57,6 +57,10 @@ Guía de consumo (registro en clientes, tools, códigos de error):
 disponibilidad y selección, rutas de whisper, restricciones (kill-switch por
 motor, piso de validación, canales de confirmación).
 
+Variables de entorno (contrato en `docs/guia-mcp.md`): `GLOSOMATA_CONFIG`
+(ruta alternativa de la matriz), `GLOSOMATA_RUNTIME` (directorio de
+lock/temporales) y `GLOSOMATA_FFMPEG` (binario de captura STT).
+
 ## Construir, correr, probar
 
 ```bash
