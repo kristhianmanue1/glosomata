@@ -6,6 +6,17 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- fix: SIGTERM termina el proceso — el handler sustituía la
+  terminación por defecto y el servidor MCP sobrevivía a su propio
+  shutdown. Trunca (flag + kill de grupos) con gracia de 250 ms: la
+  salida es la NATURAL del proceso si se adelanta (p. ej. EOF de
+  stdin), o `exit 143` si decide la gracia; en el CLI, el exit
+  natural (truncado asentado) o 143. `SIGINT` conserva la semántica
+  de sólo truncar: es la señal del `stop` cross-process (H2 del
+  análisis previo al plan de playground; tests de señales por proceso
+  real, `tests/canal.test.mjs`; ronda adversarial absorbida: salida
+  natural vs 143 declarada en spec §CLI y §MCP, tests con limpieza y
+  tope de espera).
 - feat: negociación de `protocolVersion` en `initialize` — eco de la
   versión pedida si está soportada (`2024-11-05`), máximo soportado si
   no (C1.4; cierra el incremento C1 del plan de consumo).

@@ -137,13 +137,30 @@ export function resetStop() {
   stopFlag = false;
 }
 
+// Contrato de señales: SIGINT sólo trunca (es la señal del stop
+// cross-process — el flujo en curso ve el flag, resuelve truncated y el
+// proceso muere limpio). SIGTERM trunca Y termina: el handler sustituye
+// la terminación por defecto, así que sin exit explícito el servidor
+// MCP sobrevivía a su propio shutdown (análisis 2026-10-17, H2).
+let terminando = false;
 export function instalarSenales() {
-  for (const sig of ['SIGINT', 'SIGTERM']) {
-    process.on(sig, () => {
-      stopFlag = true;
-      matarTodosLosGrupos();
-    });
-  }
+  process.on('SIGINT', () => {
+    stopFlag = true;
+    matarTodosLosGrupos();
+  });
+  process.on('SIGTERM', () => {
+    if (terminando) return;
+    terminando = true;
+    stopFlag = true;
+    matarTodosLosGrupos();
+    // gracia para que la operación en curso asiente el truncado (escala
+    // de los max_latency_ms declarados); unref: no retiene un proceso
+    // que ya estaba terminando por su cuenta. Si la salida natural se
+    // adelanta (EOF de stdin, fin de la operación), su exit gana sobre
+    // el 143 — la spec declara ambas (ronda adversarial, H1/H2).
+    const salida = setTimeout(() => process.exit(143), 250);
+    salida.unref();
+  });
 }
 
 // stop cross-process: señal al pid del lockfile (fix BLOCKER ronda 3).
