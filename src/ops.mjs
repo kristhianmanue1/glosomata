@@ -4,8 +4,7 @@
 
 import { cargarMatriz } from './matriz.mjs';
 import { canonizar } from './plantillas.mjs';
-import { argsCaptura, rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper }
-  from './stt.mjs';
+import { rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper } from './stt.mjs';
 import {
   adquirirCanal, liberarCanal, resetStop, detenerCanalRemoto, nuevoTemporal,
 } from './canal.mjs';

@@ -134,7 +134,8 @@ export async function listen(argv) {
   if (!cap) {
     return { code: 1, data: { error: 'audio_device_error' } };
   }
-  const ffmpeg = rutaFfmpeg() ?? cap.bin;
+  // rutaFfmpeg() ya resuelve el bin de esta plataforma (cap no es null aquí)
+  const ffmpeg = rutaFfmpeg();
   try {
     await access(ffmpeg);
   } catch {
