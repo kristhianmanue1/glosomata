@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "glosomata/config/v1",
+  "title": "glosomata.json — matriz de configuración v1",
+  "description": "Referencia formal de la matriz; la autoridad en runtime es src/matriz.mjs. Cerrada contra el código (P0.2): claves opcionales por adaptador — voice/rate (say), bin/model/sample_rate (piper), python/script/model/voice/pitch_scale (kokoro). constraints.max_text_chars aplica en TODAS las superficies con 2000 como tope duro (H1); las claves marcadas deprecated no tienen lector en src/ y su endgame es remoción del example, nunca cableado (max_pattern_chars duplica el límite duro 200 del contrato §plantilla).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["engines"],
+  "properties": {
+    "engines": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tts", "stt"],
+      "properties": {
+        "tts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/motor" }
+        },
+        "stt": { "$ref": "#/definitions/stt" }
+      }
+    },
+    "constraints": { "$ref": "#/definitions/constraints" }
+  },
+  "definitions": {
+    "motor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "adapter", "selected", "kill_switch"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
+        "adapter": { "enum": ["say", "piper", "kokoro"] },
+        "selected": { "type": "boolean" },
+        "bin": { "type": "string", "minLength": 1 },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Obligatorio en la práctica para kokoro: sin model el probe lo declara no disponible (fail-closed, modelo_ausente) y el script lo exige — el schema común de motor no puede expresar el condicional sin if/then (fuera del subconjunto)."
+        },
+        "python": { "type": "string", "minLength": 1 },
+        "script": { "type": "string", "minLength": 1 },
+        "voice": { "type": "string", "minLength": 1 },
+        "rate": {
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 500,
+          "description": "CONTRATO NUEVO (P0.2): hoy pasa crudo a `say -r` sin validación."
+        },
+        "pitch_scale": {
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 1.2,
+          "description": "El rango ya se aplica en runtime (synthesize_kokoro.py, pitch_invalid → tts_failed): el schema lo declara a tiempo de config, no de playback."
+        },
+        "sample_rate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 48000,
+          "description": "Sólo rotula el header WAV que piper.mjs escribe: la tasa REAL es la del modelo. Debe coincidir con la del modelo configurado (22050 en el ejemplo) o el playback queda acelerado/ralentizado."
+        },
+        "kill_switch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "target", "max_latency_ms"],
+          "properties": {
+            "type": { "enum": ["subprocess_kill"] },
+            "target": { "enum": ["process_group"] },
+            "max_latency_ms": {
+              "type": "integer",
+              "minimum": 100,
+              "description": "Piso (P0.2): el mecanismo real es grupo+SIGKILL con poll de ~50 ms; el valor se declara, no se evalúa (contrato de consumo §10)."
+            }
+          }
+        }
+      }
+    },
+    "stt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whisper_bin": { "type": "string", "minLength": 1 },
+        "whisper_model": { "type": "string", "minLength": 1 }
+      },
+      "description": "Claves opcionales: sin ellas el STT queda no disponible (fail-closed de diagnosticoWhisper), el TTS sigue operativo."
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_ttl_min": { "type": "number", "minimum": 0 },
+        "max_text_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000,
+          "description": "Tope duro 2000 (el script kokoro no acepta más). H1: el valor aplica en TODAS las superficies (speak, validate CLI/MCP); la unificación se ejecuta en P1.3."
+        },
+        "listen_default_timeout_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "validation_floor_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "deprecated": true,
+          "description": "Sin lector en src/ (reliquia de F1). Endgame: remoción del example."
+        },
+        "confirmation_channels": {
+          "type": "integer",
+          "minimum": 1,
+          "deprecated": true,
+          "description": "Sin lector en src/ (reliquia de F1). Endgame: remoción del example."
+        },
+        "max_pattern_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "deprecated": true,
+          "description": "Duplica el límite DURO 200 del contrato §plantilla (validarPlantilla). Endgame: remoción del example; jamás se cablea."
+        }
+      }
+    }
+  }
+}
