@@ -23,6 +23,17 @@ Servidor **stdio** (sin socket, sin HTTP); el cliente hereda el proceso:
 relativos (`.venv/bin/piper`, whisper) se resuelven desde ahí. Para otra
 ruta de configuración, exporta `GLOSOMATA_CONFIG` en `env` del cliente.
 
+## Variables de entorno
+
+Contrato documental (plan de consumo C0.3): toda variable leída por
+`src/` vive aquí; toda variable de esta lista es leída por `src/`.
+
+| Variable | Efecto |
+|---|---|
+| `GLOSOMATA_CONFIG` | ruta alternativa de la matriz (`glosomata.json`) |
+| `GLOSOMATA_RUNTIME` | directorio base del lock y temporales (tests, sandboxes) |
+| `GLOSOMATA_FFMPEG` | binario ffmpeg de captura STT (rutas no estándar) |
+
 Protocolo: JSON-RPC 2.0 por líneas. `initialize` (protocolVersion
 `2024-11-05`), `tools/list`, `tools/call`, `ping`. Requests desconocidos
 → `-32601`; notificaciones → silencio; arrays (batch) y envelopes

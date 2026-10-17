@@ -6,6 +6,9 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: variables de entorno contractuales (`GLOSOMATA_CONFIG`,
+  `GLOSOMATA_RUNTIME`, `GLOSOMATA_FFMPEG`) documentadas en la guía MCP y
+  README (C0.3 del plan de consumo).
 - feat: `version` en CLI y `serverInfo.version` del servidor MCP leídos
   de `package.json` — fuente única de versión, sin hardcode ni drift
   (C0.1 del plan de consumo).
