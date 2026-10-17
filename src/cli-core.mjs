@@ -30,6 +30,7 @@ comandos:
 
   config list                          matriz tal cual en disco (JSON crudo)
   config get <engines|constraints>     sección de la matriz
+  config validate [--file <ruta>]      veredicto: estructura + probes
 
 errores: engine_unavailable tts_failed stt_failed mic_denied mic_timeout
   template_invalid not_found text_too_long session_invalid session_expired

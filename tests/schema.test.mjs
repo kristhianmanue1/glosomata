@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { validar } from './helpers/schema.mjs';
+import { validar } from '../src/schema.mjs';
 
 const schema = JSON.parse(await readFile(
   new URL('../docs/schemas/glosomata-config-v1.schema.json', import.meta.url),

@@ -6,6 +6,15 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **`config validate [--file <ruta>]`** (P1.3) — veredicto
+  estilo `doctor`: estructura contra el schema formal (P0.2) + probes
+  + kill_switch sobre la MISMA ruta que usará `config set`; JSON por
+  stdout, stderr vacío, exit 0 sólo si todo lo declarado pasa (stt
+  sin claves declaradas es no-disponible fail-closed, no config
+  rota). Validador draft-07 promovido de tests a `src/schema.mjs`
+  (runtime de estructura; probes siguen en `matriz.mjs`).
+  `--file` juzga una candidata sin tocar la real. Criterio: validar
+  antes de escribir es un comando, no una fe.
 - feat: **`config list` y `config get <sección>`** (P1.1) — lectura
   CRUDA de la matriz por CLI (JSON tal cual en disco, sin probes ni
   campos derivados; la sección es lista cerrada

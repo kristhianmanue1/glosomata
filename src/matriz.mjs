@@ -66,6 +66,59 @@ export async function leerConfigCruda(ruta = RUTA_CONFIG) {
 // Secciones cerradas, sin traversal (misma regla que templates --show)
 const SECCIONES = new Set(['engines', 'constraints']);
 
+// P1.3: validación completa — estructura (schema P0.2) + probes +
+// kill_switch — sobre la MISMA ruta que usará config set. Veredicto
+// estilo doctor: JSON por stdout, stderr vacío, exit 0 sólo si todo
+// lo DECLARADO pasa (stt sin claves declaradas no invalida: es
+// no-disponible fail-closed, no config rota).
+export async function validarConfig(ruta = RUTA_CONFIG) {
+  const veredicto = { estructura: [], motores: null, stt: null };
+
+  let cfg;
+  try {
+    cfg = JSON.parse(await readFile(ruta, 'utf8'));
+  } catch {
+    veredicto.estructura.push(`JSON ilegible: ${ruta}`);
+    return { code: 1, data: veredicto };
+  }
+
+  // estructura: el schema formal es ley; sin él, fallo explícito
+  const { validar } = await import('./schema.mjs');
+  let schema;
+  try {
+    schema = JSON.parse(await readFile(
+      new URL('../docs/schemas/glosomata-config-v1.schema.json',
+        import.meta.url), 'utf8'));
+  } catch {
+    const err = new Error('internal_error');
+    err.code = 'internal_error';
+    err.cause = 'schema formal ausente o ilegible';
+    throw err;
+  }
+  veredicto.estructura = validar(cfg, schema);
+  if (veredicto.estructura.length > 0) {
+    return { code: 1, data: veredicto };
+  }
+
+  // probes + kill_switch (cargarMatriz ya fail-closed con causas)
+  const sondeada = await cargarMatriz(ruta);
+  veredicto.motores = sondeada.engines.tts.map((e) => ({
+    id: e.id, adapter: e.adapter, available: !!e.available,
+    ...(e.available ? {} : { causa: e.causa ?? 'probe_fallido' }),
+  }));
+  const sttDeclarado = !!(sondeada.engines.stt?.whisper_bin
+    || sondeada.engines.stt?.whisper_model);
+  const { diagnosticoWhisper } = await import('./stt.mjs');
+  const whisper = await diagnosticoWhisper(sondeada);
+  veredicto.stt = {
+    declarado: sttDeclarado, available: whisper.ok,
+    ...(whisper.ok ? {} : { causa: whisper.causa }),
+  };
+  const ok = veredicto.motores.every((m) => m.available)
+    && (!sttDeclarado || whisper.ok);
+  return { code: ok ? 0 : 1, data: veredicto };
+}
+
 // —— datos (nunca imprimen) ——
 export async function configData(argv) {
   const [sub, ...rest] = argv;
@@ -80,6 +133,20 @@ export async function configData(argv) {
     }
     const cfg = await leerConfigCruda();
     return { code: 0, data: cfg[seccion] ?? null };
+  }
+  if (sub === 'validate') {
+    const i = rest.indexOf('--file');
+    let ruta = RUTA_CONFIG;
+    if (i >= 0) {
+      const v = rest[i + 1];
+      if (v === undefined || v.startsWith('--') || rest.length !== 2) {
+        return { code: 2, data: { error: 'usage' } };
+      }
+      ruta = v;
+    } else if (rest.length > 0) {
+      return { code: 2, data: { error: 'usage' } };
+    }
+    return validarConfig(ruta);
   }
   return { code: 2, data: { error: 'usage' } };
 }

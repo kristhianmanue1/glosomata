@@ -43,6 +43,7 @@ node src/cli.mjs session new --template confirmar
 node src/cli.mjs validate --session ses.json --text "sí"
 node src/cli.mjs config list
 node src/cli.mjs config get engines
+node src/cli.mjs config validate
 ```
 
 Servidor MCP (stdio):
