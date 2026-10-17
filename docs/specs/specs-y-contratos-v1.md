@@ -57,7 +57,11 @@ version; doctor; templates [--list|--show id]; session new
 
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage. Excepción
 `doctor`: exit 1 = no operativo, con veredicto JSON por stdout y stderr
-vacío (ver contrato de consumo §7.1).
+vacío (ver contrato de consumo §7.1). Señal `SIGTERM`: trunca la
+operación en curso; el exit es el natural si el truncado asienta
+dentro de la gracia (250 ms) o `143` si decide la gracia — fuera de la
+taxonomía 0/1/2 por ser terminación por señal, no resultado de
+operación.
 
 Errores (taxonomía cerrada): engine_unavailable, tts_failed, stt_failed,
 mic_denied, mic_timeout, audio_device_error, template_invalid,
@@ -73,8 +77,10 @@ Logs a stderr, jamás stdout (corrompería el protocolo). `initialize`
 hace eco del `protocolVersion` pedido si está soportado (`2024-11-05`);
 si no, responde el máximo soportado. Ciclo de vida: `SIGINT` sólo
 trunca la operación activa (es la señal del `stop` cross-process y no
-termina el proceso); `SIGTERM` trunca y termina (exit 143, con gracia
-de 250 ms para asentar el truncado en curso).
+termina el proceso); `SIGTERM` trunca y termina, con gracia de 250 ms
+para asentar el truncado en curso — la salida es la NATURAL del
+proceso si ésta se adelanta (p. ej. EOF de stdin del orquestador), o
+`exit 143` si decide la gracia.
 
 Tools: speak(text, engine?), listen(timeout_s?), stop(), session_new(template_id?),
 list_engines(), list_templates() — incluye turns —, validate(session, text).

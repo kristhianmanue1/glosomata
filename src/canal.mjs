@@ -155,7 +155,9 @@ export function instalarSenales() {
     matarTodosLosGrupos();
     // gracia para que la operación en curso asiente el truncado (escala
     // de los max_latency_ms declarados); unref: no retiene un proceso
-    // que ya estaba terminando por su cuenta.
+    // que ya estaba terminando por su cuenta. Si la salida natural se
+    // adelanta (EOF de stdin, fin de la operación), su exit gana sobre
+    // el 143 — la spec declara ambas (ronda adversarial, H1/H2).
     const salida = setTimeout(() => process.exit(143), 250);
     salida.unref();
   });
