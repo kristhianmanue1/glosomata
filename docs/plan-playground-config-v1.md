@@ -1,11 +1,16 @@
 # Plan de playground y configuración — v1
 
-> **Estado:** PROPUESTA (v3: ronda adversarial + análisis contra código
-> 2026-10-17 absorbido). Ejecución sólo con aceptación del humano, tarea
-> por tarea. Complementa
-> `docs/adr/ADR-008-servidor-local-playground.md` (reabre el no-objetivo
-> HTTP de forma acotada) y `docs/specs/contrato-consumo-agentes-v1.md`.
-> Sigue el estándar de `docs/estandar-diseno-software-github.md`.
+> **Estado:** PROPUESTA (v4). **Cambio de alcance (decisión del
+> operador 2026-10-17):** el servidor HTTP, la UI y el selftest
+> (P3–P5) ya NO se ejecutan en glosomata — migran a un proyecto
+> aparte cuando se decida su hogar; P3–P5 se conservan abajo como
+> especificación semilla para el plan de ese proyecto. El alcance
+> vigente de ESTE plan es P0–P2 (schema, config por CLI, config por
+> MCP). Ejecución sólo con aceptación del humano, tarea por tarea.
+> Complementa `docs/adr/ADR-008-configuracion-gobernada.md`
+> (configuración gobernada; SIN reapertura del no-objetivo HTTP) y
+> `docs/specs/contrato-consumo-agentes-v1.md`. Sigue el estándar de
+> `docs/estandar-diseno-software-github.md`.
 
 ## Reglas de ejecución
 
@@ -27,26 +32,15 @@ Leyenda: S ≤ media sesión; M ≤ una sesión.
 
 ## P0 — Fundamentos de contrato (docs y esquema)
 
-### P0.1 ADR-008 a aceptado + barrido completo de docs — M
-La frontera HTTP cambia y CINCO documentos la mencionan; todos se
-actualizan en el mismo commit:
+### P0.1 ADR-008 (configuración gobernada) a aceptado — S
 - ADR-008: PROPUESTA → aceptado (decisión humana explícita).
-- `specs-y-contratos-v1.md` §No objetivos: HTTP queda acotado a
-  «servidor de loopback del playground (ADR-008)»; socket/streaming y
-  HTTP hacia redes externas siguen prohibidos.
-- `contrato-consumo-agentes-v1.md` §2.6 (mismo ajuste) y §1 fila
-  «Cliente HTTP/remoto»: pasa a «loopback local (ADR-008); externo:
-  no-objetivo».
-- `README.md`: «sin navegador» (§1) → «playground web local (loopback)
-  desde v1.1 (ADR-008)»; las menciones de §Comandos y §Estructura se
-  editan en los commits de P1 y P3 (cuando `config` y `serve` existan),
-  no en P0.1 — ahí sólo se ajusta la frase de §1.
-- `SECURITY.md`: «sin socket, sin HTTP» → superficie de loopback con
-  token + modelo de amenazas del ADR (ver §Amenazas del ADR).
-- `guia-mcp.md` y spec §MCP «sin socket/HTTP»: sin cambio de fondo,
-  se aclara «(transporte MCP)» para no heredar la ambigüedad.
-- **Criterio**: `grep -ri "http\|navegador\|socket"` sobre los docs
-  canónicos no arroja ninguna afirmación contradictoria con ADR-008.
+- Con la v2 del ADR (sin HTTP) NO hay barrido de docs: los
+  no-objetivos de spec/contrato/README/SECURITY/guía siguen siendo
+  verdad literal y no se tocan (el barrido de cinco documentos de la
+  v1 de este plan queda sin objeto). Las menciones de README a los
+  comandos `config` se editan en los commits de P1, cuando existan.
+- **Criterio**: el ADR refleja la decisión vigente y ningún documento
+  canónico miente.
 
 ### P0.2 Schema formal de `glosomata.json` — M — **ADV**
 - `docs/schemas/glosomata-config-v1.schema.json`: esquema cerrado con el
@@ -147,9 +141,10 @@ actualizan en el mismo commit:
   deliberadamente `list_engines` para no exponer `whisper_bin/model` al
   consumidor MCP (ops.mjs:99-100): esta decisión la RESPETA y NO la
   revierte — un agente MCP puede ser remoto.
-- La configuración COMPLETA (con rutas) queda reservada al canal de
-  loopback del operador (`GET /config` COMPLETA + `PUT /config`, P3):
-  mismo nivel de confianza que editar el archivo a mano.
+- La configuración COMPLETA (con rutas) queda reservada al canal del
+  operador: CLI `config get` (P1) y el proyecto externo autenticado
+  (antes P3, migrado): mismo nivel de confianza que editar el archivo
+  a mano.
 - Docs y tests en el MISMO commit: spec §MCP (8 tools), guía, contrato
   §1, conteo de tools 7→8, schema cerrado de la tool.
 - Forma exacta de la salida (whitelist; `bin`, `model`, `python` y
@@ -162,7 +157,12 @@ actualizan en el mismo commit:
 
 ---
 
-## P3 — `serve`: API HTTP de loopback
+## P3 — `serve`: API HTTP de loopback — **MIGRA AL PROYECTO NUEVO**
+
+> Hogar por decidir. No se ejecuta en glosomata. Lo que sigue es
+> especificación semilla para el plan del proyecto externo (que
+> consume glosomata por CLI/MCP contratadas); sus referencias a
+> README/spec de glosomata se leen como referencias a SU documentación.
 
 ### P3.1 Servidor base + auth por token + timeouts por ruta — M — **ADV**
 - `glosomata serve [--port N]` (default efímero): `node:http`, bind
@@ -234,7 +234,11 @@ actualizan en el mismo commit:
 
 ---
 
-## P4 — Playground UI (vanilla, servida por `serve`)
+## P4 — Playground UI (vanilla, servida por `serve`) — **MIGRA AL PROYECTO NUEVO**
+
+> Ídem P3: semilla para el proyecto externo. Allí la regla de cero
+> dependencias de glosomata no aplica — el framework es decisión suya
+> con ADR propio.
 
 ### P4.1 Shell + pestaña Voz — M
 - `src/ui/index.html` + JS vanilla, cero dependencias ni CDN; si el
@@ -256,7 +260,11 @@ actualizan en el mismo commit:
 
 ---
 
-## P5 — Modo pruebas integrado
+## P5 — Modo pruebas integrado — **MIGRA AL PROYECTO NUEVO**
+
+> Ídem P3: el selftest compone `doctor` + eco por CLI/MCP; la decisión
+> doctor todos-vs-≥1 (abajo) sigue vigente porque la hereda el
+> proyecto externo.
 
 ### P5.1 Self-tests desde el playground — M
 - `POST /selftest` (token, tope 300s): suite ligera en vivo — probes de
@@ -286,23 +294,19 @@ estos no-objetivos exige ADR-009 y decisión humana explícita.
 
 ---
 
-## Orden y entregas
+## Orden y entregas (alcance vigente: P0–P2)
 
 ```
-P0.1 → P0.3 → P0.2      (docs y esquema: la frontera queda escrita)
+P0.1 → P0.3 → P0.2      (docs y esquema: la config gobernada queda escrita)
 P1.1 → P1.3 → P1.2      (config por CLI)
 P2.1                    (config por MCP, sólo lectura y saneada)
-P3.1 → P3.2 → P3.3      (serve: API loopback)
-P4.1 → P4.2             (playground UI)
-P5.1                    (modo pruebas)
+P3–P5                   (MIGRADAS al proyecto aparte — hogar por decidir)
 ```
 
-Coordinación con el plan de consumo (análisis 2026-10-17): P3.2
-depende de la codificación de errores — si C2.5 (codificación única)
-no aterrizó antes, `serve` hereda la dualidad semántico/pelado en una
-TERCERA superficie. Orden recomendado: **C2.5 (idealmente C2.3) antes
-de P3.2**, o decisión explícita escrita de aplazarla.
+La coordinación con el plan de consumo que la v3 anotaba para P3.2
+(codificación única C2.5 antes de `serve`) MIGRA con el playground:
+la hereda el proyecto externo si consume MCP.
 
 Cada tarea = un PR independiente. Si el plan se corta en cualquier
-punto, lo entregado es estable y contractado. El servidor no existe
-hasta P3: P0–P2 son puros CLI/MCP/docs.
+punto, lo entregado es estable y contractado. P0–P2 son puros
+CLI/MCP/docs; glosomata no abre HTTP.
