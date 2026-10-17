@@ -111,3 +111,12 @@ test('validarTurno: turno inválido → session_invalid', () => {
   assert.throws(() => validarTurno(libre, -1, 'x'), (e) => e.code === 'session_invalid');
   assert.throws(() => validarTurno(libre, 1.5, 'x'), (e) => e.code === 'session_invalid');
 });
+
+test('validarTurno: plantilla null (sesión acuñada por defecto) = modo libre (C1.5)', () => {
+  // SPEC-2: sesión libre → ok siempre. Antes: template_invalid
+  assert.deepEqual(validarTurno(null, 0, 'lo que sea'),
+    { result: 'ok', next_turn: 1 });
+  // turn basura sigue fail-closed aunque la plantilla sea null
+  assert.throws(() => validarTurno(null, -1, 'x'),
+    (e) => e.code === 'session_invalid');
+});

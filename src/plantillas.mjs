@@ -177,12 +177,20 @@ export function regexSegura(pattern) {
 // Validación de turno — función pura. turn fuera de rango → session_invalid
 // (antes: clamp que enmascaraba bugs del agente).
 export function validarTurno(plantilla, turn, textoCrudo, maxChars = 2000) {
-  validarPlantilla(plantilla);
+  // el contador se valida primero: turn basura es session_invalid aunque
+  // la plantilla también lo sea
   if (!Number.isInteger(turn) || turn < 0) {
     const err = new Error('session_invalid');
     err.code = 'session_invalid';
     throw err;
   }
+  // sesión acuñada sin plantilla = modo libre (SPEC-2: ok siempre).
+  // Antes validarPlantilla(null) rebotaba template_invalid y la sesión
+  // que `session new` acuña por defecto no era validable (C1.5)
+  if (plantilla === null) {
+    return { result: 'ok', next_turn: turn + 1 };
+  }
+  validarPlantilla(plantilla);
   const texto = canonizar(textoCrudo, maxChars);
   if (plantilla.kind === 'free' || plantilla.turns.length === 0) {
     return { result: 'ok', next_turn: turn + 1 };

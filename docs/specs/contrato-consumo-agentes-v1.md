@@ -149,33 +149,27 @@ causas sólo crece.
 Estos huecos están DECLARADOS, con plan de cierre incremental
 (`docs/plan-consumo-agentes-v1.md`):
 
-1. **Agente MCP-only no autónomo**: no existe tool `session_new`; el
-   flujo típico exige CLI para acuñar sesión (guía, §Flujo paso 1).
-   Tampoco `list_templates` expone `turns` ni hay `--show` vía MCP.
-2. **`serverInfo.version` y protocolo**: versión hardcodeada en
-   `mcp-core.mjs` (riesgo de drift contra `package.json`; hoy
-   coinciden); `initialize` no negocía: responde `2024-11-05` fijo.
-3. **`channel_busy` sin datos**: no informa `busy_pid` ni estimado de
+1. **Negociación de protocolo**: `initialize` responde `2024-11-05`
+   fijo, sin eco de la versión pedida por el cliente (C1.4).
+2. **`channel_busy` sin datos**: no informa `busy_pid` ni estimado de
    reintento; el consumidor no puede backoff informado.
-4. **Validación de sesión incompleta**: template y turn SÍ se validan
+3. **Validación de sesión incompleta**: template y turn SÍ se validan
    hoy (`template_invalid` / `session_invalid`); NO se verifican el
    campo `schema` ni la forma de `ttl_min`.
-5. **Sesión libre no validable**: `session new` sin `--template` acuña
-   `template:null`; `validate` sobre ella responde `template_invalid`,
-   cuando SPEC-2 promete ok siempre para sesión libre.
-6. **`ttl_min` malformado es fail-open**: `expirada()` con `ttl_min` no
-   numérico compara contra `NaN` y la sesión nunca expira (sin impacto
-   de seguridad — ADR-001 —, pero viola el marco fail-closed).
-7. **CLI `validate` con JSON `null`**: escapa un `TypeError` crudo
+4. **CLI `validate` con JSON `null`**: escapa un `TypeError` crudo
    fuera de la taxonomía (exit 1, mensaje de excepción en stderr). La
    vía MCP está guardada (`usage`).
-8. **Causas de audio poco granulares**: `mic_denied` agrupa permiso,
+5. **Causas de audio poco granulares**: `mic_denied` agrupa permiso,
    dispositivo ausente y fallo de captura; `audio_device_error` lleva
    `causa` sólo en un caso (ffmpeg ausente en STT); las causas TTS se
    descartan.
-9. **Plantillas propias**: "el agente crea la propia" exige fabricar el
+6. **Plantillas propias**: "el agente crea la propia" exige fabricar el
    JSON de sesión a mano; no hay superficie de plantillas del
    orquestador (CATALOGO builtin únicamente).
+
+Cerrados y sacados de esta lista: agente MCP-only no autónomo
+(session_new + list_templates con turns, C1.1/C1.2) y sesión libre no
+validable (plantilla `null` = modo libre, C1.5).
 
 Ninguno es bloqueante para el consumo actual; todos tienen tarea
 asignada en el plan. Mientras no se cierren: lo no contratado no se
