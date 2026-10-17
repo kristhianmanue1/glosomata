@@ -71,7 +71,10 @@ exclusivamente la interrupción de un `listen` por `stop`.
 Transporte: stdio únicamente, heredado del orquestador. Sin socket/HTTP.
 Logs a stderr, jamás stdout (corrompería el protocolo). `initialize`
 hace eco del `protocolVersion` pedido si está soportado (`2024-11-05`);
-si no, responde el máximo soportado.
+si no, responde el máximo soportado. Ciclo de vida: `SIGINT` sólo
+trunca la operación activa (es la señal del `stop` cross-process y no
+termina el proceso); `SIGTERM` trunca y termina (exit 143, con gracia
+de 250 ms para asentar el truncado en curso).
 
 Tools: speak(text, engine?), listen(timeout_s?), stop(), session_new(template_id?),
 list_engines(), list_templates() — incluye turns —, validate(session, text).
