@@ -6,6 +6,10 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: alta de `config_write_failed` en la taxonomía cerrada (P0.3)
+  — spec §CLI v1 y contrato §2.1: 17 originales + 1. Destinado a los
+  fallos de la escritura gobernada de config (`config set`, P1.2);
+  la taxonomía sólo crece.
 - docs: **ADR-008 (configuración gobernada) ACEPTADO** — decisión
   humana explícita del operador (2026-10-17). P0.1 del plan v4
   ejecutado; sin barrido de docs: los no-objetivos siguen siendo
