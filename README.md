@@ -44,6 +44,7 @@ node src/cli.mjs validate --session ses.json --text "sí"
 node src/cli.mjs config list
 node src/cli.mjs config get engines
 node src/cli.mjs config validate
+node src/cli.mjs config set nueva-config.json
 ```
 
 Servidor MCP (stdio):

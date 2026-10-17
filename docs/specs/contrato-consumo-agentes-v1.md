@@ -63,8 +63,8 @@ estas dos operaciones.
 
 Comandos: `speak`, `listen`, `stop`, `engines`, `templates`,
 `session new`, `validate`, `config list`, `config get
-engines|constraints`, `config validate [--file ruta]` — semántica en
-§CLI v1 del spec canónico.
+engines|constraints`, `config validate [--file ruta]`, `config set
+<archivo>` — semántica en §CLI v1 del spec canónico.
 
 ## 4. Superficie MCP (S2)
 

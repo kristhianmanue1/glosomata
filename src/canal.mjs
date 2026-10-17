@@ -13,6 +13,11 @@ const RUNTIME = process.env.GLOSOMATA_RUNTIME
   : join(tmpdir(), `glosomata-${process.getuid?.() ?? 'u'}`);
 const LOCK = join(RUNTIME, 'canal.lock');
 
+// P1.2: backups de config junto al lock — mismo layout per-user
+export function rutaBackups() {
+  return join(RUNTIME, 'backups');
+}
+
 let lockRuta = null;
 
 // Exclusión atómica: create-or-fail. EEXIST → liveness por señal 0;

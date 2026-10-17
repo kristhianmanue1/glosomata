@@ -31,11 +31,12 @@ comandos:
   config list                          matriz tal cual en disco (JSON crudo)
   config get <engines|constraints>     sección de la matriz
   config validate [--file <ruta>]      veredicto: estructura + probes
+  config set <archivo-json>            replace atómico validado + backup
 
 errores: engine_unavailable tts_failed stt_failed mic_denied mic_timeout
   template_invalid not_found text_too_long session_invalid session_expired
-  session_abandoned channel_busy not_supported config_unreadable usage
-  internal_error audio_device_error`;
+  session_abandoned channel_busy not_supported config_unreadable
+  config_write_failed usage internal_error audio_device_error`;
 
 const COMANDOS = Object.create(null);
 Object.assign(COMANDOS, {

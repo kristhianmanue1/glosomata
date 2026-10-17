@@ -12,6 +12,16 @@ import { join } from 'node:path';
 const CLI = 'src/cli.mjs';
 const CWD = new URL('..', import.meta.url).pathname;
 
+// set escribe: cada test aísla config Y runtime (backups) en su
+// propio directorio efímero
+function entorno(rutaCfg, runtimeDir) {
+  return {
+    ...process.env,
+    GLOSOMATA_CONFIG: rutaCfg,
+    ...(runtimeDir ? { GLOSOMATA_RUNTIME: runtimeDir } : {}),
+  };
+}
+
 const CONFIG_VALIDA = {
   engines: {
     tts: [{ id: 'say', adapter: 'say', selected: true,
@@ -183,4 +193,164 @@ test('config validate: --file sin valor o args extra → usage (exit 2)', () => 
     (e) => e.status === 2);
   assert.throws(() => cli(['config', 'validate', 'otra-cosa'], ruta),
     (e) => e.status === 2);
+});
+
+// —— config set (P1.2): replace atómico validado + backup ——
+
+const { readFileSync, readdirSync, statSync,
+  writeFileSync: write2 } = await import('node:fs');
+
+test('config set: usage cerrado (sin archivo / flag / extra)', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  assert.throws(() => cli(['config', 'set'], ruta), (e) => e.status === 2);
+  assert.throws(() => cli(['config', 'set', '--file'], ruta),
+    (e) => e.status === 2);
+  assert.throws(() => cli(['config', 'set', 'a.json', 'b.json'], ruta),
+    (e) => e.status === 2);
+});
+
+test('config set: candidato inexistente → config_write_failed, original intacto', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set',
+    '/no/existe/cand.json'], { encoding: 'utf8', cwd: CWD,
+    env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /config_write_failed/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set: candidato que viola schema → rechazado, original intacto', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const mala = structuredClone(CONFIG_VALIDA);
+  mala.engines.tts[0].rate = 1000;
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(mala));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /config_write_failed/.test(e.stderr)
+      && /rate/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set: motor sin kill_switch → rechazado (schema required)', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const mala = structuredClone(CONFIG_VALIDA);
+  delete mala.engines.tts[0].kill_switch;
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(mala));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /kill_switch/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set: ids duplicados → rechazado (semántica P1.2)', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const dup = structuredClone(CONFIG_VALIDA);
+  dup.engines.tts.push(structuredClone(dup.engines.tts[0]));
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(dup));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /duplicados/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set: selected cero o dos → rechazado (exactamente uno)', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const cero = structuredClone(CONFIG_VALIDA);
+  cero.engines.tts[0].selected = false;
+  const cand0 = join(rt, 'cero.json');
+  write2(cand0, JSON.stringify(cero));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand0],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /selected/.test(e.stderr));
+
+  const dos = structuredClone(CONFIG_VALIDA);
+  dos.engines.tts.push({ ...structuredClone(dos.engines.tts[0]),
+    id: 'otro-motor' });
+  const cand2 = join(rt, 'dos.json');
+  write2(cand2, JSON.stringify(dos));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand2],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /selected/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set: candidato con campos derivados → rechazado (nunca se persisten)', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const sucia = structuredClone(CONFIG_VALIDA);
+  sucia.engines.tts[0].available = true;
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(sucia));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /available/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set: motor declarado no disponible → rechazado con causa', () => {
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(CONFIG_MOTOR_ROTO));
+  assert.throws(() => execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }),
+    (e) => e.status === 1 && /config_write_failed/.test(e.stderr)
+      && /causa/.test(e.stderr));
+  assert.deepEqual(JSON.parse(cli(['config', 'list'], ruta)), CONFIG_VALIDA);
+});
+
+test('config set válido: reemplaza, modo 0600 y sin derivados en disco', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (probes TTS)');
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const nueva = structuredClone(CONFIG_VALIDA);
+  nueva.constraints = { session_ttl_min: 30 };
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(nueva));
+  const out = JSON.parse(execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) }));
+  assert.equal(out.ok, true);
+  assert.ok(out.backup);
+  const enDisco = JSON.parse(readFileSync(ruta, 'utf8'));
+  assert.deepEqual(enDisco, nueva);
+  assert.equal('available' in enDisco.engines.tts[0], false);
+  assert.equal(statSync(ruta).mode & 0o777, 0o600);
+});
+
+test('config set: backup creado y podado a las últimas 5', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (probes TTS)');
+  const ruta = configAislada(CONFIG_VALIDA);
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(CONFIG_VALIDA));
+  for (let i = 0; i < 7; i++) {
+    execFileSync('node', [CLI, 'config', 'set', cand],
+      { encoding: 'utf8', cwd: CWD, env: entorno(ruta, rt) });
+  }
+  const backups = readdirSync(join(rt, `glosomata-${process.getuid()}`,
+    'backups')).filter((f) => f.endsWith('.json'));
+  assert.equal(backups.length, 5);
+});
+
+test('config set: destino inexistente → lo crea sin backup', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (probes TTS)');
+  const rt = mkdtempSync(join(tmpdir(), 'glo-rt-'));
+  const dirDestino = mkdtempSync(join(tmpdir(), 'glo-dest-'));
+  const destino = join(dirDestino, 'glosomata.json');
+  const cand = join(rt, 'cand.json');
+  write2(cand, JSON.stringify(CONFIG_VALIDA));
+  const out = JSON.parse(execFileSync('node', [CLI, 'config', 'set', cand],
+    { encoding: 'utf8', cwd: CWD,
+      env: { ...process.env, GLOSOMATA_CONFIG: destino,
+        GLOSOMATA_RUNTIME: rt } }));
+  assert.equal(out.ok, true);
+  assert.equal(out.backup, undefined);
+  assert.deepEqual(JSON.parse(readFileSync(destino, 'utf8')), CONFIG_VALIDA);
 });
