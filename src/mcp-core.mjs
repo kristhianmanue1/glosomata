@@ -108,11 +108,15 @@ async function llamar(name, args) {
       return templatesData([], { conTurnos: true });
     }
     case 'validate': {
-      const { expirada } = await import('./sesion.mjs');
+      const { expirada, formaValida } = await import('./sesion.mjs');
       const { validarTurno } = await import('./plantillas.mjs');
       if (!args.session || typeof args.session !== 'object' ||
           typeof args.text !== 'string') {
         return { code: 2, data: { error: 'usage' } };
+      }
+      // forma v1 antes de expiración (C1.3): misma barrera que el CLI
+      if (!formaValida(args.session)) {
+        return { code: 1, data: { error: 'session_invalid' } };
       }
       if (expirada(args.session)) {
         return { code: 1, data: { error: 'session_expired' } };

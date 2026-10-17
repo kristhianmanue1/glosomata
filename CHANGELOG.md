@@ -6,6 +6,11 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- fix: forma de sesión v1 verificada en validate CLI y MCP — `schema`
+  exacto obligatorio, objeto plano (JSON `null` ya no explota con
+  TypeError fuera de taxonomía) y `ttl_min` malformado fail-closed
+  (antes `'para_siempre'` comparaba contra NaN y la sesión nunca
+  expiraba) (C1.3).
 - fix: sesión acuñada sin plantilla (`template:null`) es modo libre —
   `validate` responde ok siempre (SPEC-2); antes `template_invalid`.
   El contador de turno se valida antes que la plantilla (C1.5).

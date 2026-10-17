@@ -316,6 +316,23 @@ test('MCP: validate sesión expirada → session_expired', async () => {
   });
 });
 
+test('MCP: validate sin schema / schema ajeno / array → session_invalid (C1.3)', async () => {
+  await conCliente(async (c) => {
+    const sinSchema = sesionDePrueba();
+    delete sinSchema.schema;
+    const schemaAjeno = sesionDePrueba({ schema: 'otra/cosa' });
+    c.enviar(llamada(1, 'validate', { session: sinSchema, text: 'sí' }));
+    c.enviar(llamada(2, 'validate', { session: schemaAjeno, text: 'sí' }));
+    c.enviar(llamada(3, 'validate', { session: [1, 2], text: 'sí' }));
+    const [r1, r2, r3] = await Promise.all([
+      c.esperar(1), c.esperar(2), c.esperar(3)]);
+    for (const r of [r1, r2, r3]) {
+      assert.equal(r.result.isError, true);
+      assert.equal(JSON.parse(r.result.content[0].text).error, 'session_invalid');
+    }
+  });
+});
+
 test('MCP: stop durante speak largo → speak truncated, stop atendido en curso', async (t) => {
   await conCliente(async (c) => {
     c.enviar(llamada(1, 'list_engines'));
