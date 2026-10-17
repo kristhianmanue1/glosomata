@@ -52,9 +52,14 @@ export async function sessionData(argv) {
   }
   // TTL desde la matriz (ronda 5, L-3): el 15 estaba duplicado en código
   // y config, con drift silencioso si la config cambiaba. Fail-closed:
-  // config rota → config_unreadable, no default oculto.
+  // config rota → config_unreadable, no default oculto. (C1.3: un ttl
+  // malformado acuñaba sesiones muertas al nacer — mint falla fuerte.)
   const { cargarMatriz } = await import('./matriz.mjs');
   const cfg = await cargarMatriz();
-  const ses = acunar(template, cfg.constraints?.session_ttl_min ?? TTL_MIN_DEF);
+  const ttl = cfg.constraints?.session_ttl_min ?? TTL_MIN_DEF;
+  if (typeof ttl !== 'number' || !Number.isFinite(ttl) || ttl < 0) {
+    return { code: 1, data: { error: 'config_unreadable' } };
+  }
+  const ses = acunar(template, ttl);
   return { code: 0, data: ses };
 }

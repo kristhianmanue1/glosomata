@@ -83,6 +83,24 @@ test('CLI: validate JSON null / sin schema → session_invalid, sin TypeError (C
     (e) => e.status === 1 && /session_invalid/.test(e.stderr));
 });
 
+test('CLI: session new con session_ttl_min malformado → config_unreadable (C1.3)', () => {
+  const { writeFileSync, mkdtempSync } = require('node:fs');
+  const { tmpdir } = require('node:os');
+  const { join } = require('node:path');
+  const ruta = join(mkdtempSync(join(tmpdir(), 'glosomata-test-')), 'g.json');
+  // string numérico: antes la coerción acuñaba sesiones muertas al nacer
+  writeFileSync(ruta, JSON.stringify({
+    engines: { tts: [], stt: {} },
+    constraints: { session_ttl_min: '30' },
+  }));
+  assert.throws(
+    () => execFileSync('node', [CLI, 'session', 'new'], {
+      cwd: new URL('..', import.meta.url).pathname,
+      env: { ...process.env, GLOSOMATA_CONFIG: ruta },
+    }),
+    (e) => e.status === 1 && /config_unreadable/.test(e.stderr));
+});
+
 test('CLI: validate ok exit 0 / fail exit 1', () => {
   const { writeFileSync, mkdtempSync } = require('node:fs');
   const { tmpdir } = require('node:os');
