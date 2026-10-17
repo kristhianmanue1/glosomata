@@ -17,6 +17,12 @@ let currentReply = "";
 let requestId = 0;
 let voiceConversationActive = false;
 let speechTurnId = 0;
+let systemVoices = [];
+
+function refreshVoices() {
+  if (!("speechSynthesis" in window)) return;
+  systemVoices = window.speechSynthesis.getVoices();
+}
 
 function setStatus(text, kind = "info") {
   statusNode.textContent = text;
@@ -37,6 +43,11 @@ function speakText(text, continueConversation = false) {
   const ownSpeechTurn = ++speechTurnId;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "es-MX";
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  const voices = systemVoices.length ? systemVoices : window.speechSynthesis.getVoices();
+  utterance.voice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("es") && v.name.includes("Jorge"))
+    || voices.find(v => v.lang && v.lang.toLowerCase().startsWith("es"));
   utterance.onstart = () => {
     if (ownSpeechTurn !== speechTurnId) return;
     stopButton.disabled = false;
@@ -186,3 +197,7 @@ window.addEventListener("beforeunload", () => {
 
 configureRecognition();
 agentLabel.textContent = "Agente: pendiente del primer mensaje";
+refreshVoices();
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.onvoiceschanged = refreshVoices;
+}
