@@ -72,3 +72,12 @@ function execFileSyncStatus(args) {
 
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+
+test('CLI: version refleja package.json (fuente única, C0.1)', () => {
+  const pkg = JSON.parse(
+    require('node:fs').readFileSync(
+      new URL('../package.json', import.meta.url), 'utf8'));
+  const out = JSON.parse(cli(['version']));
+  assert.equal(out.name, pkg.name);
+  assert.equal(out.version, pkg.version);
+});

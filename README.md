@@ -36,6 +36,7 @@ node src/cli.mjs speak --text "listo"
 node src/cli.mjs listen --timeout 10
 node src/cli.mjs stop
 node src/cli.mjs engines
+node src/cli.mjs version
 node src/cli.mjs templates --list
 node src/cli.mjs session new --template confirmar
 node src/cli.mjs validate --session ses.json --text "sí"
