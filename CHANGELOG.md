@@ -6,6 +6,10 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- ci: workflow de integración (`ci.yml`) — suite `node --test` en Node
+  20 (mínimo contratado) y 24 (verificado) + gate de estructura
+  `check_sizes.py` en cada PR y push a main. La verificación previa de
+  los planes deja de depender de la disciplina manual del agente.
 - fix: SIGTERM termina el proceso — el handler sustituía la
   terminación por defecto y el servidor MCP sobrevivía a su propio
   shutdown. Trunca (flag + kill de grupos) con gracia de 250 ms: la
