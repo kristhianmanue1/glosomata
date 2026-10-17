@@ -1,8 +1,9 @@
-// Validador mínimo de JSON Schema (draft-07, subconjunto) para tests.
+// Validador mínimo de JSON Schema (draft-07, subconjunto).
 // El repo es cero-dependencias: no hay ajv. El schema de config usa
 // SOLO estas palabras clave — si el schema crece a otra, este
 // validador debe crecer con ella (tests/schema.test.mjs lo vigila).
-// No es runtime: la autoridad en runtime es src/matriz.mjs.
+// Runtime (P1.3/P1.2): `config validate`/`config set` validan la
+// ESTRUCTURA con esto; los probes y kill_switch siguen en matriz.mjs.
 
 export function validar(instancia, schema, raiz = schema, ruta = '$') {
   const errores = [];

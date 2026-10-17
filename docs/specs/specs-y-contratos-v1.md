@@ -56,7 +56,10 @@ version; doctor; templates [--list|--show id]; session new
 [--template id]; validate --session archivo --text str; config list;
 config get engines|constraints — lectura CRUDA de la matriz (sin
 probes ni campos derivados; `config validate` juzga, la lectura no).
-Sección: lista cerrada, sin traversal.
+Sección: lista cerrada, sin traversal. `config validate [--file ruta]`:
+veredicto estilo `doctor` — estructura (schema formal) + probes +
+kill_switch; JSON por stdout y stderr vacío; exit 0 sólo si todo lo
+declarado pasa (stt sin claves declaradas no invalida).
 
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage. Excepción
 `doctor`: exit 1 = no operativo, con veredicto JSON por stdout y stderr
