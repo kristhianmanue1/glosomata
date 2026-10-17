@@ -6,6 +6,18 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **schema formal de `glosomata.json`** (P0.2, ADR-008):
+  `docs/schemas/glosomata-config-v1.schema.json`, cerrado contra el
+  código — incorpora `script`/`rate`/`sample_rate` que el spec §matriz
+  omitía; rangos nuevos con dientes (`rate` 50–500, `pitch_scale`
+  0.8–1.2 declarados a tiempo de config — antes tarde y opacos en
+  playback, `max_text_chars` tope duro 2000 — unificación P1.3),
+  enums y piso de `kill_switch`, claves sin lector marcadas
+  `deprecated` (anotación que no rechaza). Validador mínimo de
+  draft-07 en tests (repo cero-dependencias) con controles positivos
+  (example, config real del operador, config que ejerce TODAS las
+  claves opcionales) y negativos (once rechazos) + vigilancia meta:
+  el schema sólo usa palabras clave que el validador implementa.
 - docs: alta de `config_write_failed` en la taxonomía cerrada (P0.3)
   — spec §CLI v1 y contrato §2.1: 17 originales + 1. Destinado a los
   fallos de la escritura gobernada de config (`config set`, P1.2);
