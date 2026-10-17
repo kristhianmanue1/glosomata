@@ -206,7 +206,34 @@ ids/códigos/duraciones, kill-switch por motor declarado en matriz y
 verificado en arranque (fail-closed), y `stop` con latencia máxima
 declarada (`max_latency_ms`). Detalles de amenaza: `SECURITY.md`.
 
-## 11. Historia
+## 11. Reporte de incidencias y mejoras en GitHub
+
+Los consumidores reportan en `github.com/kristhianmanue1/glosomata/issues`
+(público). Clases de reporte bien formadas, en orden de prioridad:
+
+1. **Violación de contrato** — el código se comporta distinto a este
+   documento o al spec canónico. Es un bug del proyecto por definición:
+   incluir repro mínimo, salida obtenida vs esperada, `glosomata
+   version` y plataforma.
+2. **Código fuera de taxonomía** — cualquier código no listado en §2 o
+   excepción cruda (stack trace) llegando al consumidor. Adjuntar la
+   entrada que lo produjo, saneada.
+3. **Fricción de adopción** — `doctor` que no distingue un caso real,
+   variable de entorno indocumentada, guía que engaña.
+4. **Mejora propuesta** — entra como candidato al plan (sus tareas y la
+   tabla v2) y requiere ADR con autorización humana; los no-objetivos
+   v1 (§2) no se reabren por número de votos.
+5. **Seguridad** — NUNCA en issue público: seguir `SECURITY.md`
+   (canal privado).
+
+Formato mínimo: qué esperaba / qué pasó / repro mínimo / `glosomata
+version` + plataforma. Privacidad obligatoria en TODO reporte: sin
+transcripciones, sin audio, sin texto de usuario, sin rutas con datos
+personales — el repro se sanea antes de publicar. Los logs del proyecto
+nunca contienen texto: si tu reporte lo necesita, estás reportando otra
+cosa.
+
+## 12. Historia
 
 - v1 (2026-10-17): propuesta inicial; superficies S1/S2 contratadas,
   S3 declarada no contratada, huecos declarados con plan.
