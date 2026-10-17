@@ -1,6 +1,7 @@
 # ADR-008: configuración gobernada de `glosomata.json`
 
-Estado: PROPUESTA — pendiente de aceptación del humano
+Estado: **ACEPTADO** — decisión humana explícita del operador
+(2026-10-17, sesión de trabajo)
 Fecha: 2026-10-17 (v2 del mismo día: el playground/web pasa a
 proyecto aparte por decisión del operador; esta versión NO reabre
 ningún no-objetivo)

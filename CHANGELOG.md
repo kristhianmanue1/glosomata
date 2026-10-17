@@ -6,6 +6,11 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **ADR-008 (configuración gobernada) ACEPTADO** — decisión
+  humana explícita del operador (2026-10-17). P0.1 del plan v4
+  ejecutado; sin barrido de docs: los no-objetivos siguen siendo
+  verdad literal. Siguiente tarea del plan: P0.3 (alta de
+  `config_write_failed` en spec §CLI v1 y contrato §2.1).
 - docs: **cambio de alcance del plan de playground (v4, decisión del
   operador)** — el servidor HTTP, la UI y el selftest (P3–P5) migran a
   un proyecto aparte que consume glosomata por superficies
