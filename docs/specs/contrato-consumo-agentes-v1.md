@@ -122,6 +122,28 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   cada motor con causa de indisponibilidad, whisper bin/model, ffmpeg por
   plataforma (existe; causas cerradas).
 
+### 7.1 `doctor` — forma y conjunto cerrado de causas
+
+`glosomata doctor` imprime el veredicto JSON en stdout:
+
+- `node: {version, ok, causa?}` — causa: `node_viejo`.
+- `config: {ok, code?, detalle?}` — si falla: `code: "config_unreadable"`
+  con `detalle` textual (ruta local de config, no secreto).
+- `tts: [{id, adapter, available, causa?}]` — `causa` ∈ conjunto cerrado:
+  `plataforma_no_soportada`, `afplay_ausente`, `binario_ausente`,
+  `modelo_ausente`, `python_ausente`, `script_ausente`,
+  `sin_kill_switch`, `adapter_desconocido`, `probe_fallido`.
+- `stt: {whisper: {ok, causa?}, ffmpeg: {ok, causa?}}` — causas:
+  `whisper_bin_ausente`, `whisper_model_ausente`, `config_unreadable`;
+  y para ffmpeg: `ffmpeg_ausente`, `plataforma_no_soportada`.
+
+Exit 0 sólo con todo operativo (incluye ≥1 motor TTS disponible;
+`tts[]` vacío es no-operativo y ninguna sección lleva causa extra —
+el vacío ES el diagnóstico). Exit 1 = veredicto JSON por stdout, sin
+código en stderr: en `doctor` el fallo es el resultado esperado de la
+consulta, no un error de operación. Dentro de v1.x el conjunto de
+causas sólo crece.
+
 ## 8. Huecos conocidos del contrato v1 (en plan)
 
 Estos huecos están DECLARADOS, con plan de cierre incremental

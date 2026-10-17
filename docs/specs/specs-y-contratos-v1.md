@@ -55,7 +55,9 @@ Operaciones: speak --text [--engine]; listen [--timeout]; stop; engines;
 version; doctor; templates [--list|--show id]; session new
 [--template id]; validate --session archivo --text str.
 
-Exit codes: 0 ok; 1 error (código en stderr); 2 usage.
+Exit codes: 0 ok; 1 error (código en stderr); 2 usage. Excepción
+`doctor`: exit 1 = no operativo, con veredicto JSON por stdout y stderr
+vacío (ver contrato de consumo §7.1).
 
 Errores (taxonomía cerrada): engine_unavailable, tts_failed, stt_failed,
 mic_denied, mic_timeout, audio_device_error, template_invalid,

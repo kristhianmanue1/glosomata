@@ -26,10 +26,13 @@ export async function cargarMatriz(ruta = RUTA_CONFIG) {
     throw errConfig(`ilegible: ${ruta}`);
   }
   // estructura mínima fail-closed: sin esto, una config sin engines
-  // reventaba con TypeError fuera de la taxonomía (ronda 5, M-6)
+  // reventaba con TypeError fuera de la taxonomía (ronda 5, M-6);
+  // entradas no-objeto en tts[] revientaban el loop de probes igual
+  // (doctor las etiquetaba config_unreadable con detalle "undefined")
   if (typeof cfg !== 'object' || cfg === null
       || !Array.isArray(cfg.engines?.tts)
-      || typeof cfg.engines?.stt !== 'object' || cfg.engines.stt === null) {
+      || typeof cfg.engines?.stt !== 'object' || cfg.engines.stt === null
+      || cfg.engines.tts.some((x) => !x || typeof x !== 'object')) {
     throw errConfig('estructura inválida: engines.tts[] y engines.stt{} requeridos');
   }
   for (const e of cfg.engines.tts) {

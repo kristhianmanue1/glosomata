@@ -9,8 +9,11 @@ generadas desde commits/PRs reales.
 - feat: `doctor` en CLI — diagnóstico de instalación con causas cerradas
   (node, config, motores TTS con `diagnostico()` por adaptador, whisper
   bin/model, ffmpeg por plataforma); `matriz` adjunta causa cerrada a
-  cada motor no disponible; `disponible()` queda como envoltura de
-  `diagnostico()` (C0.2 del plan de consumo).
+  cada motor no disponible y rechaza entradas no-objeto en `tts[]`;
+  `disponible()` queda como envoltura de `diagnostico()`; helpers
+  compartidos `rutaFfmpeg()`/`diagnosticoCaptura()`/`diagnosticoWhisper()`
+  (una sola definición para listen/engines/doctor). Forma y conjunto
+  cerrado de causas en contrato de consumo §7.1 (C0.2 del plan).
 - docs: variables de entorno contractuales (`GLOSOMATA_CONFIG`,
   `GLOSOMATA_RUNTIME`, `GLOSOMATA_FFMPEG`) documentadas en la guía MCP y
   README (C0.3 del plan de consumo).

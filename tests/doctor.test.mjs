@@ -28,12 +28,6 @@ function doctor(env = {}) {
   }
 }
 
-const CAUSAS_CERRADAS = new Set([
-  'plataforma_no_soportada', 'afplay_ausente', 'binario_ausente',
-  'modelo_ausente', 'python_ausente', 'script_ausente', 'sin_kill_switch',
-  'adapter_desconocido', 'probe_fallido',
-]);
-
 test('doctor: config ilegible → exit 1, config_unreadable con detalle, sin tts', () => {
   const ruta = configTemporal('{esto no es json');
   const { code, out } = doctor({ GLOSOMATA_CONFIG: ruta });
@@ -50,7 +44,8 @@ test('doctor: config ilegible → exit 1, config_unreadable con detalle, sin tts
   assert.equal(typeof d.stt.ffmpeg.ok, 'boolean');
 });
 
-test('doctor: motores con rutas ausentes → causas del conjunto cerrado', () => {
+test('doctor: motores con rutas ausentes → causa exacta por motor', (t) => {
+  const enDarwin = process.platform === 'darwin';
   const ruta = configTemporal({
     engines: {
       tts: [
@@ -73,12 +68,100 @@ test('doctor: motores con rutas ausentes → causas del conjunto cerrado', () =>
   const d = JSON.parse(out);
   assert.equal(d.config.ok, true);
   assert.equal(d.tts.length, 2);
-  for (const t of d.tts) {
-    assert.equal(t.available, false, t.id);
-    assert.ok(CAUSAS_CERRADAS.has(t.causa), `causa cerrada: ${t.causa}`);
-  }
+  // orden de dependencia del diagnóstico: plataforma → afplay → resto
+  const esperadoPiper = enDarwin ? 'binario_ausente' : 'plataforma_no_soportada';
+  const esperadoKokoro = enDarwin ? 'python_ausente' : 'plataforma_no_soportada';
+  assert.equal(d.tts.find((x) => x.id === 'piper-roto').causa, esperadoPiper);
+  assert.equal(d.tts.find((x) => x.id === 'kokoro-roto').causa, esperadoKokoro);
   assert.equal(d.stt.whisper.ok, false);
   assert.equal(d.stt.whisper.causa, 'whisper_bin_ausente');
+});
+
+test('doctor: todo operativo → exit 0 (camino verde del contrato)', (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (say/afplay)');
+  const ruta = configTemporal({
+    engines: {
+      tts: [
+        { id: 'say-ok', adapter: 'say', selected: true,
+          kill_switch: { type: 'subprocess_kill', target: 'process_group',
+            max_latency_ms: 200 } },
+      ],
+      stt: { whisper_bin: '/usr/bin/say', whisper_model: '/usr/bin/say' },
+    },
+    constraints: {},
+  });
+  const { code, out } = doctor({
+    GLOSOMATA_CONFIG: ruta, GLOSOMATA_FFMPEG: '/usr/bin/say',
+  });
+  assert.equal(code, 0);
+  const d = JSON.parse(out);
+  assert.equal(d.node.ok, true);
+  assert.equal(d.config.ok, true);
+  assert.equal(d.tts[0].available, true);
+  assert.equal(d.stt.whisper.ok, true);
+  assert.equal(d.stt.ffmpeg.ok, true);
+});
+
+test('doctor: GLOSOMATA_FFMPEG ausente → ffmpeg_ausente', () => {
+  const ruta = configTemporal({
+    engines: { tts: [], stt: { whisper_bin: '/no/existe/w',
+      whisper_model: '/no/existe/m' } },
+    constraints: {},
+  });
+  const { code, out } = doctor({
+    GLOSOMATA_CONFIG: ruta, GLOSOMATA_FFMPEG: '/no/existe/ffmpeg',
+  });
+  assert.equal(code, 1);
+  const d = JSON.parse(out);
+  assert.equal(d.stt.ffmpeg.ok, false);
+  assert.equal(d.stt.ffmpeg.causa, 'ffmpeg_ausente');
+});
+
+test('doctor: adapter desconocido → adapter_desconocido', () => {
+  const ruta = configTemporal({
+    engines: {
+      tts: [
+        { id: 'misterio', adapter: 'foo', selected: false,
+          kill_switch: { type: 'subprocess_kill', target: 'process_group',
+            max_latency_ms: 100 } },
+      ],
+      stt: { whisper_bin: '/no/existe/w', whisper_model: '/no/existe/m' },
+    },
+    constraints: {},
+  });
+  const { code, out } = doctor({ GLOSOMATA_CONFIG: ruta });
+  assert.equal(code, 1);
+  const d = JSON.parse(out);
+  assert.equal(d.tts[0].causa, 'adapter_desconocido');
+});
+
+test('doctor: engines.tts vacío → exit 1, tts[] vacío sin causa extra', () => {
+  const ruta = configTemporal({
+    engines: { tts: [], stt: { whisper_bin: '/no/existe/w',
+      whisper_model: '/no/existe/m' } },
+    constraints: {},
+  });
+  const { code, out } = doctor({ GLOSOMATA_CONFIG: ruta });
+  assert.equal(code, 1);
+  const d = JSON.parse(out);
+  assert.deepEqual(d.tts, []);
+  assert.equal(d.config.ok, true);
+});
+
+test('doctor: engines.tts:[null] → config_unreadable con detalle real', () => {
+  // el diagnóstico no puede mentir: la causa es estructural, no "undefined"
+  const ruta = configTemporal({
+    engines: { tts: [null], stt: { whisper_bin: '/no/existe/w',
+      whisper_model: '/no/existe/m' } },
+    constraints: {},
+  });
+  const { code, out } = doctor({ GLOSOMATA_CONFIG: ruta });
+  assert.equal(code, 1);
+  const d = JSON.parse(out);
+  assert.equal(d.config.ok, false);
+  assert.equal(d.config.code, 'config_unreadable');
+  assert.match(d.config.detalle, /estructura inválida/);
+  assert.notEqual(d.config.detalle, 'undefined');
 });
 
 test('doctor: motor sin kill_switch → sin_kill_switch, probe no corre', () => {

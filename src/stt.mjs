@@ -6,8 +6,7 @@ import {
   adquirirCanal, liberarCanal, resetStop, stopPedido,
   spawnGrupo, matarGrupo, nuevoTemporal,
 } from './canal.mjs';
-import { rm, stat, readFile } from 'node:fs/promises';
-import { access } from 'node:fs/promises';
+import { rm, stat, readFile, access, constants } from 'node:fs/promises';
 
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
 
@@ -24,6 +23,38 @@ export function argsCaptura(plataforma) {
       input: ['-f', 'alsa', '-i', 'default'] };
   }
   return null;
+}
+
+// Diagnóstico compartido (doctor C0.2): UNA definición de resolución y
+// checks para listen/engines/doctor — sin copias que deriven.
+export function rutaFfmpeg() {
+  return process.env.GLOSOMATA_FFMPEG
+    ?? argsCaptura(process.platform)?.bin ?? null;
+}
+
+export async function diagnosticoCaptura() {
+  const ruta = rutaFfmpeg();
+  if (!ruta) return { ok: false, causa: 'plataforma_no_soportada' };
+  try {
+    await access(ruta, constants.F_OK);
+    return { ok: true };
+  } catch {
+    return { ok: false, causa: 'ffmpeg_ausente' };
+  }
+}
+
+export async function diagnosticoWhisper(cfg) {
+  try {
+    await access(cfg.engines.stt.whisper_bin, constants.F_OK);
+  } catch {
+    return { ok: false, causa: 'whisper_bin_ausente' };
+  }
+  try {
+    await access(cfg.engines.stt.whisper_model, constants.F_OK);
+  } catch {
+    return { ok: false, causa: 'whisper_model_ausente' };
+  }
+  return { ok: true };
 }
 
 async function correr(cmd, args) {
@@ -103,7 +134,7 @@ export async function listen(argv) {
   if (!cap) {
     return { code: 1, data: { error: 'audio_device_error' } };
   }
-  const ffmpeg = process.env.GLOSOMATA_FFMPEG ?? cap.bin;
+  const ffmpeg = rutaFfmpeg() ?? cap.bin;
   try {
     await access(ffmpeg);
   } catch {
