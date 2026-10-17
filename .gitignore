@@ -17,3 +17,4 @@ tmp/
 docs/proposal/**/*.onnx
 docs/proposal/**/*.onnx.json
 docs/proposal/**/models/
+.glosomata-set-*.tmp

@@ -66,7 +66,19 @@ atómico de la matriz completa — candidato a temporal 0600 en el
 directorio del destino, validación completa sobre el temporal, backup
 previo (retención: últimas 5) y `rename`; cualquier fallo →
 `config_write_failed` con el veredicto y el original intacto. El
-schema garantiza que no se persistan campos derivados.
+schema garantiza que no se persistan campos derivados. Semántica
+observable del set: el destino queda con modo 0600 (el del temporal);
+los backups viven en `$GLOSOMATA_RUNTIME/glosomata-<uid>/backups/`
+(retención: últimas 5, la respuesta devuelve el basename); las rutas
+relativas del candidato se resuelven contra el CWD del proceso —
+misma regla que la guía MCP (`cwd` importa): valida y escribe desde
+donde correrás glosomata; set exige que TODO motor declarado pase
+probes («validación completa», P1.2/ADR-008) — un motor caído bloquea
+el set: corrígelas o retíralo del candidato (el backup permite
+volver); si el destino es un symlink, `rename` lo reemplaza por un
+archivo regular y el target queda intacto; un proceso muerto entre
+temporal y rename deja `.glosomata-set-*.tmp` huérfano (0600,
+ignorado por git, borrable a mano).
 
 Exit codes: 0 ok; 1 error (código en stderr); 2 usage. Excepción
 `doctor`: exit 1 = no operativo, con veredicto JSON por stdout y stderr

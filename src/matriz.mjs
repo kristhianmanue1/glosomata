@@ -139,8 +139,11 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
 // —— datos (nunca imprimen) ——
 
 const rand6 = () => Math.random().toString(36).slice(2, 8);
+// sello con milisegundos: mismo largo en todos los nombres → el sort
+// lexicográfico de la poda es cronológico de verdad (ronda ADV: sin
+// ms, dos backups del mismo segundo se ordenaban por rand)
 const fechaCompacta = () => new Date().toISOString()
-  .replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  .slice(0, 23).replace(/[-:]/g, '');
 
 // P1.2: config set — replace atómico de la matriz COMPLETA (sin
 // parches por clave). El candidato se copia a un temporal 0600 EN el

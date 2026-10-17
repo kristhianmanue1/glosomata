@@ -16,6 +16,12 @@ generadas desde commits/PRs reales.
   nueva compartida por `config validate`: ids únicos en engines.tts y
   exactamente un motor `selected:true` (el schema no puede
   expresarlo). Criterio: jamás queda una config rota tras un set.
+  Ronda adversarial absorbida: sello de backup con milisegundos (la
+  poda «últimas 5» es cronológica de verdad), `.gitignore` del
+  temporal huérfano, y semántica observable documentada en el spec —
+  destino 0600, ubicación de backups, resolución de rutas relativas
+  contra el CWD del proceso, política de probes (todo motor declarado
+  debe pasar) y reemplazo de symlinks por archivo regular.
 - feat: **`config validate [--file <ruta>]`** (P1.3) — veredicto
   estilo `doctor`: estructura contra el schema formal (P0.2) + probes
   + kill_switch sobre la MISMA ruta que usará `config set`; JSON por
