@@ -4,6 +4,7 @@
 
 import { cargarMatriz } from './matriz.mjs';
 import { canonizar } from './plantillas.mjs';
+import { rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper } from './stt.mjs';
 import {
   adquirirCanal, liberarCanal, resetStop, detenerCanalRemoto, nuevoTemporal,
 } from './canal.mjs';
@@ -91,20 +92,46 @@ export async function stopOp() {
 
 export async function enginesOp() {
   const cfg = await cargarMatriz();
-  const { access, constants } = await import('node:fs/promises');
   const tts = cfg.engines.tts.map((e) => ({
     id: e.id, adapter: e.adapter, available: e.available,
     selected: e.selected && e.available,
   }));
   // STT curado como TTS: disponibilidad, no rutas del filesystem
   // (ronda 5: exponía whisper_bin/whisper_model al consumidor MCP)
-  let sttOk = false;
-  try {
-    await access(cfg.engines.stt.whisper_bin, constants.F_OK);
-    await access(cfg.engines.stt.whisper_model, constants.F_OK);
-    sttOk = true;
-  } catch {}
+  const sttOk = (await diagnosticoWhisper(cfg)).ok;
   return { code: 0, data: { tts, stt: { available: sttOk } } };
+}
+
+// Diagnóstico de adopción (doctor, C0.2): checks cerrados, causas del
+// conjunto cerrado de los adaptadores (contrato de consumo §7.1).
+// Salida contractual por stdout; exit 0 sólo si TODO está operativo.
+export async function doctorOp() {
+  const mayorNode = Number(process.versions.node.split('.')[0]);
+  const node = { version: process.versions.node, ok: mayorNode >= 20 };
+  if (!node.ok) node.causa = 'node_viejo';
+
+  let config = { ok: true };
+  let cfg = null;
+  try {
+    cfg = await cargarMatriz();
+  } catch (e) {
+    config = { ok: false, code: 'config_unreadable', detalle: String(e.cause ?? e.code) };
+  }
+
+  const tts = (cfg?.engines?.tts ?? []).map((e) => ({
+    id: e.id, adapter: e.adapter, available: !!e.available,
+    ...(e.available ? {} : { causa: e.causa ?? 'probe_fallido' }),
+  }));
+
+  const ffmpeg = await diagnosticoCaptura();
+  const whisper = cfg
+    ? await diagnosticoWhisper(cfg)
+    : { ok: false, causa: 'config_unreadable' };
+
+  const data = { node, config, tts, stt: { whisper, ffmpeg } };
+  const operativo = node.ok && config.ok && tts.length > 0
+    && tts.every((t) => t.available) && whisper.ok && ffmpeg.ok;
+  return { code: operativo ? 0 : 1, data };
 }
 
 export async function templatesOp(argv) {
