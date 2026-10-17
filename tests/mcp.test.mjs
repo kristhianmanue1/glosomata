@@ -124,7 +124,51 @@ test('MCP: initialize y tools/list por stdio', async () => {
     const pkg = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     assert.equal(init.result.serverInfo.version, pkg.version);
-    assert.equal(lista.result.tools.length, 6);
+    assert.equal(lista.result.tools.length, 7);
+  });
+});
+
+test('MCP: session_new sin template → sesión v1 con template null', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'session_new'));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, false);
+    const ses = JSON.parse(r.result.content[0].text);
+    assert.equal(ses.schema, 'glosomata/sesion-v1');
+    assert.equal(ses.template, null);
+    assert.equal(ses.turn, 0);
+  });
+});
+
+test('MCP: session_new con template_id builtin incrusta plantilla', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'session_new', { template_id: 'confirmar' }));
+    const r = await c.esperar(1);
+    const ses = JSON.parse(r.result.content[0].text);
+    assert.equal(ses.template.id, 'confirmar');
+    assert.equal(ses.turn, 0);
+  });
+});
+
+test('MCP: session_new id desconocido → not_found; id malformado → template_invalid', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'session_new', { template_id: 'no-existe' }));
+    c.enviar(llamada(2, 'session_new', { template_id: '../etc/passwd' }));
+    const [r1, r2] = await Promise.all([c.esperar(1), c.esperar(2)]);
+    assert.equal(JSON.parse(r1.result.content[0].text).error, 'not_found');
+    assert.equal(JSON.parse(r2.result.content[0].text).error, 'template_invalid');
+  });
+});
+
+test('MCP: list_templates incluye turns (agente MCP-only autónomo)', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'list_templates'));
+    const r = await c.esperar(1);
+    const lista = JSON.parse(r.result.content[0].text);
+    const confirmar = lista.find((t) => t.id === 'confirmar');
+    assert.ok(confirmar, 'catalogo sin confirmar');
+    assert.deepEqual(confirmar.turns,
+      [{ expectation: 'exact', pattern: 'sí|no|si' }]);
   });
 });
 

@@ -201,7 +201,7 @@ export function validarTurno(plantilla, turn, textoCrudo, maxChars = 2000) {
 
 // —— datos (nunca imprimen) ——
 
-export async function templatesData(argv) {
+export async function templatesData(argv, { conTurnos = false } = {}) {
   const showIdx = argv.indexOf('--show');
   if (showIdx >= 0) {
     const id = argv[showIdx + 1];
@@ -212,7 +212,8 @@ export async function templatesData(argv) {
     if (!t) return { code: 1, data: { error: 'not_found' } };
     return { code: 0, data: t };
   }
-  const lista = Object.values(CATALOGO).map(({ turns, ...t }) => t);
+  const lista = Object.values(CATALOGO)
+    .map((t) => (conTurnos ? t : (({ turns, ...resto }) => resto)(t)));
   return { code: 0, data: lista };
 }
 
