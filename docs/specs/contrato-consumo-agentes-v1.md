@@ -42,7 +42,9 @@ Dentro de la misma versión mayor (`v1.x`):
 5. **Exit codes CLI**: 0 ok, 1 error de operación, 2 usage. Estables.
 6. **No-objetivos v1** (pacto de no sorpresa): sin servidor HTTP/socket,
    sin streaming de audio, sin cola de turnos, sin retención de audio o
-   texto, sin APIs de terceros. Si aparecen, será en v2 con ADR propio.
+   texto en glosomata, sin APIs externas. ADR-010 admite un cliente de
+   loopback al Ollama local sólo para TTS experimental. Cualquier otra
+   apertura requiere decisión y ADR propios.
 
 ## 3. Superficie CLI (S1)
 
@@ -208,7 +210,8 @@ comportamiento; este documento declara obligaciones, no las sustituye.
 ## 10. Privacidad como cláusula de consumo
 
 Garantías que el consumidor puede ofrecer a SUS usuarios por apoyarse en
-glosomata: 100% local (sin red en turnos de voz), sin retención
+glosomata: 100% local (Phonon experimental usa loopback al Ollama
+local), sin retención por glosomata
 (temporales en directorio 0700 y archivos 0600, borrados por operación
 y barridos por edad), logs sólo
 ids/códigos/duraciones, kill-switch por motor declarado en matriz —
@@ -216,7 +219,8 @@ la declaración se verifica en arranque (fail-closed: sin `kill_switch`
 el motor no es seleccionable) y el corte es SIGKILL al grupo del
 subprocess, efectivo en la ventana del poll (~50 ms). El
 `max_latency_ms` declarado es documentación de la operación, no un
-valor evaluado en runtime. Detalles de amenaza: `SECURITY.md`.
+valor evaluado en runtime. La política de retención del daemon de Ollama
+no está cubierta por esta garantía. Detalles de amenaza: `SECURITY.md`.
 
 ## 11. Reporte de incidencias y mejoras en GitHub
 

@@ -1,10 +1,11 @@
 # glosomata
 
 Canal de voz **100% local** entre agentes de IA y su orquestador humano.
-Voz→texto (whisper.cpp), texto→voz (Kokoro MLX / Piper / say), y un contrato
+Voz→texto (whisper.cpp), texto→voz (Kokoro MLX / Piper / say / Phonon
+experimental), y un contrato
 de comunicación por turno: libre o por plantilla. Se consume como **CLI** o
-como **servidor MCP (stdio)**. Sin navegador, sin APIs de terceros, sin
-retención de audio o texto.
+como **servidor MCP (stdio)**. Sin navegador ni APIs externas. El adaptador
+experimental Phonon consulta por loopback al Ollama local (ADR-010).
 
 Del griego γλώσσα (*glṓssa*, "lengua"): el órgano del habla, el canal —
 no el cerebro que decide qué decir.
@@ -14,8 +15,8 @@ no el cerebro que decide qué decir.
 **Es:** el canal de voz. STT, TTS, contrato de turnos y plantillas.
 
 **No es:** el agente. El LLM vive en el consumidor (CLI/MCP); Ollama sólo
-aparece como demo en `docs/proposal/` (prototipos web previos, no parte del
-sistema). Ninguna garantía de seguridad depende de la sesión: sus contadores
+se usa para TTS en el adaptador experimental y como demo en
+`docs/proposal/`. Ninguna garantía de seguridad depende de la sesión: sus contadores
 son metadata consultiva del agente.
 
 ## Requisitos
@@ -28,6 +29,8 @@ son metadata consultiva del agente.
   - Piper (binario externo; GPL-3.0 — subprocess con texto por stdin,
     nunca link ni bundle: ADR-005);
   - Kokoro MLX (Apple Silicon, Python).
+  - Phonon mediante Ollama local (experimental, macOS Apple Silicon;
+    configuración y límites en `docs/phonon-ollama-experimental.md`).
 
 ## Comandos (contrato CLI v1)
 
@@ -86,7 +89,7 @@ src/
   cli.mjs        # entrada CLI (contrato CLI v1)
   mcp.mjs        # servidor MCP stdio (contrato MCP v1)
   canal.mjs      # half-duplex, lockfile, temporales, kill-switch
-  tts/           # adaptadores EngineTTS: say, piper, kokoro
+  tts/           # adaptadores EngineTTS: say, piper, kokoro, phonon_ollama
   stt.mjs        # whisper.cpp (subprocess, 16 kHz mono PCM)
   plantillas.mjs # catálogo base + validación RE2-style + NFC
   sesion.mjs     # sesión efímera (metadata consultiva del agente)
@@ -114,4 +117,5 @@ Historia de decisión en `docs/adr/`.
 
 Apache-2.0 (`LICENSE`). Los binarios y modelos que glosomata invoca por
 subprocess conservan sus propias licencias (Piper es GPL-3.0; ver
-ADR-005 para la frontera).
+ADR-005 para la frontera). El checkpoint Phonon español declara
+CC BY-NC 4.0; ver ADR-010.

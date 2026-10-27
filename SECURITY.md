@@ -2,10 +2,11 @@
 
 ## Modelo
 
-glosomata es un canal de voz **100% local**: sin APIs de terceros, sin
-telemetría, sin persistencia de audio, texto ni transcripciones más allá
-del proceso. Los temporales son unlink-tras-open en directorio 0700 por
-usuario y se barren por edad (`src/canal.mjs`).
+glosomata es un canal de voz **100% local**: sin APIs externas ni
+telemetría. El adaptador Phonon experimental entrega el texto al daemon
+de Ollama mediante loopback; la política de logs y retención de ese
+daemon se evalúa por separado. Los temporales de glosomata viven en
+directorio 0700 por usuario y se barren por edad (`src/canal.mjs`).
 
 Propiedades declaradas (no negociables en PRs):
 
@@ -17,11 +18,13 @@ Propiedades declaradas (no negociables en PRs):
   sesión corrupta o expirada → error explícito, nunca éxito inferido.
 - **Frontera GPL**: Piper corre como subprocess con texto por stdin;
   prohibido link dinámico y bundling (ADR-005).
-- **Superficie mínima**: MCP escucha stdio heredado del orquestador; sin
-  socket, sin HTTP.
+- **Superficie mínima**: MCP escucha stdio heredado del orquestador; no
+  abre socket ni servidor HTTP. Sólo Phonon usa un cliente HTTP de
+  loopback hacia Ollama; URL fija y sin proxy ni redirecciones (ADR-010).
 
 El texto pasa por subprocesses locales: `say`, `piper`,
-`python`+Kokoro, `whisper-cli`, `ffmpeg` y `afplay`. El modelo de
+`python`+Kokoro, `whisper-cli`, `ffmpeg`, `afplay` y, opcionalmente,
+`curl` hacia Ollama local. El modelo de
 amenaza asume máquina de un solo usuario: no hay aislamiento entre
 procesos del mismo usuario.
 

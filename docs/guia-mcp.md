@@ -133,7 +133,11 @@ Fail-closed ante todo: motor sin `kill_switch` en la matriz aparece con
 
 ## Privacidad
 
-Sin APIs de terceros, sin persistencia: audio y texto mueren con el
-proceso. El servidor loguea a stderr sólo ids, códigos y duraciones —
+Sin APIs externas ni retención deliberada en glosomata: los temporales
+se borran al cerrar la operación y se barren por edad si quedan huérfanos.
+Si se configura Phonon experimental, el adaptador consulta
+por loopback al Ollama local; su política de retención es independiente
+(ADR-010, `docs/phonon-ollama-experimental.md`). El servidor loguea a
+stderr sólo ids, códigos y duraciones —
 nunca texto, patrón, transcripción ni echo. Si tu cliente captura
 stderr, esa política se mantiene (ver `SECURITY.md`).

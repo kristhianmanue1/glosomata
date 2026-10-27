@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "glosomata/config/v1",
   "title": "glosomata.json — matriz de configuración v1",
-  "description": "Referencia formal de la matriz; la autoridad en runtime es src/matriz.mjs. Cerrada contra el código (P0.2): claves opcionales por adaptador — voice/rate (say), bin/model/sample_rate (piper), python/script/model/voice/pitch_scale (kokoro). constraints.max_text_chars aplica en TODAS las superficies con 2000 como tope duro (H1); las claves marcadas deprecated no tienen lector en src/ y su endgame es remoción del example, nunca cableado (max_pattern_chars duplica el límite duro 200 del contrato §plantilla).",
+  "description": "Referencia formal de la matriz; la autoridad en runtime es src/matriz.mjs. Claves por adaptador: voice/rate (say), bin/model/sample_rate (piper), python/script/model/voice/pitch_scale (kokoro), model/voice (phonon_ollama; bin opcional sólo si es /usr/bin/curl, validado en probe). constraints.max_text_chars aplica en TODAS las superficies con 2000 como tope duro (H1); las claves marcadas deprecated no tienen lector en src/ y su endgame es remoción del example (max_pattern_chars duplica el límite duro 200 del contrato §plantilla).",
   "type": "object",
   "additionalProperties": false,
   "required": ["engines"],
@@ -28,7 +28,7 @@
       "required": ["id", "adapter", "selected", "kill_switch"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
-        "adapter": { "enum": ["say", "piper", "kokoro"] },
+        "adapter": { "enum": ["say", "piper", "kokoro", "phonon_ollama"] },
         "selected": { "type": "boolean" },
         "bin": { "type": "string", "minLength": 1 },
         "model": {
