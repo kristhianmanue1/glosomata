@@ -26,3 +26,6 @@ en el agente consumidor. Ollama queda como demo en los prototipos web de
   requiere semántica que el núcleo no tiene. Plantilla que la usa →
   `not_supported` (schema válido, feature excluida).
 - `speak` no genera respuesta: sólo reproduce el texto que el agente decide.
+
+Nota posterior: ADR-010 admite un cliente local de Ollama únicamente como
+motor TTS experimental. No incorpora un LLM ni cambia quién decide el texto.

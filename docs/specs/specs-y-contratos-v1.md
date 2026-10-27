@@ -21,7 +21,9 @@ Casos:
 - DADO dos operaciones de canal concurrentes (intra o cross-process)
   CUANDO la segunda arriva ENTONCES `channel_busy` (flock global).
 
-Invariantes: 100% local; temporales en dir 0700 per-user, borrados al
+Invariantes: 100% local; el adaptador TTS experimental `phonon_ollama`
+usa sólo loopback hacia el Ollama del equipo (ADR-010), sin servidor
+HTTP en glosomata. Temporales en dir 0700 per-user, borrados al
 cierre de cada operación y barridos por edad; logs sólo
 ids/códigos/duraciones, JAMÁS texto, patrón, transcripción ni echo;
 logs MCP a stderr.
