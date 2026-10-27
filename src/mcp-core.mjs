@@ -4,6 +4,8 @@
 import { createInterface } from 'node:readline';
 import { writeSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { normalizeErrorCode } from './error-codes.mjs';
+import { stopGeneration } from './canal.mjs';
 
 // Fuente única de versión: package.json (C0.1). El serverInfo de
 // initialize la toma de aquí; el CLI (`version`) comparte la fuente.
@@ -83,17 +85,17 @@ function rpcError(id, code, message) {
 }
 
 async function llamar(name, args) {
+  // Fija el inicio antes del import dinámico: stop durante la carga
+  // también pertenece a esta solicitud ya recibida.
+  const stopAtStart = stopGeneration();
   const ops = await import('./ops.mjs');
   switch (name) {
     case 'speak': {
-      if (typeof args.text !== 'string' || !args.text) {
-        return { code: 2, data: { error: 'usage' } };
-      }
-      return ops.speakMcp(args);
+      return ops.speakMcp(args, stopAtStart);
     }
     case 'listen': {
       const argv = ['--timeout', String(args.timeout_s ?? 10)];
-      return ops.listenOp(argv);
+      return ops.listenOp(argv, stopAtStart);
     }
     case 'stop':
       return ops.stopOp();
@@ -203,14 +205,18 @@ export async function main() {
       // curso (fix BLOCKER ronda 3). rpc es un único writeSync por línea.
       llamar(params.name, params.arguments ?? {})
         .then((r) => {
+          const data = r.data?.error
+            ? { ...r.data, error: normalizeErrorCode(r.data.error) } : r.data;
           rpc(id, {
-            content: [{ type: 'text', text: JSON.stringify(r.data) }],
+            content: [{ type: 'text', text: JSON.stringify(data) }],
             isError: r.code !== 0,
           });
         })
         .catch((e) => {
           rpc(id, {
-            content: [{ type: 'text', text: e.code ?? 'internal_error' }],
+            content: [{ type: 'text', text: JSON.stringify({
+              error: normalizeErrorCode(e?.code),
+            }) }],
             isError: true,
           });
         });

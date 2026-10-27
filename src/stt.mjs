@@ -3,10 +3,11 @@
 
 import { cargarMatriz } from './matriz.mjs';
 import {
-  adquirirCanal, liberarCanal, resetStop, stopPedido,
+  adquirirCanal, liberarCanal, resetStop, stopGeneration, stopPedido,
   spawnGrupo, matarGrupo, nuevoTemporal,
 } from './canal.mjs';
 import { rm, stat, readFile, access, constants } from 'node:fs/promises';
+import { measureOperation } from './duration.mjs';
 
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
 
@@ -100,10 +101,24 @@ export function pcmDesdeWav(buf) {
       || buf.toString('latin1', 0, 4) !== 'RIFF'
       || buf.toString('latin1', 8, 12) !== 'WAVE') return null;
   let pos = 12;
+  let validFormat = false;
   for (let i = 0; i < 64 && pos + 8 <= buf.length; i++) {
     const id = buf.toString('latin1', pos, pos + 4);
     const size = buf.readUInt32LE(pos + 4);
-    if (id === 'data') return buf.subarray(pos + 8, pos + 8 + size);
+    if (pos + 8 + size > buf.length) return null;
+    if (id === 'fmt ') {
+      if (size < 16) return null;
+      const p = pos + 8;
+      validFormat = buf.readUInt16LE(p) === 1 // PCM lineal
+        && buf.readUInt16LE(p + 2) === 1 // mono
+        && buf.readUInt32LE(p + 4) === 16000
+        && buf.readUInt16LE(p + 12) === 2 // bytes por muestra
+        && buf.readUInt16LE(p + 14) === 16;
+    }
+    if (id === 'data') {
+      return validFormat && size % 2 === 0
+        ? buf.subarray(pos + 8, pos + 8 + size) : null;
+    }
     pos += 8 + size + (size % 2); // chunks alineados a byte par
   }
   return null;
@@ -119,7 +134,11 @@ function rmsS16(buf) {
   return n ? Math.sqrt(suma / n) : 0;
 }
 
-export async function listen(argv) {
+export async function listen(argv, stopAtStart = stopGeneration()) {
+  return measureOperation(() => listenRaw(argv, stopAtStart));
+}
+
+async function listenRaw(argv, stopAtStart) {
   const cfg = await cargarMatriz();
   let timeout = cfg.constraints?.listen_default_timeout_s ?? 10;
   const i = argv.indexOf('--timeout');
@@ -132,6 +151,7 @@ export async function listen(argv) {
   }
   const cap = argsCaptura(process.platform);
   if (!cap) {
+    // Una plataforma sin backend no prueba que falte un dispositivo.
     return { code: 1, data: { error: 'audio_device_error' } };
   }
   // rutaFfmpeg() ya resuelve el bin de esta plataforma (cap no es null aquí)
@@ -139,17 +159,25 @@ export async function listen(argv) {
   try {
     await access(ffmpeg);
   } catch {
-    return { code: 1, data: { error: 'audio_device_error', causa: 'ffmpeg ausente' } };
+    return { code: 1, data: { error: 'audio_device_error',
+      causa: 'ffmpeg_missing' } };
   }
   try {
     await adquirirCanal();
   } catch (e) {
-    return { code: 1, data: { error: e.code ?? 'internal_error' } };
+    return { code: 1, data: { error: e.code ?? 'internal_error',
+      ...(e.code === 'channel_busy' && e.busy_pid
+        ? { busy_pid: e.busy_pid } : {}) } };
   }
-  resetStop();
-  const t = await nuevoTemporal('stt');
-  await t.handle.close();
+  resetStop(stopAtStart);
+  let t = null;
+  let handleClosed = false;
   try {
+    // La preparación del WAV también queda protegida por la liberación
+    // del lock: un runtime/tmp inválido no debe bloquear el canal.
+    t = await nuevoTemporal('stt');
+    await t.handle.close();
+    handleClosed = true;
     let captura;
     try {
       captura = await correr(ffmpeg, [
@@ -161,15 +189,27 @@ export async function listen(argv) {
       ]);
     } catch (e) {
       if (e.code === 'stopped') return { code: 1, data: { error: 'stopped' } };
-      return { code: 1, data: { error: 'audio_device_error' } };
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'capture_failed' } };
     }
     if (captura.code !== 0) {
-      return { code: 1, data: { error: 'mic_denied' } };
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'capture_failed' } };
     }
     // silencio: RMS del PCM real por debajo del umbral
-    const wav = await readFile(t.ruta);
+    let wav;
+    try {
+      wav = await readFile(t.ruta);
+    } catch {
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'capture_failed' } };
+    }
     const pcm = pcmDesdeWav(wav);
-    if (!pcm || pcm.length < 3200 || rmsS16(pcm) < UMBRAL_RMS) {
+    if (!pcm || pcm.length < 3200) {
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'capture_failed' } };
+    }
+    if (rmsS16(pcm) < UMBRAL_RMS) {
       return { code: 1, data: { error: 'mic_timeout' } };
     }
     let trans;
@@ -180,9 +220,11 @@ export async function listen(argv) {
       ]);
     } catch (e) {
       if (e.code === 'stopped') return { code: 1, data: { error: 'stopped' } };
-      return { code: 1, data: { error: 'stt_failed' } };
+      return { code: 1, data: { error: 'stt_failed',
+        causa: 'whisper_failed' } };
     }
-    if (trans.code !== 0) return { code: 1, data: { error: 'stt_failed' } };
+    if (trans.code !== 0) return { code: 1, data: { error: 'stt_failed',
+      causa: 'whisper_failed' } };
     const transcript = trans.stdout
       .split('\n').map((l) => l.trim())
       .filter((l) => l && !/^(whisper_|main:|system_info|read_audio_data)/.test(l))
@@ -191,7 +233,10 @@ export async function listen(argv) {
       .trim();
     return { code: 0, data: { transcript } };
   } finally {
-    await rm(t.ruta, { force: true }).catch(() => {});
+    if (t) {
+      if (!handleClosed) await t.handle.close().catch(() => {});
+      await rm(t.ruta, { force: true }).catch(() => {});
+    }
     await liberarCanal();
   }
 }

@@ -60,6 +60,9 @@ export async function adquirirCanal() {
       }
       const err = new Error('channel_busy');
       err.code = 'channel_busy';
+      // Snapshot diagnóstico: el pid no predice duración ni da autoridad
+      // para interrumpir la operación de otro consumidor.
+      err.busy_pid = pid;
       throw err;
     }
   }
@@ -110,6 +113,7 @@ async function barrerHuerfanos() {
 // truncated y el proceso termina limpio (fix BLOCKER ronda 3).
 const grupos = new Set();
 let stopFlag = false;
+let stopEpoch = 0;
 
 export function registrarGrupo(child) {
   grupos.add(child);
@@ -132,14 +136,20 @@ export function matarGrupo(child) {
 }
 
 export function pedirStop() {
+  stopEpoch++;
   stopFlag = true;
   matarTodosLosGrupos();
 }
 export function stopPedido() {
   return stopFlag;
 }
-export function resetStop() {
-  stopFlag = false;
+export function stopGeneration() {
+  return stopEpoch;
+}
+export function resetStop(expectedGeneration) {
+  // Una señal llegada mientras la operación cargaba config o adquiría
+  // el lock no se borra al iniciar reproducción/captura.
+  if (stopEpoch === expectedGeneration) stopFlag = false;
 }
 
 // Contrato de señales: SIGINT sólo trunca (es la señal del stop
@@ -150,12 +160,14 @@ export function resetStop() {
 let terminando = false;
 export function instalarSenales() {
   process.on('SIGINT', () => {
+    stopEpoch++;
     stopFlag = true;
     matarTodosLosGrupos();
   });
   process.on('SIGTERM', () => {
     if (terminando) return;
     terminando = true;
+    stopEpoch++;
     stopFlag = true;
     matarTodosLosGrupos();
     // gracia para que la operación en curso asiente el truncado (escala

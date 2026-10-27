@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import {
+  readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CATALOGO } from '../src/plantillas.mjs';
@@ -12,9 +14,10 @@ const RAIZ = new URL('..', import.meta.url).pathname;
 // Sin mocks internos: el contrato es observable por proceso (política repo).
 class Cliente {
   constructor(extra = {}) {
+    this.runtimeDir = mkdtempSync(join(tmpdir(), 'glosomata-mcp-'));
     this.child = spawn('node', ['src/mcp.mjs'], {
       cwd: RAIZ,
-      env: { ...process.env, ...extra },
+      env: { ...process.env, GLOSOMATA_RUNTIME: this.runtimeDir, ...extra },
     });
     this.respuestas = [];
     this.orden = [];
@@ -85,6 +88,7 @@ class Cliente {
     clearTimeout(this.guard);
     this.child.stdin.end();
     await new Promise((res) => this.child.on('close', res));
+    rmSync(this.runtimeDir, { recursive: true, force: true });
   }
 }
 
@@ -96,6 +100,17 @@ async function conCliente(fn, extra = {}) {
   } finally {
     await c.cerrar();
   }
+}
+
+async function waitForLock(c) {
+  const lock = join(c.runtimeDir,
+    `glosomata-${process.getuid()}`, 'canal.lock');
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (existsSync(lock)) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('speak no adquirió el lock dentro de 5 segundos');
 }
 
 function llamada(id, name, arguments_ = {}) {
@@ -294,7 +309,9 @@ test('MCP: tools/call speak sin text → usage, isError', async () => {
     c.enviar(llamada(1, 'speak', {}));
     const r = await c.esperar(1);
     assert.equal(r.result.isError, true);
-    assert.equal(JSON.parse(r.result.content[0].text).error, 'usage');
+    const data = JSON.parse(r.result.content[0].text);
+    assert.equal(data.error, 'usage');
+    assert.ok(Number.isInteger(data.duration_ms) && data.duration_ms >= 0);
   });
 });
 
@@ -303,8 +320,20 @@ test('MCP: tools/call speak con engine inexistente → engine_unavailable', asyn
     c.enviar(llamada(1, 'speak', { text: 'hola', engine: 'no-existe' }));
     const r = await c.esperar(1);
     assert.equal(r.result.isError, true);
-    assert.equal(JSON.parse(r.result.content[0].text).error, 'engine_unavailable');
+    const data = JSON.parse(r.result.content[0].text);
+    assert.equal(data.error, 'engine_unavailable');
+    assert.ok(Number.isInteger(data.duration_ms) && data.duration_ms >= 0);
   });
+});
+
+test('MCP: excepción de config se codifica como JSON de operación', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'get_config'));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, true);
+    assert.deepEqual(JSON.parse(r.result.content[0].text),
+      { error: 'config_unreadable' });
+  }, { GLOSOMATA_CONFIG: '/ruta-inexistente/glosomata.json' });
 });
 
 test('MCP: validate ok → isError false y next_turn 1', async () => {
@@ -472,7 +501,7 @@ test('MCP: stop durante speak largo → speak truncated, stop atendido en curso'
     const textoLargo = 'prueba de interrupción por kill switch. '.repeat(40);
     const t0 = Date.now();
     c.enviar(llamada(2, 'speak', { text: textoLargo, engine: motor.id }));
-    await new Promise((res) => setTimeout(res, 200));
+    await waitForLock(c);
     c.enviar(llamada(3, 'stop'));
     const [rStop, rSpeak] = await Promise.all([c.esperar(3), c.esperar(2)]);
     const transcurrido = Date.now() - t0;
@@ -486,7 +515,34 @@ test('MCP: stop durante speak largo → speak truncated, stop atendido en curso'
     // el speak se resuelve con isError y truncated, no se pierde
     assert.equal(rSpeak.result.isError, true);
     const data = JSON.parse(rSpeak.result.content[0].text);
+    assert.equal(data.played, false,
+      `error=${data.error ?? 'none'}, truncated=${data.truncated ?? 'none'}`);
+    assert.equal(data.truncated, true);
+    assert.ok(Number.isInteger(data.duration_ms) && data.duration_ms >= 0);
+  });
+});
+
+test('MCP: stop inmediato tras speak no se pierde durante imports', async (t) => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'list_engines'));
+    const engines = await c.esperar(1);
+    const tts = JSON.parse(engines.result.content[0].text).tts;
+    const motor = tts.find((e) => e.id === 'say' && e.available)
+      ?? tts.find((e) => e.available);
+    if (!motor) {
+      t.skip('sin motor TTS disponible en este entorno');
+      return;
+    }
+    c.enviar(llamada(2, 'speak', {
+      text: 'interrumpir el arranque. '.repeat(40), engine: motor.id,
+    }));
+    c.enviar(llamada(3, 'stop'));
+    const [speak, stop] = await Promise.all([c.esperar(2), c.esperar(3)]);
+    assert.equal(stop.result.isError, false);
+    assert.equal(speak.result.isError, true);
+    const data = JSON.parse(speak.result.content[0].text);
     assert.equal(data.played, false);
     assert.equal(data.truncated, true);
+    assert.ok(Number.isInteger(data.duration_ms) && data.duration_ms >= 0);
   });
 });

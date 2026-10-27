@@ -82,12 +82,10 @@ Semántica que el consumidor DEBE conocer:
   dura al menos `timeout_s`. El consumidor debe comunicarlo en su UX.
 - **Errores de operación** llegan como `isError:true` en
   `content[0].text` — nunca como error JSON-RPC (ésos son de protocolo).
-  Hoy hay **dos codificaciones** y el consumidor debe aceptar ambas:
-  JSON `{"error":"<código>",...}` para los errores semánticos de tool
-  (`usage`, `engine_unavailable`, `session_expired`, …), y código
-  pelado (`"config_unreadable"`) para los que escapan como excepción
-  (hoy `config_unreadable` y códigos imprevistos). La lectura correcta
-  es `JSON.parse` con fallback a string.
+  La codificación es JSON `{"error":"<código>",...}` también cuando
+  la operación lanza una excepción. Un código ajeno a la taxonomía se
+  reduce a `internal_error`. `validate` con resultado `fail` y `speak`
+  truncado conservan sus formas de resultado sin campo `error`.
 
 ## 5. Semántica transversal de contención
 
@@ -97,6 +95,8 @@ concurrentes (varios agentes en la misma máquina):
 
 1. Ante `channel_busy`, reintentar con backoff exponencial (base 1s,
    tope 30s, jitter recomendado) hasta un límite de política propia.
+   `busy_pid`, cuando aparece, es una observación del lock y sirve sólo
+   para diagnóstico: puede quedar obsoleto y no estima la espera.
 2. `stop` es compartido: interrumpe la operación activa SEA DE QUIEN SEA.
    Un agente no debe llamar `stop` para resolver su propia contención.
 3. No hay cola en v1 (REQ-12 pospuesto): la política de espera es del
@@ -105,6 +105,23 @@ concurrentes (varios agentes en la misma máquina):
    (`canal.lock`); un pid reciclado puede producir `channel_busy`
    persistente (ver `SECURITY.md`). La política de backoff debe incluir
    degradación a texto tras N reintentos fallidos.
+
+`speak` y `listen` incluyen `duration_ms` entero no negativo en sus
+resultados, incluso fallos e interrupciones. Mide tiempo wall-clock desde
+la entrada a la operación hasta después de su limpieza; incluye carga de
+configuración, espera de subprocess y adquisición del lock. No mide una
+cola de espera del consumidor, porque v1 no tiene cola.
+
+`causa` en fallos de audio es opcional y pertenece al conjunto cerrado
+`permission|device_missing|ffmpeg_missing|capture_failed|playback_failed|whisper_failed`.
+Un exit genérico de ffmpeg da `audio_device_error` con
+`causa:capture_failed`, no `mic_denied`: el exit no prueba que faltó
+permiso. Un WAV vacío, corto o ilegible también es `capture_failed`,
+no `mic_timeout`: sólo PCM válido con RMS bajo acredita silencio.
+`permission` y `device_missing` se reservan para una sonda que
+distinga esos estados. Fallos de reproducción TTS confirmados dan
+`playback_failed`; fallos de whisper, `whisper_failed`. Si no hay base
+para clasificar, se omite `causa`.
 
 ## 6. Variables de entorno contractuales
 
@@ -154,13 +171,10 @@ causas sólo crece.
 Estos huecos están DECLARADOS, con plan de cierre incremental
 (`docs/plan-consumo-agentes-v1.md`):
 
-1. **`channel_busy` sin datos**: no informa `busy_pid` ni estimado de
-   reintento; el consumidor no puede backoff informado.
-2. **Causas de audio poco granulares**: `mic_denied` agrupa permiso,
-   dispositivo ausente y fallo de captura; `audio_device_error` lleva
-   `causa` sólo en un caso (ffmpeg ausente en STT); las causas TTS se
-   descartan.
-3. **Plantillas propias**: "el agente crea la propia" exige fabricar el
+1. **Causas de permiso/dispositivo aún no distinguibles**: un exit
+   genérico de ffmpeg no permite atribuirlas; se informa
+   `capture_failed` hasta contar con una sonda fiable.
+2. **Plantillas propias**: "el agente crea la propia" exige fabricar el
    JSON de sesión a mano; no hay superficie de plantillas del
    orquestador (CATALOGO builtin únicamente).
 

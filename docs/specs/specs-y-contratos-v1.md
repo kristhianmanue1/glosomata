@@ -115,6 +115,12 @@ y constraints, sin rutas del filesystem —, list_templates() — incluye
 turns —, validate(session, text). Mismos códigos de error que CLI; un
 `listen` interrumpido por `stop` se resuelve con `stopped`. `validate`
 recibe la sesión inline como objeto.
+Los errores de operación MCP viajan como JSON `{ "error": "<código>" }`
+en `content[0].text`; los errores JSON-RPC son sólo de protocolo.
+`speak` y `listen` incluyen `duration_ms` entero no negativo aun cuando
+fallen o sean interrumpidos. `channel_busy` puede incluir `busy_pid`
+diagnóstico. `causa` de audio es opcional y de lista cerrada según el
+contrato de consumo §5.
 
 ## CONTRATO: plantilla v1 (esquema cerrado)
 

@@ -6,12 +6,16 @@ import { cargarMatriz } from './matriz.mjs';
 import { canonizar } from './plantillas.mjs';
 import { rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper } from './stt.mjs';
 import {
-  adquirirCanal, liberarCanal, resetStop, detenerCanalRemoto, nuevoTemporal,
+  adquirirCanal, liberarCanal, resetStop, stopGeneration,
+  detenerCanalRemoto, nuevoTemporal,
 } from './canal.mjs';
 import { rm } from 'node:fs/promises';
+import { measureOperation } from './duration.mjs';
 
-function err(code, cause) {
-  return Object.assign(new Error(code), { code, cause });
+// Sólo afplay en los adaptadores emite audio_device_error: una falla
+// allí sí acredita playback_failed. tts_failed no identifica la etapa.
+export function ttsAudioCause(code) {
+  return code === 'audio_device_error' ? 'playback_failed' : null;
 }
 
 // parser estricto: valores obligatorios, no inician con '--'
@@ -29,15 +33,23 @@ export function parseArgs(argv, spec) {
 }
 
 export async function speakOp(argv) {
-  const args = parseArgs(argv, { '--text': 'text', '--engine': 'engine' });
-  if (!args?.text) return { code: 2, data: { error: 'usage' } };
-  return speakCore(args);
+  const stopAtStart = stopGeneration();
+  return measureOperation(() => {
+    const args = parseArgs(argv, { '--text': 'text', '--engine': 'engine' });
+    return !args?.text
+      ? { code: 2, data: { error: 'usage' } }
+      : speakRaw(args, stopAtStart);
+  });
 }
 
 // Núcleo de speak con objeto directo {text, engine?}. MCP inyecta aquí:
 // re-serializar a argv re-parseaba y rechazaba texto legítimo que inicia
 // con '--' como usage falso (ronda 5, M-5).
-export async function speakCore(args) {
+export async function speakCore(args, stopAtStart = stopGeneration()) {
+  return measureOperation(() => speakRaw(args, stopAtStart));
+}
+
+async function speakRaw(args, stopAtStart) {
   const cfg = await cargarMatriz();
   let motor;
   if (args.engine) {
@@ -55,10 +67,8 @@ export async function speakCore(args) {
   } catch (e) {
     return { code: 1, data: { error: e.code } };
   }
-  await adquirirCanal().catch((e) => {
-    throw err(e.code ?? 'internal_error');
-  });
-  resetStop();
+  await adquirirCanal();
+  resetStop(stopAtStart);
   let tmpWav = null;
   try {
     const adaptador = await import(`./tts/${motor.adapter}.mjs`);
@@ -70,16 +80,18 @@ export async function speakCore(args) {
     const out = await adaptador.hablar(motor, texto, { tmpWav });
     return { code: out.played ? 0 : 1, data: { engine: motor.id, ...out } };
   } catch (e) {
-    return { code: 1, data: { error: e.code ?? 'internal_error' } };
+    const audioCause = ttsAudioCause(e.code);
+    return { code: 1, data: { error: e.code ?? 'internal_error',
+      ...(audioCause ? { causa: audioCause } : {}) } };
   } finally {
     if (tmpWav) await rm(tmpWav, { force: true }).catch(() => {});
     await liberarCanal();
   }
 }
 
-export async function listenOp(argv) {
+export async function listenOp(argv, stopAtStart = stopGeneration()) {
   const { listen } = await import('./stt.mjs');
-  return listen(argv);
+  return listen(argv, stopAtStart);
 }
 
 export async function stopOp() {
@@ -150,8 +162,11 @@ export async function validateOp(argv) {
 }
 
 // variante para MCP con argumentos ya parseados
-export async function speakMcp(args) {
-  return speakCore(args);
+export async function speakMcp(args, stopAtStart = stopGeneration()) {
+  if (typeof args?.text !== 'string' || !args.text) {
+    return measureOperation(() => ({ code: 2, data: { error: 'usage' } }));
+  }
+  return speakCore(args, stopAtStart);
 }
 
 export async function configOp(argv) {
