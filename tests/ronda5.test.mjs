@@ -46,8 +46,19 @@ function chunk(id, cuerpo) {
   return Buffer.concat([h, cuerpo, cuerpo.length % 2 ? Buffer.alloc(1) : Buffer.alloc(0)]);
 }
 
+function fmtPcm() {
+  const fmt = Buffer.alloc(16);
+  fmt.writeUInt16LE(1, 0); // PCM
+  fmt.writeUInt16LE(1, 2); // mono
+  fmt.writeUInt32LE(16000, 4);
+  fmt.writeUInt32LE(32000, 8);
+  fmt.writeUInt16LE(2, 12);
+  fmt.writeUInt16LE(16, 14);
+  return chunk('fmt ', fmt);
+}
+
 test('ronda5/H-1: pcmDesdeWav con header clásico de 44 bytes', () => {
-  const fmt = chunk('fmt ', Buffer.alloc(16));
+  const fmt = fmtPcm();
   const pcm = Buffer.from([1, 0, 2, 0, 3, 0, 4, 0]);
   const data = chunk('data', pcm);
   const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4),
@@ -56,7 +67,7 @@ test('ronda5/H-1: pcmDesdeWav con header clásico de 44 bytes', () => {
 });
 
 test('ronda5/H-1: LIST INFOISFT desplaza data a offset 70 (caso ffmpeg real)', () => {
-  const fmt = chunk('fmt ', Buffer.alloc(16));
+  const fmt = fmtPcm();
   const list = chunk('LIST', Buffer.alloc(26, 0x41)); // 26 bytes ASCII basura
   const pcm = Buffer.alloc(3200, 0); // silencio real
   const data = chunk('data', pcm);
@@ -71,6 +82,10 @@ test('ronda5/H-1: LIST INFOISFT desplaza data a offset 70 (caso ffmpeg real)', (
 test('ronda5/H-1: WAV ilegible → null (fail-closed)', () => {
   assert.equal(pcmDesdeWav(Buffer.alloc(100, 7)), null); // sin RIFF
   assert.equal(pcmDesdeWav(Buffer.from('RIFF____WAVE__nochunks')), null);
+  const oddData = chunk('data', Buffer.alloc(3201, 1));
+  const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4),
+    Buffer.from('WAVE'), fmtPcm(), oddData]);
+  assert.equal(pcmDesdeWav(wav), null);
 });
 
 // —— M-2: robo del lock ——
@@ -85,7 +100,8 @@ test('ronda5/M-2: lock stale con pid muerto se roba y libera', async () => {
 
 test('ronda5/M-2: lock con pid vivo → channel_busy', async () => {
   writeFileSync(LOCK, String(process.pid));
-  await assert.rejects(adquirirCanal(), (e) => e.code === 'channel_busy');
+  await assert.rejects(adquirirCanal(),
+    (e) => e.code === 'channel_busy' && e.busy_pid === process.pid);
   rmSync(LOCK, { force: true });
 });
 

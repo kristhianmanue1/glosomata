@@ -70,7 +70,29 @@ de la matriz rige sólo el CLI.
   inaudibles fuera) si la reproducción fue completa, `null` en caso
   contrario. Si hay texto en `echo`, sonó entero.
 - **`listen`** captura la ventana completa y clasifica post-hoc: silencio
-  (RMS bajo) → `mic_timeout`; luego transcribe con whisper.
+  (RMS bajo de PCM válido) → `mic_timeout`; WAV ausente o ilegible →
+  `audio_device_error` con `capture_failed`; luego transcribe con whisper.
+- **`duration_ms`** en `speak` y `listen` mide la operación completa,
+  incluso si falla o se interrumpe. `busy_pid` en `channel_busy` es sólo
+  una pista diagnóstica del lock, nunca un tiempo de espera.
+
+## Operación con varios agentes
+
+El canal no encola solicitudes. Si `speak` o `listen` responde
+`channel_busy`, un consumidor puede probar hasta cinco veces con espera
+exponencial de 1, 2, 4, 8 y 16 segundos, aplicando jitter de ±20 % a
+cada espera. El límite de 30 segundos del contrato rige si el
+consumidor elige más intentos. Tras agotar su límite, debe devolver el
+contenido por texto al humano y explicar que el canal sigue ocupado.
+Ésta es una receta de consumo, no una espera implementada por glosomata.
+
+No uses `busy_pid` para ajustar la espera ni para enviar señales: un pid
+puede reciclarse. `stop` afecta la operación activa aunque la haya
+iniciado otro agente. Úsalo sólo ante una petición deliberada de
+interrumpirla, nunca para despejar `channel_busy`. Ante `stopped`, no
+reintentes automáticamente la frase interrumpida. Ante fallos de audio,
+lee `causa`: `capture_failed` no demuestra falta de permiso; degrada a
+texto mientras el operador revisa el dispositivo y sus permisos.
 
 ## Flujo de turno con plantilla (típico)
 
@@ -89,14 +111,21 @@ de la matriz rige sólo el CLI.
 ## Códigos de error
 
 Taxonomía cerrada, mismos códigos que el CLI, siempre en
-`content[0].text` con `isError:true`:
+`content[0].text` como JSON `{"error":"<código>",...}` con
+`isError:true` para errores de operación. Un código de excepción ajeno
+a la taxonomía se entrega como `internal_error`:
 
 `engine_unavailable`, `tts_failed`, `stt_failed`, `mic_denied`,
 `mic_timeout`, `audio_device_error`, `template_invalid`, `not_found`,
 `text_too_long`, `session_invalid`, `session_expired`,
 `session_abandoned`, `channel_busy`, `not_supported`,
-`config_unreadable`, `usage`, `internal_error` — más `stopped` cuando
+`config_unreadable`, `config_write_failed`, `usage`, `internal_error` — más `stopped` cuando
 `stop` interrumpe un `listen` en curso.
+
+El campo `causa` de audio, cuando se conoce, pertenece a
+`permission|device_missing|ffmpeg_missing|capture_failed|playback_failed|whisper_failed`.
+Un fallo genérico de ffmpeg usa `capture_failed`; no se presenta como
+permiso denegado sin evidencia adicional.
 
 Fail-closed ante todo: motor sin `kill_switch` en la matriz aparece con
 `available:false` y no es seleccionable; sesión expirada o corrupta →

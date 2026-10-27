@@ -1,7 +1,10 @@
 # Plan de consumo para agentes — v1
 
 > **Estado:** PROPUESTA en ejecución. C0 y C1 cerrados (2026-10-17,
-> PRs #6–#13). Ejecución sólo con aceptación del humano, tarea por
+> PRs #6–#13); C2 implementado y verificado en 2026-10-27 según los
+> criterios afinados por el operador: `busy_pid` sólo diagnóstico y
+> causas de audio sólo cuando la evidencia permite atribuirlas.
+> Ejecución sólo con aceptación del humano, tarea por
 > tarea. Complementa `docs/specs/contrato-consumo-agentes-v1.md`
 > (el contrato que este plan hace real) y sigue el estándar de
 > `docs/estandar-diseno-software-github.md`.
@@ -129,17 +132,21 @@ Leyenda de tamaño: S ≤ media sesión; M ≤ una sesión; L requiere partirse.
 ## C2 — Contención y observabilidad para varios agentes (entrega: cooperación sin leer fuente)
 
 ### C2.1 `channel_busy` informado — S — **ADV**
-- `src/canal.mjs`: al fallar adquisición, adjuntar `{busy_pid}` (ya se
-  lee el lock). `ops`/`stt` lo propagan en `data`.
-- Documentar en contrato §5: reintento con backoff es política del
-  agente; sin cola en v1.
-- Tests: dos adquisiciones → la segunda ve `busy_pid` del holder.
-- **Criterio**: el agente implementa backoff sin adivinar quién ocupa.
+- `src/canal.mjs`: al fallar adquisición, adjuntar `{busy_pid}` cuando
+  el lock conserva un PID vivo. `ops`/`stt` lo propagan en `data`.
+- Documentar en contrato §5: `busy_pid` es un snapshot diagnóstico,
+  no estima duración ni gobierna el backoff; reintento es política del
+  agente, sin cola en v1.
+- Tests: dos adquisiciones → la segunda ve el PID registrado en el lock.
+- **Criterio**: cuando se informa, el agente recibe ese PID como pista
+  diagnóstica, sin inferir identidad actual, cuánto esperar ni usarlo
+  para interrumpir.
 
 ### C2.2 `duration_ms` en resultados — S
-- `speak`/`listen` añaden `duration_ms` (medición wall-clock dentro de
-  la operación). La política de logs ya admite duraciones; es dato, no
-  log.
+- `speak`/`listen` añaden `duration_ms` entero no negativo (medición
+  wall-clock desde la entrada hasta después de limpiar), también en
+  fallos e interrupciones. La política de logs ya admite duraciones;
+  es dato, no log.
 - Tests: campo presente y entero ≥0.
 - **Criterio**: el orquestador mide latencia por motor sin tocar nada.
 
@@ -147,18 +154,24 @@ Leyenda de tamaño: S ≤ media sesión; M ≤ una sesión; L requiere partirse.
 - Conjunto cerrado de causas estructuradas (`causa` de lista fija):
   `permission`, `device_missing`, `ffmpeg_missing`, `capture_failed`,
   `playback_failed`, `whisper_failed`.
-- Estado real que corrige: `mic_denied` agrupa permiso, dispositivo y
-  fallo de captura (exit≠0 de ffmpeg); `ffmpeg_missing` ya hoy es
-  `audio_device_error` con causa en STT; en TTS las causas de afplay
-  (piper/kokoro) quedan en `Error.cause` y `speakCore` las descarta al
-  armar `data`.
-- Alcance: propagar `cause → data` TAMBIÉN en `ops.speakCore` (TTS) —
-  sin eso el conjunto queda partido: STT con causa, TTS sin causa.
+- Estado anterior que corrige: `mic_denied` agrupaba permiso,
+  dispositivo y fallo de captura (exit≠0 de ffmpeg); en TTS las causas
+  de afplay (piper/kokoro) quedaban en `Error.cause` y `speakCore` las
+  descartaba al armar `data`.
+- Alcance: clasificar en `ops.speakCore` los errores de reproducción de
+  los adaptadores como `playback_failed`; no reenviar `Error.cause`
+  crudo al consumidor.
+- Un exit genérico de ffmpeg, WAV ausente o ilegible se informa como
+  `capture_failed`: no acredita `permission` ni `device_missing`.
+  Estas dos causas quedan reservadas hasta contar con sonda fiable.
 - Compat: campo nuevo → compatible por contrato §2.2.
-- Tests por causa con binarios/plataforma simulados (paths por env, ya
-  existe el patrón `GLOSOMATA_FFMPEG`).
-- **Criterio**: "no tengo micrófono" ≠ "no diste permiso" ≠ "falló el
-  playback" para el consumidor, en STT y en TTS.
+- Tests de captura y whisper con binarios simulados (paths por env, ya
+  existe el patrón `GLOSOMATA_FFMPEG`); clasificación TTS probada a
+  nivel de función. La reproducción fallida de `speak` no tiene prueba
+  de proceso extremo a extremo en esta entrega.
+- **Criterio afinado**: el consumidor distingue captura, reproducción y
+  whisper fallidos; no recibe un diagnóstico falso de permiso o
+  dispositivo cuando la sonda sólo prueba fallo de captura.
 
 ### C2.4 Guía de reintentos y degradación — S
 - `docs/guia-mcp.md`: sección "Operación multiagente": backoff ante
@@ -168,7 +181,7 @@ Leyenda de tamaño: S ≤ media sesión; M ≤ una sesión; L requiere partirse.
 - **Criterio**: la política de espera vive en docs, no en folklore.
 
 ### C2.5 Codificación única de errores MCP — S — **ADV**
-- `mcp-core.mjs`: los errores que hoy escapan pelados por `.catch`
+- `mcp-core.mjs`: los errores que antes escapaban pelados por `.catch`
   (`config_unreadable`, códigos imprevistos) se normalizan a la forma
   JSON `{"error":"<código>"}`. El contrato §4 declara la codificación
   dual vigente hasta que esta tarea cierre; entonces pasa a única.

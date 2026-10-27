@@ -6,6 +6,17 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: C2.5/C2.4/C2.3/C2.1/C2.2 — errores de operación MCP siempre
+  como JSON con código de taxonomía (desconocidos → `internal_error`),
+  guía de reintentos/degradación para varios agentes, causas cerradas
+  de audio sin inferir permisos de un exit ffmpeg, `busy_pid` sólo
+  diagnóstico y `duration_ms` de `speak`/`listen` incluso en fallos.
+  Un exit genérico de ffmpeg pasa de `mic_denied` a
+  `audio_device_error`/`capture_failed` para no afirmar una causa no
+  probada. La revisión adversarial cerró dos rutas STT: el lock se
+  libera si falla la creación del temporal, y un WAV vacío o ilegible
+  es `capture_failed` en vez de silencio inferido. Una señal `stop`
+  llegada durante el arranque ya no se borra al adquirir el canal.
 - feat: **tool MCP `get_config`** (P2.1, octava tool) — matriz
   SANEADA con whitelist estricta: `engines.tts[{id, adapter,
   selected, available, kill_switch:{max_latency_ms}}]`,
