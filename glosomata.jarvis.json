@@ -1,0 +1,22 @@
+{
+  "engines": {
+    "tts": [
+      {
+        "id": "phonon-rebeca",
+        "adapter": "phonon_ollama",
+        "model": "phonon-es-mx-eval-20261027:latest",
+        "voice": "Rebeca",
+        "selected": true,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 500
+        }
+      }
+    ],
+    "stt": {}
+  },
+  "constraints": {
+    "max_text_chars": 2000
+  }
+}
