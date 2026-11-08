@@ -52,6 +52,8 @@ evalúa por ruta concreta antes de enviar datos reales.
   aún pasa por `--text` en argv; el plugin descarta stdout, stderr y el
   código de salida de `speak`, y envía SIGTERM tras 120 s. Un cierre de
   sesión de OpenCode no acredita que el audio haya sonado completo.
+  (2026-11-08: cierto para la copia instalada; la copia versionada del
+  repo ya habla por stdin y registra el exit — ver dependencia 3.)
 
 Fuentes: `docs/specs/contrato-consumo-agentes-v1.md`,
 `docs/specs/specs-y-contratos-v1.md`, `docs/adr/ADR-003-ollama-fuera-del-nucleo.md`
@@ -147,9 +149,15 @@ riesgos. Piper sigue seleccionado hasta una decisión distinta.
 2. Publicar contrato local de TTS y conformidad para consumidor externo,
    incluidos cancelación y custodia:
    [issue #3](https://github.com/kristhianmanue1/LFM3-Omni-FK/issues/3).
-3. Resolver el texto en argv y la custodia del log histórico del plugin
-   global de OpenCode antes de G0 con datos reales; la copia instalada
-   está fuera de este repositorio.
+3. Resuelta en el repo (2026-11-08, mandato timbre-stdin): el contrato
+   CLI v1 añade `speak --text-stdin` (compatible: `--text` sigue igual)
+   y la copia versionada del plugin
+   (`integrations/opencode/timbre-jarvis.js`) escribe la locución por
+   stdin del hijo — ningún argv la contiene — y registra el exit de
+   `speak` (código, no texto) sin añadir contenido al log. Pendiente
+   para G0 con datos reales: instalar la copia global en
+   `~/.config/opencode/` (fuera de este repositorio) y decidir la
+   custodia del log histórico ya existente en esa misma ruta.
 4. Encargar G0 y, si procede, adoptar G2/G3 por separado en glosomata.
 
 ## Decisiones del Operador (2026-11-07)

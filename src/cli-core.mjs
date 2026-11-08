@@ -18,6 +18,9 @@ const USO = `uso: glosomata <comando> [opciones]
 
 comandos:
   speak --text <str> [--engine <id>]   reproduce texto localmente
+  speak --text-stdin [--engine <id>]   ídem; texto completo por stdin
+                                       UTF-8 (excluye --text: argv no
+                                       ve la locución)
   listen [--timeout <s>]               captura micrófono, imprime transcripción
   stop                                 interrumpe la operación de canal activa
   engines                              lista disponibilidad y selección
