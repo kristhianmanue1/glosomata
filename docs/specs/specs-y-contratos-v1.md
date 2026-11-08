@@ -53,11 +53,42 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 
 ## CONTRATO: CLI v1
 
-Operaciones: speak --text [--engine]; listen [--timeout]; stop; engines;
+Operaciones: speak --text [--engine] | speak --text-stdin [--engine];
+listen [--timeout]; stop; engines;
 version; doctor; templates [--list|--show id]; session new
 [--template id]; validate --session archivo --text str; config list;
 config get engines|constraints — lectura CRUDA de la matriz (sin
 probes ni campos derivados; `config validate` juzga, la lectura no).
+
+`speak --text-stdin` (adición compatible, 2026-11): el texto completo
+llega por stdin (UTF-8) en vez de `--text`; mutuamente excluyentes
+(ambos o ninguno → `usage`); mismos límites y validaciones
+(`max_text_chars` → `text_too_long`). Reglas de vacío idénticas por la
+misma métrica: la vacuidad decide sobre el texto crudo recibido, como
+`--text` (cero caracteres — stdin vacío, EOF sin datos o TTY sin
+tubería — → `usage`); una entrada de sólo inaudibles NO es vacía y
+sigue el mismo camino que `--text` (habla el vacío canonizado). Un
+error de lectura de stdin no es entrada vacía: `internal_error` sin
+hablar parcial alguno. Misma
+precedencia de errores que `--text` (vacío → `usage`;
+`engine_unavailable` decide antes que `text_too_long`): la
+disponibilidad del motor se resuelve antes de la cota y sin motor la
+lectura sólo drena (memoria constante, sin acotar) — el rechazo
+temprano `text_too_long` durante la lectura aplica con motor
+disponible, cuando la cota en streaming mide con la MISMA métrica que
+`--text`: el texto se canoniza por segmentos (NFC + inaudibles) y en
+cuanto esa longitud excede `max_text_chars` responde `text_too_long`
+sin esperar EOF (una fuente que deja el pipe abierto no retiene el
+proceso); una señal de stop durante la lectura la aborta sin hablar,
+con el mismo resultado truncado (`played:false`, `truncated:true`) que
+el stop durante la reproducción. Desde el inicio de la lectura el
+proceso queda registrado como esperador mediante un socket local
+propio: `stop` desde otro proceso le entrega la orden con acuse por
+ese socket (sin señales a pids de terceros; un registro huérfano se
+barre sin receptor) aunque aún no posea el canal. Motivación: argv
+es visible en `ps` para otros usuarios locales (ADR-005) — la
+superficie CLI aplica al texto de entrada la misma política que los
+adaptadores aplican al texto que entregan al motor.
 Sección: lista cerrada, sin traversal. `config validate [--file ruta]`:
 veredicto estilo `doctor` — estructura (schema formal) + probes +
 kill_switch; JSON por stdout y stderr vacío; exit 0 sólo si todo lo

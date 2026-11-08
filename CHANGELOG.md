@@ -6,6 +6,21 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **`speak --text-stdin`** — el texto llega completo por stdin
+  (UTF-8) en vez de `--text`: argv es visible en `ps` para otros
+  usuarios locales, así que la superficie CLI aplica al texto de
+  entrada la misma política que ADR-005 exige a los adaptadores.
+  Adición compatible del contrato CLI v1: `--text` sigue igual; ambos
+  o ninguno → `usage`; mismos límites y validaciones (tope
+  `max_text_chars` → `text_too_long`) y reglas de vacío (stdin vacío o
+  ausente = texto vacío). El plugin de OpenCode
+  (`integrations/opencode/timbre-jarvis.js`) habla por `--text-stdin`:
+  ninguna locución cruza argv, stdin queda cerrado tras escribir y el
+  exit de `speak` se registra en el log como código (jamás texto);
+  spawn y log inyectables para los tests del repo (sin `~/.config`, sin
+  SDK, sin audio). MCP sin cambios (`speakMcp` inyecta el objeto
+  directo). Cierra la dependencia 3 del plan LFM3 en el repo; la copia
+  global de `~/.config/opencode/` queda pendiente de instalar.
 - feat: C2.5/C2.4/C2.3/C2.1/C2.2 — errores de operación MCP siempre
   como JSON con código de taxonomía (desconocidos → `internal_error`),
   guía de reintentos/degradación para varios agentes, causas cerradas

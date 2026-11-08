@@ -33,10 +33,16 @@
 //   - Adiós a los topes de estilo por chars (160/500): la longitud la decide
 //     el contexto. Válvulas anti-fuga únicamente (runaway del TTS): marcador
 //     1800c (glosomata canoniza a 2000), fallback 900c.
+//
+// v4 (2026-11-08, mandato timbre-stdin): la locución viaja por stdin del
+//   hijo (`speak --text-stdin`) y NINGÚN argv la contiene — argv es visible
+//   en `ps` para otros usuarios locales (misma política que ADR-005 de
+//   glosomata aplica a sus adaptadores, ahora en la frontera CLI). El exit
+//   de `speak` se registra (código, no texto) en vez de descartarse; el log
+//   sigue recibiendo sólo eventos y códigos, jamás contenido.
 
 import { existsSync, appendFileSync } from "node:fs"
 import { spawn, execFileSync } from "node:child_process"
-import { Plugin } from "@opencode/plugin"
 
 // Puerto V1→V2 (2026-10-14, opencode 2.0.29): la API de plugins cambió de
 // forma rupturista ("Plugin must export a default definition..."). Mapeo:
@@ -244,34 +250,70 @@ const NODE = resolverNode()
 // H2: cola serializadora — una locución a la vez, compartida entre instancias
 // vía __timbre (ver nota arriba). La promesa nunca rechaza: el timbre jamás
 // debe romper la sesión.
-function hablar(locucion) {
-  __timbre.cola = __timbre.cola.then(
-    () =>
-      new Promise((resolve) => {
-        let terminado = false
-        const fin = () => {
-          if (terminado) return
-          terminado = true
-          clearTimeout(temporizador)
-          resolve()
-        }
-        const child = spawn(
-          NODE,
-          [GLOSOMATA, "speak", "--engine", "phonon-rebeca", "--text", locucion],
-          { cwd: GLOSOMATA_DIR, stdio: "ignore",
-            env: { ...process.env, GLOSOMATA_CONFIG: JARVIS_CONFIG } }
-        )
-        const temporizador = setTimeout(() => {
-          try {
-            child.kill("SIGTERM")
-          } catch {}
-        }, 120000)
-        child.on("error", fin)
-        child.on("close", fin)
-      })
-  )
-  return __timbre.cola
+//
+// v4: spawn y registro inyectables para los tests del repo (capturan argv y
+// stdin sin tocar ~/.config, sin SDK de opencode y sin audio real). El
+// registro recibe SÓLO eventos y códigos; jamás contenido de la locución.
+function registrarEnLog(linea) {
+  appendFileSync(LOG, linea, { mode: 0o600 })
 }
+
+export function crearHablar(spawnFn = spawn, registrar = registrarEnLog) {
+  return function hablar(locucion) {
+    __timbre.cola = __timbre.cola.then(
+      () =>
+        new Promise((resolve) => {
+          let terminado = false
+          const registrarSeguro = (linea) => {
+            try {
+              registrar(linea)
+            } catch {} // un fallo de log jamás rompe la cola
+          }
+          const fin = () => {
+            if (terminado) return
+            terminado = true
+            clearTimeout(temporizador)
+            resolve()
+          }
+          // v4: la locución NO va en argv (visible en ps) — viaja por stdin.
+          const child = spawnFn(
+            NODE,
+            [GLOSOMATA, "speak", "--engine", "phonon-rebeca", "--text-stdin"],
+            { cwd: GLOSOMATA_DIR, stdio: ["pipe", "ignore", "ignore"],
+              env: { ...process.env, GLOSOMATA_CONFIG: JARVIS_CONFIG } }
+          )
+          const temporizador = setTimeout(() => {
+            try {
+              child.kill("SIGTERM")
+            } catch {}
+          }, 120000)
+          child.on("error", (e) => {
+            registrarSeguro(
+              `[${new Date().toISOString()}] speak error ${e.code ?? "internal_error"}\n`
+            )
+            fin()
+          })
+          // v4: el exit de speak se conserva como código (no texto). Exit 0
+          // no registra nada; señal/timeout queda como "senal".
+          child.on("close", (code) => {
+            if (code !== 0) {
+              registrarSeguro(
+                `[${new Date().toISOString()}] speak exit ${code ?? "senal"}\n`
+              )
+            }
+            fin()
+          })
+          // EPIPE: si speak muere antes de leer stdin (p.ej. usage temprano),
+          // write/end fallan aquí; 'close' ya viene — no rompe el host.
+          child.stdin.on("error", () => {})
+          child.stdin.write(locucion)
+          child.stdin.end()
+        })
+    )
+    return __timbre.cola
+  }
+}
+const hablar = crearHablar()
 
 // v3.1 (2026-08-20, decreto Mediador: "más Jarvis", nivel 2): marco vocal
 // determinista — toda locución abre con "Señor." salvo que ya lo contenga
@@ -284,7 +326,41 @@ function conMarco(locucion) {
 
 // --- fin de la parte extraíble para tests ---
 
-export default Plugin.define({
+// El SDK de opencode sólo existe dentro del host. Carga diferida con
+// try/catch: el repo es cero-dependencias y el import falla fuera del
+// host; los tests inyectan un cargador simulado (ver inyección abajo).
+async function cargarPluginSdk() {
+  try {
+    return (await import("@opencode/plugin")).Plugin
+  } catch {
+    return null
+  }
+}
+
+// v4.1 (corrección r2, hallazgo 3 de la revisión): la definición V2 se
+// separa del entrypoint y se vuelve comprobable — con un SDK simulado,
+// crearDefinicionPlugin debe producir una definición default válida.
+// Una carga fallida del SDK jamás es un `default null` silencioso: el
+// código (sdk_no_disponible / sdk_invalido) se registra en el log del
+// plugin y en stderr del host — fallo de integración distinguible de
+// plugin ausente.
+//
+// Inyección para tests del repo: se lee UNA vez al iniciar el módulo,
+// ANTES de la primera importación (el host no define este global y
+// corre los defaults de producción):
+//   globalThis.__timbreJarvisInyeccion = { cargarSdk?, registrarCargaFallida? }
+const __inyeccion = globalThis.__timbreJarvisInyeccion ?? {}
+const cargarSdk = __inyeccion.cargarSdk ?? cargarPluginSdk
+const registrarCargaFallida = __inyeccion.registrarCargaFallida
+  ?? ((codigo) => {
+    try {
+      registrarEnLog(`[${new Date().toISOString()}] plugin ${codigo}\n`)
+    } catch {}
+    console.error(`timbre-jarvis: ${codigo}`)
+  })
+
+export function crearDefinicionPlugin(Plugin) {
+  return Plugin.define({
   id: "timbre-jarvis",
   setup(ctx) {
     const disponible = existsSync(GLOSOMATA)
@@ -347,4 +423,16 @@ export default Plugin.define({
       controller.abort()
     }
   },
-})
+  })
+}
+
+const Plugin = await cargarSdk()
+let definicion = null
+if (Plugin && typeof Plugin.define === "function") {
+  definicion = crearDefinicionPlugin(Plugin)
+} else {
+  // fallo de integración EXPLÍCITO, jamás un default null silencioso
+  // (código, no contenido). En el host: log del plugin + stderr.
+  registrarCargaFallida(Plugin ? "sdk_invalido" : "sdk_no_disponible")
+}
+export default definicion

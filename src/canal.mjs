@@ -5,6 +5,7 @@ import { open, mkdir, rm, readdir, rename, stat, readFile, unlink } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 
 // GLOSOMATA_RUNTIME aísla el dir de lock/temporales (tests paralelos de la
 // suite comparten $TMPDIR con otros procesos de la misma corrida).
@@ -12,6 +13,11 @@ const RUNTIME = process.env.GLOSOMATA_RUNTIME
   ? join(process.env.GLOSOMATA_RUNTIME, `glosomata-${process.getuid?.() ?? 'u'}`)
   : join(tmpdir(), `glosomata-${process.getuid?.() ?? 'u'}`);
 const LOCK = join(RUNTIME, 'canal.lock');
+// Esperadores de stdin (speak --text-stdin): stop cross-process (r3 B1;
+// r4 H-5: socket propio por esperador, sin señales a pids de terceros)
+const ESPERA = join(RUNTIME, 'espera');
+const ORDEN_STOP = 's'; // orden de stop: 1 byte por el socket
+const ACUSE_RECEPCION = 'a'; // acuse del esperador: 1 byte de vuelta
 
 // P1.2: backups de config junto al lock — mismo layout per-user
 export function rutaBackups() {
@@ -75,6 +81,53 @@ export async function liberarCanal() {
   const ruta = lockRuta;
   lockRuta = null;
   if (ruta) await unlink(ruta).catch(() => {});
+}
+
+// Registro de esperadores de stdin (speak --text-stdin): `stop` desde
+// otro proceso debe alcanzar al lector DURANTE la lectura, cuando aún
+// no existe canal.lock (r3, B1). Cada esperador abre un socket local
+// propio bajo espera/ y la orden se ENTREGA por ese socket con acuse
+// del receptor (r4, H-5): jamás una señal a un pid — un pid reciclado
+// no puede recibir el SIGINT de un stop, y conectar al socket de un
+// proceso muerto falla (ECONNREFUSED/ENOENT), así que el registro
+// huérfano se barre sin receptor. El lock sigue significando exclusión
+// de reproducción, no presencia del proceso. Limpieza: finally del
+// propio lector; carreras ENOENT (un stop barrió justo antes) son
+// normales. La ruta debe caber en sun_path (~104 bytes en darwin): con
+// un TMPDIR inusualmente largo el listen falla y la operación falla
+// explícito (fail-closed, mismo criterio que un registro fs roto).
+export function registrarEspera(alOrden) {
+  return new Promise((resolve, reject) => {
+    mkdir(ESPERA, { recursive: true, mode: 0o700 }).then(() => {
+      const ruta = join(ESPERA,
+        `${Math.random().toString(36).slice(2, 8)}.sock`);
+      const server = net.createServer();
+      server.on('error', reject); // listen fallido → la operación falla
+      server.on('connection', (conn) => {
+        conn.on('data', () => {
+          alOrden();
+          conn.end(ACUSE_RECEPCION);
+        });
+        conn.on('error', () => {});
+      });
+      server.listen(ruta, () => {
+        // tras el bind, un error del server no tumba al esperador: sólo
+        // degrada el stop remoto (el local y el SIGINT directo siguen)
+        server.removeAllListeners('error');
+        server.on('error', () => { try { server.close(); } catch {} });
+        resolve({ ruta, server });
+      });
+    }, reject);
+  });
+}
+
+export async function liberarEspera(registro) {
+  if (!registro) return;
+  await new Promise((res) => {
+    registro.server.close(() => res());
+    registro.server.closeAllConnections?.();
+  });
+  await unlink(registro.ruta).catch(() => {}); // ENOENT: normal
 }
 
 // Temporales: unlink-tras-open; barrido por edad al arranque.
@@ -180,21 +233,65 @@ export function instalarSenales() {
   });
 }
 
-// stop cross-process: señal al pid del lockfile (fix BLOCKER ronda 3).
+// stop cross-process: señal al pid del lockfile (fix BLOCKER ronda 3,
+// superficie v1 preexistente) y orden CON ACUSE a cada esperador de
+// stdin por SU socket (r3, B1; r4, H-5: la lectura con pipe abierto
+// también es interrumpible, sin señales a pids de terceros). Un socket
+// sin receptor (proceso muerto: conectar falla) se barra aquí. Un
+// socket con receptor lento que no acusa dentro del plazo no se barre
+// ni cuenta: podría estar vivo y ocupado. senal_remota es true si la
+// señal llegó al portador del canal o un esperador vivo ACUSÓ la orden.
 export async function detenerCanalRemoto() {
+  let senal = false;
   let pid = 0;
   try {
     pid = Number((await readFile(LOCK, 'utf8')).trim());
-  } catch {
-    return false; // sin lock: canal libre
+  } catch {} // sin lock: el canal está libre para reproducción
+  if (Number.isInteger(pid) && pid > 0) {
+    try {
+      process.kill(pid, 'SIGINT');
+      senal = true;
+    } catch {}
   }
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+  let entradas = [];
   try {
-    process.kill(pid, 'SIGINT');
-    return true;
-  } catch {
-    return false;
+    entradas = await readdir(ESPERA);
+  } catch {} // sin directorio: nadie espera
+  for (const nombre of entradas) {
+    if (!nombre.endsWith('.sock')) continue; // ajeno al registro
+    const recibido = await ordenStopEsperador(join(ESPERA, nombre));
+    if (recibido === null) continue; // vivo pero sin acuse: no tocar
+    if (!recibido) {
+      // huérfano: sin receptor que pueda acusar
+      await unlink(join(ESPERA, nombre)).catch(() => {});
+      continue;
+    }
+    senal = true;
   }
+  return senal;
+}
+
+// Entrega la orden de stop a un socket de esperador. true = acusada por
+// el receptor; false = sin receptor (conectar falló: proceso muerto o
+// archivo no-socket); null = conectó pero no acuso dentro del plazo.
+function ordenStopEsperador(ruta, plazoMs = 1000) {
+  return new Promise((resolve) => {
+    let terminado = false;
+    let plazo = null;
+    const socket = net.connect(ruta);
+    const fin = (v) => {
+      if (terminado) return;
+      terminado = true;
+      if (plazo) clearTimeout(plazo);
+      socket.destroy();
+      resolve(v);
+    };
+    plazo = setTimeout(() => fin(null), plazoMs);
+    plazo.unref();
+    socket.on('error', () => fin(false));
+    socket.on('connect', () => socket.write(ORDEN_STOP));
+    socket.on('data', () => fin(true));
+  });
 }
 
 // spawn en su propio grupo; stderr drenado SIEMPRE (fix HIGH: pipe lleno
