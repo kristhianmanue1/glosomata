@@ -152,6 +152,23 @@ riesgos. Piper sigue seleccionado hasta una decisión distinta.
    está fuera de este repositorio.
 4. Encargar G0 y, si procede, adoptar G2/G3 por separado en glosomata.
 
+## Decisiones del Operador (2026-11-07)
+
+- **Alcance:** TTS local y el piloto de texto G0. STT vía LFM3 queda
+  como trabajo futuro: LFM3 declara `transcripcion: true`, pero ADR-002
+  fija STT en whisper.cpp y la ruta I1-VR de LFM3 guarda transcripciones,
+  contra la política de no retención. Requiere ADR propio y contrato de
+  custodia del proveedor; issue sólo si el Operador lo decide.
+- **#2:** voz fija en el contrato v1 del proveedor (comentario en
+  [#2](https://github.com/kristhianmanue1/LFM3-Omni-FK/issues/2)).
+- **#3:** contrato sólo TTS por loopback; cerrarlo es el gate G1
+  (comentario en
+  [#3](https://github.com/kristhianmanue1/LFM3-Omni-FK/issues/3)).
+- **Orden:** el proveedor cierra #2 y #3 primero; G2/G3 aquí se encargan
+  después de G1. G0 espera a resolver la dependencia 3 (plugin de
+  OpenCode) o usa sólo datos sintéticos.
+- **Agentes:** ejecutores y revisores nuevos con codex u opencode.
+
 ## Refutación y condición de parada
 
 Un control positivo del gateway con WAV válido debe preceder a afirmar
