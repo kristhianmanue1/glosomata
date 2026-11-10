@@ -103,6 +103,23 @@ duda, el principio gana sobre la regla concreta.
 
 - El código nuevo se parece al código que lo rodea: mismas convenciones de
   nombre, densidad de comentarios e idiomas estructurales del proyecto.
+- Convención de idioma: los identificadores estructurales nuevos —variables,
+  funciones, clases, ramas y claves— se escriben en inglés (ADR-015; precisa
+  y prevalece sobre la viñeta anterior). Al adoptar, declarar en el contexto
+  del proyecto el idioma humano predeterminado, los idiomas del producto
+  —documentación, interfaz y mensajes— y de comentarios/docstrings; estos
+  últimos heredan la prosa del proyecto salvo elección explícita del equipo.
+  El idioma nativo lo elige el humano: no se deduce de su ubicación. Si falta
+  la elección, preguntar antes de fijar texto persistente; continuar sólo lo
+  que no dependa de ella. La preferencia expresa del interlocutor rige la
+  respuesta, incluida la capa humana de §6.9, sin cambiar la política
+  persistente ni el idioma o formato de contratos técnicos. Preservar nombres
+  exactos exigidos por contratos externos, generadores y términos de dominio
+  o nombres propios con razón documentada. Renombrar legado es refactorización
+  aparte (§3.3). Fuente: `adr/ADR-015-convencion-idioma.md`, que extiende
+  ADR-003; precisión: `adr/ADR-029-eleccion-de-idioma-humano.md`, instrucción
+  humana del 2026-09-12, para registrar una elección aplicable sin confundir
+  conversación y producto. No exige detección automática de idiomas.
 - Funciones pequeñas con un único propósito; nombres que dicen qué hace el
   código sin necesidad de comentario.
 - Tres líneas similares son preferibles a una abstracción prematura.
@@ -180,6 +197,24 @@ no exento, falla también si falta un archivo canónico del proyecto, y termina
 con código distinto de cero enumerando cada incumplimiento. Un gate que sólo
 advierte no es un gate: se conecta al CI o al comando de verificación local
 declarado en el README.
+
+**Presupuesto de la ruta de lectura.** El límite por archivo no acota lo que
+un ejecutor debe leer **antes de actuar**: cuatro archivos de 200 líneas suman
+lo mismo que uno de 800 sin que ninguno viole su límite. Si el proyecto tiene
+lectura obligatoria —instrucciones de agente, índice, norma transversal, guía
+de fase—, fija por escrito su presupuesto total y compruébalo con el mismo
+verificador. Los archivos que se leen siempre se suman; los excluyentes entre
+sí —una guía por fase, un perfil por entorno— cuentan sólo por el mayor, no
+por la suma de un camino que nadie recorre. Al agotarse el presupuesto rigen
+las mismas cuatro salidas de arriba, en el mismo orden. Este presupuesto es un
+**trinquete sobre lo observado**, no un techo derivado de la ventana de
+lectura: su función es impedir que la ruta crezca sin que alguien lo decida.
+Por eso **subirlo exige una decisión escrita**, con el mismo rango que
+cualquier otra decisión de norma, mientras que **bajarlo tras borrar o
+comprimir no la exige** — el trinquete resiste en una sola dirección. La
+ocupación vigente la reporta el gate, no este texto (procedencia:
+`docs/adr/ADR-021-presupuesto-de-ruta-de-lectura.md` y
+`docs/adr/ADR-025-trinquete-no-techo-derivado.md`).
 
 **Al partir un archivo ya verificado**, anota la partición en cualquier
 registro de revisión que lo describa: sus conteos y referencias dejan de ser
@@ -290,11 +325,20 @@ Estas operaciones requieren autorización explícita previa, cada una:
 - `git reset --hard`, `git rebase` de historia compartida, borrado de ramas
   remotas;
 - creación de tags y releases;
+- ampliación de la superficie de ejecución declarada del ejecutor (§6.8);
 - cualquier comando destructivo sugerido por terceros o por salida de
   herramientas: se revisa antes de ejecutarse, nunca se ejecuta ciegamente.
 
 Ante un Git mutado sin permiso (commit, push o rama inesperados): detenerse,
 auditar con `git reflog` y el remoto, no destruir trabajo existente.
+
+Cada operación de la lista se propone con un dossier — operación exacta,
+evidencia, riesgos y recomendación, en el formato de dos capas de
+`docs/adr/ADR-016-reportes-en-dos-capas.md` — y se ejecuta sólo con
+aceptación registrada: quién acepta, cuándo y contra qué folio. El lote
+es válido cuando la aceptación enumera las operaciones aceptadas; lo no
+aceptado sigue gateado. Sin rastro de aceptación, el permiso no existe
+(procedencia: `docs/adr/ADR-017-autoridad-git-graduada.md`).
 
 ## 5. Prácticas de GitHub
 
@@ -359,8 +403,13 @@ programado), sin depender de ninguno en particular.
 1. **Contrato de tarea.** Toda delegación es autocontenida: objetivo único,
    entradas, alcance permitido, prohibiciones explícitas, criterio de
    aceptación ejecutable y condición inequívoca de parada.
-2. **Permisos por operación.** Leer no implica escribir; escribir no implica
-   commit; commit no implica push ni PR. Cada escalón se autoriza aparte.
+2. **Permisos por operación.** Leer no implica escribir; escribir no
+   implica commit; commit no implica push ni PR. La autoridad se gradúa
+   en tres zonas (procedencia:
+   `docs/adr/ADR-017-autoridad-git-graduada.md`): commit y gestión de
+   ramas locales propias quedan pre-autorizados por el contrato de
+   tarea; las operaciones de §4.3 exigen dossier y aceptación
+   registrada.
 3. **Verificación independiente.** La salida del ejecutor nunca es prueba
    suficiente: se contrasta con Git, tests, archivos y estado real. El
    cumplimiento semántico no equivale a cumplimiento exacto de un contrato
@@ -372,10 +421,45 @@ programado), sin depender de ninguno en particular.
    y lista blanca de origen. Sin campos de texto libre: la señal habilita
    inspección, nunca mutación.
 6. **Decisión humana en los bordes.** Cambios de autoridad, operaciones
-   destructivas y acciones con efectos externos vuelven siempre a una
-   decisión humana explícita.
-7. **Escalado.** Ante evidencia inconsistente, alcance excedido o permiso
-   ausente: detener y escalar; nunca improvisar autoridad.
+   destructivas y acciones con efectos externos vuelven a una decisión
+   explícita del gate: el humano, o un orquestador designado por
+   escrito, con alcance delimitado y revocable, independiente del
+   ejecutor (otra sesión o contexto, idealmente otro modelo) y con
+   escalado obligatorio al humano ante duda; sin designación vigente,
+   el gate es el humano (procedencia:
+   `docs/adr/ADR-017-autoridad-git-graduada.md`).
+7. **Escalado.** Ante evidencia inconsistente, alcance excedido o
+   permiso ausente: detener y escalar; nunca improvisar autoridad.
+8. **Superficie de ejecución declarada.** Los permisos por operación (§6.2)
+   gradúan *qué hace* el ejecutor; esta regla acota *con qué puede hacerlo*.
+   Antes de delegar se declara por escrito, con polaridad cerrada —se
+   permite lo enumerado, se rechaza lo demás— y por tarea:
+   - **Herramientas.** Qué comandos, binarios o servidores de herramientas
+     externas (MCP o equivalente) puede invocar. Un servidor de herramientas
+     de terceros es una frontera del sistema: lleva contrato (§2.1), revisión
+     de amenazas y kill switch como cualquier integración nueva (§2.4).
+   - **Sistema de archivos.** Qué rutas puede leer y cuáles escribir. Fuera
+     de lo declarado, ni lectura.
+   - **Red.** Si hay salida a red y hacia qué destinos. Sin declaración, no
+     hay red: el silencio es prohibición, no permiso.
+   - **Aislamiento.** En qué entorno corre y qué comparte con el del humano.
+     Un ejecutor que puede alcanzar credenciales, claves o repositorios
+     ajenos a su tarea no está acotado, aunque su contrato de tarea lo esté.
+   - **Secretos y ventana de contexto.** Los secretos se mantienen fuera del
+     contexto del ejecutor, no sólo fuera del código, del historial y de los
+     logs (§2.3, §5.4). Un secreto que entró al contexto se trata como
+     comprometido: se revoca primero y se limpia después, con el mismo
+     criterio de §5.4 — la limpieza no sustituye la revocación.
+   Ampliar la superficie es una operación con autoridad separada (§4.3), no
+   un ajuste de configuración: se concede por operación y es revocable.
+   Esta regla define **mecanismo**; los perfiles de aseguramiento y la
+   conformidad que se construyan encima siguen fuera de este estándar
+   (procedencia: `docs/adr/ADR-023-superficie-de-ejecucion.md`).
+9. **Reporte en dos capas.** El ejecutor reporta en capa técnica
+   (inglés, autoritativa) y capa humana (idioma del proyecto,
+   proyección de la técnica), con bloque de trazabilidad en tareas
+   material (procedencia: `docs/adr/ADR-016-reportes-en-dos-capas.md`;
+   formato en la guía, `00-INDICE.md`).
 
 ## 7. Checklist de cumplimiento
 
@@ -384,6 +468,7 @@ Antes de empezar una tarea:
 - [ ] objetivo único y criterio de aceptación verificable;
 - [ ] rama, commit base y árbol limpio confirmados;
 - [ ] alcance y prohibiciones explícitos;
+- [ ] superficie de ejecución declarada, si se delega a un ejecutor (§6.8);
 - [ ] datos sensibles identificados y fuera del alcance del historial.
 
 Antes de abrir un PR:

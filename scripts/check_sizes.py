@@ -7,15 +7,30 @@ Markdown operativo suelto en la raíz.
 
 Copiable sin edición a un proyecto adoptante: si su estructura de archivos
 canónicos, límites o exenciones difiere de la de Skevi, declara
-`skevi-gate.json` en la raíz en vez de editar este script (ADR-006).
+`skevi-gate.json` en la raíz en vez de editar este script (ADR-006). Desde
+gate/v9 (ADR-039) la unidad de copia son los cuatro scripts de scripts/
+juntos: la validación de manifiestos vive en check_templates.py y este
+script la delega por import.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from pathlib import Path
 
+import check_templates
+
+
+# Identidad de esta copia del gate (ADR-027). Skevi no puede avisar a un
+# adoptante de que existe una versión nueva: el manifiesto le prohíbe observar
+# proyectos ajenos. Lo que sí puede es que la copia diga quién es y cuántos
+# días tiene, en la salida que el adoptante ya ejecuta. Al cambiar el
+# comportamiento del gate se sube GATE_VERSION y se pone la fecha del cambio.
+GATE_VERSION = "gate/v13"
+GATE_GENERATED_AT = "2026-10-29"
+GATE_STALE_AFTER_DAYS = 90
 
 ROOT = Path(__file__).resolve().parent.parent
 ROOT_MARKDOWN = {"AGENTS.md", "CLAUDE.md", "README.md"}
@@ -29,7 +44,8 @@ REQUIRED = {
     "docs/ai-agent-guide/03-cascaron-proyecto.md",
     "docs/ai-agent-guide/04-ejecucion-y-verificacion.md",
     "scripts/check_sizes.py",
-    "templates/registro-contexto.md",
+    "templates/skevi/registro-contexto.md",
+    "templates/skevi/plan-de-implementacion.md",
     "templates/skevi/usage-guide.md",
     "templates/skevi/architecture-overview.md",
 }
@@ -67,6 +83,15 @@ EXEMPT_SUFFIXES = {
     ".zip",
 }
 EXEMPT_PATHS: set[str] = set()
+# Exención por nombre exacto de archivo (ADR-030): basura que Git no
+# versiona, sin declarar su ruta una a una.
+EXEMPT_NAMES: set[str] = set()
+# Presupuesto de la ruta de lectura obligatoria (ADR-021). Vacío =
+# inactivo: §3.4 acota cada archivo por separado, y hasta ADR-021
+# nada acotaba la suma que un ejecutor debe leer antes de actuar.
+READING_PATH: dict = {}
+# Ocupación medida en la última corrida; None si el presupuesto está inactivo.
+READING_PATH_OBSERVED: int | None = None
 LIMITS = {
     "AGENTS.md": 200,
     "README.md": 300,
@@ -74,6 +99,18 @@ LIMITS = {
 DEFAULT_LIMIT = 800
 TEMPLATE_PREFIX = "templates/"
 TEMPLATE_LIMIT = 300
+
+# Manifiesto de plantillas (#28 D1 + enmiendas T09, ADR-020): el esquema
+# cerrado, el listado exacto y los digests vigentes se validan en
+# check_templates.py, dueño del dominio desde gate/v9 (ADR-039); este
+# gate delega por import. Los alias preservan la superficie que tests y
+# adoptantes importan desde aquí: mover el hogar no es romper la API.
+TEMPLATE_MANIFEST_NAME = check_templates.TEMPLATE_MANIFEST_NAME
+TEMPLATE_MANIFEST_SCHEMA = check_templates.TEMPLATE_MANIFEST_SCHEMA
+SCRIPT_MANIFEST_SCHEMA = check_templates.SCRIPT_MANIFEST_SCHEMA
+CORPUS_MANIFEST_SCHEMA = check_templates.CORPUS_MANIFEST_SCHEMA
+check_template_manifest = check_templates.check_template_manifest
+check_corpus_manifest = check_templates.check_corpus_manifest
 
 # Instantánea de los valores de Skevi, congelada al importar el módulo, antes
 # de que ninguna configuración de proyecto pueda tocarlos. `main()` restaura
@@ -85,6 +122,8 @@ _SKEVI_DEFAULTS = {
     "REQUIRED": frozenset(REQUIRED),
     "SKIP_DIRS": frozenset(SKIP_DIRS),
     "EXEMPT_PATHS": frozenset(EXEMPT_PATHS),
+    "EXEMPT_NAMES": frozenset(EXEMPT_NAMES),
+    "READING_PATH": dict(READING_PATH),
     "LIMITS": dict(LIMITS),
     "DEFAULT_LIMIT": DEFAULT_LIMIT,
 }
@@ -102,6 +141,10 @@ def reset_to_skevi_defaults() -> None:
     SKIP_DIRS.update(_SKEVI_DEFAULTS["SKIP_DIRS"])
     EXEMPT_PATHS.clear()
     EXEMPT_PATHS.update(_SKEVI_DEFAULTS["EXEMPT_PATHS"])
+    EXEMPT_NAMES.clear()
+    EXEMPT_NAMES.update(_SKEVI_DEFAULTS["EXEMPT_NAMES"])
+    READING_PATH.clear()
+    READING_PATH.update(_SKEVI_DEFAULTS["READING_PATH"])
     LIMITS.clear()
     LIMITS.update(_SKEVI_DEFAULTS["LIMITS"])
     DEFAULT_LIMIT = _SKEVI_DEFAULTS["DEFAULT_LIMIT"]
@@ -113,9 +156,22 @@ def reset_to_skevi_defaults() -> None:
 # decidirlo es aceptable, cambiarlo en silencio no lo es.
 CONFIG_NAME = "skevi-gate.json"
 CONFIG_KEYS = {
-    "limits", "default_limit", "exempt_paths", "required", "skip_dirs",
-    "root_markdown",
+    "limits", "default_limit", "exempt_paths", "exempt_names", "required",
+    "skip_dirs", "root_markdown", "plans", "reading_path", "reports",
 }
+# "plans" la consume scripts/check_plans.py (gate estructural de planes,
+# ADR-014) y "reports" scripts/check_reports.py (gate de reportes de dos
+# capas, ADR-022): misma config, polaridad cerrada compartida — ausente =
+# inactivo. Un check_sizes desactualizado las rechaza con BLOQ en vez de
+# ignorarlas, que es el efecto buscado.
+
+
+class _ConfigError(ValueError):
+    """Diagnóstico interno con constantes/campos conocidos, nunca payload.
+
+    Procedencia: ADR-007 y SPEC-AUD-02. Conserva compatibilidad con quienes
+    capturan ValueError; sólo esta variante admite mostrar su mensaje.
+    """
 
 
 def _resolve_project_path(value: object) -> Path | None:
@@ -137,12 +193,12 @@ def _safe_relative_paths(field: str, values: object) -> list[str]:
     ROOT. Rechaza absolutas y saltos hacia fuera (`../..`), con la misma
     frontera que `_resolve_registry_path` aplica al bloque de registro."""
     if not isinstance(values, list):
-        raise ValueError(f"{CONFIG_NAME}: «{field}» debe ser una lista de rutas")
+        raise _ConfigError(f"{CONFIG_NAME}: «{field}» debe ser una lista de rutas")
     safe: list[str] = []
     for value in values:
         if _resolve_project_path(value) is None:
-            raise ValueError(
-                f"{CONFIG_NAME}: «{field}» tiene una ruta inválida: {value!r} "
+            raise _ConfigError(
+                f"{CONFIG_NAME}: «{field}» tiene una ruta inválida "
                 "(debe ser relativa a la raíz del proyecto)"
             )
         safe.append(value)
@@ -151,8 +207,66 @@ def _safe_relative_paths(field: str, values: object) -> list[str]:
 
 def _string_list(field: str, values: object) -> list[str]:
     if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
-        raise ValueError(f"{CONFIG_NAME}: «{field}» debe ser una lista de texto")
+        raise _ConfigError(f"{CONFIG_NAME}: «{field}» debe ser una lista de texto")
     return values
+
+
+def _exempt_names(field: str, values: object) -> list[str]:
+    """Nombre de archivo sin ruta (ADR-030); para rutas, «exempt_paths»."""
+    names = _string_list(field, values)
+    if any(not n or n in {".", ".."} or "/" in n or "\\" in n for n in names):
+        raise _ConfigError(
+            f"{CONFIG_NAME}: «{field}» sólo admite nombres de archivo sin "
+            "ruta; para exentar una ruta usa «exempt_paths»"
+        )
+    return names
+
+
+def _reading_path(values: object) -> dict:
+    """Valida la clave `reading_path` de `skevi-gate.json` (ADR-021).
+
+    Polaridad cerrada como el resto de la config: subclave desconocida,
+    límite no entero o ruta que escapa la raíz fallan en vez de ignorarse.
+    Un typo no puede apagar el presupuesto en silencio — mismo criterio que
+    `plans` en scripts/check_plans.py.
+    """
+    if not isinstance(values, dict):
+        raise _ConfigError(
+            f"{CONFIG_NAME}: «reading_path» debe ser un objeto con "
+            "«limit» y «files»"
+        )
+    unknown = sorted(set(values) - {"limit", "files", "worst_case_of"})
+    if unknown:
+        raise _ConfigError(
+            f"{CONFIG_NAME}: «reading_path» sólo admite «limit», «files» "
+            "y «worst_case_of»"
+        )
+    if "limit" not in values or "files" not in values:
+        raise _ConfigError(
+            f"{CONFIG_NAME}: «reading_path» exige «limit» y «files»"
+        )
+    limit = values["limit"]
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
+        raise _ConfigError(
+            f"{CONFIG_NAME}: «reading_path.limit» debe ser un entero positivo"
+        )
+    files = _safe_relative_paths("reading_path.files", values["files"])
+    if not files:
+        raise _ConfigError(
+            f"{CONFIG_NAME}: «reading_path.files» no puede estar vacía"
+        )
+    resultado = {"limit": limit, "files": files}
+    if "worst_case_of" in values:
+        alternativas = _safe_relative_paths(
+            "reading_path.worst_case_of", values["worst_case_of"]
+        )
+        if not alternativas:
+            raise _ConfigError(
+                f"{CONFIG_NAME}: «reading_path.worst_case_of» no puede "
+                "estar vacía"
+            )
+        resultado["worst_case_of"] = alternativas
+    return resultado
 
 
 def load_config() -> dict:
@@ -166,10 +280,13 @@ def load_config() -> dict:
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"{CONFIG_NAME}: la raíz debe ser un objeto")
+        raise _ConfigError(f"{CONFIG_NAME}: la raíz debe ser un objeto")
     unknown = sorted(set(data) - CONFIG_KEYS)
     if unknown:
-        raise ValueError(f"{CONFIG_NAME}: claves desconocidas: {', '.join(unknown)}")
+        raise _ConfigError(
+            f"{CONFIG_NAME}: claves desconocidas; permitidas: "
+            + ", ".join(sorted(CONFIG_KEYS))
+        )
     return data
 
 
@@ -186,30 +303,29 @@ def apply_config(config: dict) -> None:
     adoptante con otra estructura de directorios — como `an-kla-memory`, que
     usa `docs/architecture/`— declara la suya.
 
-    Toda entrada mal tipada falla con `ValueError`, nunca con la excepción
-    cruda de Python: `main()` sólo sabe convertir `ValueError`/`OSError` en un
-    `BLOQ` legible, y un `TypeError` o `AttributeError` sin atrapar
-    reventaría con un stack trace, justo lo que este gate le reprocha al
-    resto del corpus no hacer.
+    Entradas mal tipadas producen `ValueError`: main las convierte en BLOQ,
+    sin traceback (ADR-007).
     """
     global DEFAULT_LIMIT
     if "limits" in config:
         raw = config["limits"]
         if not isinstance(raw, dict):
-            raise ValueError(f"{CONFIG_NAME}: «limits» debe ser un objeto")
+            raise _ConfigError(f"{CONFIG_NAME}: «limits» debe ser un objeto")
         for name, value in raw.items():
             if not isinstance(value, int) or isinstance(value, bool):
-                raise ValueError(
-                    f"{CONFIG_NAME}: «limits.{name}» debe ser un entero"
+                raise _ConfigError(
+                    f"{CONFIG_NAME}: cada valor de «limits» debe ser un entero"
                 )
             LIMITS[str(name)] = value
     if "default_limit" in config:
         value = config["default_limit"]
         if not isinstance(value, int) or isinstance(value, bool):
-            raise ValueError(f"{CONFIG_NAME}: «default_limit» debe ser un entero")
+            raise _ConfigError(f"{CONFIG_NAME}: «default_limit» debe ser un entero")
         DEFAULT_LIMIT = value
     if "exempt_paths" in config:
         EXEMPT_PATHS.update(_safe_relative_paths("exempt_paths", config["exempt_paths"]))
+    if "exempt_names" in config:
+        EXEMPT_NAMES.update(_exempt_names("exempt_names", config["exempt_names"]))
     if "required" in config:
         REQUIRED.clear()
         REQUIRED.update(_safe_relative_paths("required", config["required"]))
@@ -217,6 +333,8 @@ def apply_config(config: dict) -> None:
         SKIP_DIRS.update(_string_list("skip_dirs", config["skip_dirs"]))
     if "root_markdown" in config:
         ROOT_MARKDOWN.update(_string_list("root_markdown", config["root_markdown"]))
+    if "reading_path" in config:
+        READING_PATH.update(_reading_path(config["reading_path"]))
 
 
 def limit_for(name: str) -> int:
@@ -299,7 +417,10 @@ def check_registry_block(relative: Path, text: str) -> list[str]:
 def discover() -> list[Path]:
     paths: list[Path] = []
     for path in ROOT.rglob("*"):
-        if not path.is_file():
+        # Los symlinks no se siguen: la frontera de raíz vale también para el
+        # listado. Sin esto el gate medía y reportaba el tamaño de un archivo
+        # ajeno al repositorio, y el nombre del enlace bastaba para inferirlo.
+        if path.is_symlink() or not path.is_file():
             continue
         relative = path.relative_to(ROOT)
         if any(part in SKIP_DIRS for part in relative.parts[:-1]):
@@ -309,31 +430,195 @@ def discover() -> list[Path]:
 
 
 def count_text_lines(relative: Path) -> int | None:
+    """None significa exención; los errores de lectura los reporta main.
+
+    Procedencia: estándar §3.4 y ADR-007; una lectura fallida no acredita
+    tamaño ni permite omitir el archivo como si estuviera exento.
+    """
     if relative.as_posix() in EXEMPT_PATHS:
+        return None
+    if relative.name in EXEMPT_NAMES:
         return None
     if relative.suffix.lower() in EXEMPT_SUFFIXES:
         return None
-    try:
-        text = (ROOT / relative).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return None
+    text = (ROOT / relative).read_text(encoding="utf-8")
     return len(text.splitlines())
+
+
+def check_reading_path() -> list[str]:
+    """Suma las líneas de la ruta de lectura obligatoria (ADR-021).
+
+    Un archivo ausente o ilegible no acredita tamaño cero: es un fallo, con
+    la misma lógica que `count_text_lines` aplica a la exención (ADR-007).
+    Nunca vuelca la excepción: puede llevar rutas o datos del host.
+    """
+    global READING_PATH_OBSERVED
+    READING_PATH_OBSERVED = None
+    if not READING_PATH:
+        return []
+    failures: list[str] = []
+
+    # Coherencia root_markdown ↔ reading_path (issue #63): un Markdown
+    # operativo de raíz declarado por el adoptante —`AN-KLA.md` en el caso
+    # real— es lectura obligatoria del ejecutor; un presupuesto activo que
+    # no lo declara mide una ruta incompleta y da la falsa comodidad que
+    # #42 dejó y #63 encontró dos veces en adoptantes. Config contra
+    # config: sin detectar runtime, sin red. Desde gate/v11 (ADR-041) la
+    # exigencia cubre también la entrada del ejecutor: AGENTS.md y
+    # CLAUDE.md, si existen en la raíz, son lectura obligatoria con
+    # presupuesto activo — README queda fuera: cara humana, no entrada del
+    # ejecutor.
+    intrinsic = _SKEVI_DEFAULTS["ROOT_MARKDOWN"]
+    spine = set(READING_PATH["files"])
+    # README.md nunca entra: intrinsic siempre lo contiene y la exigencia
+    # de existencia condicional sólo cubre AGENTS/CLAUDE (ADR-041).
+    pendientes = sorted(ROOT_MARKDOWN - intrinsic)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        # .is_file() sigue symlinks a diferencia de discover(), que los
+        # excluye: asimetría aceptada y conservadora — el presupuesto
+        # cuenta las líneas reales del destino; el límite por archivo de
+        # §3.4 es el que un symlink podría saltar (ronda gate/v11, LOW).
+        if (ROOT / name).is_file():
+            pendientes.append(name)
+    for name in pendientes:
+        if name not in spine:
+            failures.append(
+                f"ruta de lectura obligatoria: {name} es lectura "
+                "obligatoria del ejecutor y no figura en "
+                "«reading_path.files»; absórbelo en el presupuesto por "
+                "decisión escrita (la plantilla usage-guide documenta el "
+                "caso con límite 1400 como ejemplo)"
+            )
+
+    def contar(name: str) -> int | None:
+        path = ROOT / name
+        if not path.is_file():
+            failures.append(f"ruta de lectura obligatoria: falta {name}")
+            return None
+        try:
+            return len(path.read_text(encoding="utf-8").splitlines())
+        except UnicodeDecodeError:
+            failures.append(
+                f"ruta de lectura obligatoria: {name} no es UTF-8 válido"
+            )
+        except OSError:
+            failures.append(
+                f"ruta de lectura obligatoria: no se pudo leer {name}"
+            )
+        return None
+
+    total = 0
+    for name in READING_PATH["files"]:
+        observado = contar(name)
+        if observado is not None:
+            total += observado
+    # De las alternativas sólo cuenta la mayor: son excluyentes entre sí —
+    # un ejecutor lee el archivo de la fase en la que está, no las cinco.
+    alternativas = [
+        observado
+        for name in READING_PATH.get("worst_case_of", [])
+        if (observado := contar(name)) is not None
+    ]
+    if alternativas:
+        total += max(alternativas)
+    if failures:
+        return failures
+    limit = READING_PATH["limit"]
+    if total > limit:
+        failures.append(
+            f"ruta de lectura obligatoria: {total} líneas > límite {limit}"
+        )
+    else:
+        # La norma (§3.4 y ADR-025) delega en el gate la cifra vigente; si
+        # sólo se emitiera al fallar, el trinquete no sería auditable sin un
+        # script ad-hoc. Se publica aparte, no dentro de READING_PATH: ese
+        # dict modela la configuración del adoptante y no debe llevar estado
+        # de salida.
+        READING_PATH_OBSERVED = total
+    return failures
+
+
+def gate_staleness(hoy: date | None = None) -> str | None:
+    """Aviso de vejez de esta copia, o None si aún no lo amerita.
+
+    Dice «soy vieja», nunca «existe una nueva»: lo segundo exigiría observar
+    el origen, y `project-manifest.yaml` §no_ofrece lo cede. Un adoptante que
+    ve la edad decide si comprobar; el gate no decide por él, ni falla por
+    ello — la polaridad de aviso la hereda de ADR-020.
+    """
+    hoy = hoy or date.today()
+    try:
+        generado = date.fromisoformat(GATE_GENERATED_AT)
+    except (ValueError, TypeError):
+        # Constante mal editada al copiar —formato roto, comillas borradas—:
+        # la identidad de la copia no es frontera de seguridad y no puede
+        # tumbar el gate de nadie.
+        return None
+    dias = (hoy - generado).days
+    if dias < GATE_STALE_AFTER_DAYS:
+        return None
+    return (
+        f"AVISO: esta copia del gate ({GATE_VERSION}, {GATE_GENERATED_AT}) "
+        f"tiene {dias} días. Comprueba contra su origen si sigue vigente; "
+        "este gate no consulta la red ni observa el repositorio de origen."
+    )
 
 
 def main() -> int:
     failures: list[str] = []
 
+    config_error = None
     try:
         reset_to_skevi_defaults()
         apply_config(load_config())
-    except (ValueError, OSError) as exc:
-        print("BLOQ — check_sizes no pudo leer la configuración del proyecto")
-        print(f"- {exc}")
+    except _ConfigError as exc:
+        config_error = str(exc)
+    except UnicodeDecodeError:
+        config_error = f"{CONFIG_NAME}: contenido no válido como UTF-8"
+    except json.JSONDecodeError as exc:
+        config_error = (
+            f"{CONFIG_NAME}: JSON inválido "
+            f"(línea {exc.lineno}, columna {exc.colno})"
+        )
+    except OSError:
+        config_error = f"{CONFIG_NAME}: no se pudo leer la configuración"
+    except ValueError:
+        config_error = f"{CONFIG_NAME}: valor no válido en la configuración"
+    if config_error is not None:
+        print("BLOQ — check_sizes encontró configuración inválida")
+        print(f"- {config_error}")
         return 1
 
     for relative in sorted(REQUIRED):
         if not (ROOT / relative).is_file():
             failures.append(f"falta archivo requerido: {relative}")
+
+    manifest_path = ROOT / "templates" / "skevi" / TEMPLATE_MANIFEST_NAME
+    if manifest_path.is_file():
+        failures.extend(
+            check_templates.check_template_manifest(
+                manifest_path, manifest_path.parent)
+        )
+
+    scripts_manifest_path = ROOT / "scripts" / TEMPLATE_MANIFEST_NAME
+    if scripts_manifest_path.is_file():
+        failures.extend(check_templates.check_template_manifest(
+            scripts_manifest_path, scripts_manifest_path.parent,
+            expected_schema=SCRIPT_MANIFEST_SCHEMA))
+
+    corpus_manifest_path = ROOT / "docs" / TEMPLATE_MANIFEST_NAME
+    if corpus_manifest_path.is_file():
+        failures.extend(
+            check_templates.check_corpus_manifest(corpus_manifest_path)
+        )
+
+    # Cuarta familia (ADR-040): los ADRs inmutables, con listado exacto
+    # del directorio plano.
+    adr_manifest_path = ROOT / "docs" / "adr" / TEMPLATE_MANIFEST_NAME
+    if adr_manifest_path.is_file():
+        failures.extend(check_templates.check_template_manifest(
+            adr_manifest_path, adr_manifest_path.parent,
+            expected_schema=check_templates.ADR_MANIFEST_SCHEMA))
 
     unexpected_markdown = sorted(
         path.name
@@ -342,34 +627,66 @@ def main() -> int:
     )
     if unexpected_markdown:
         failures.append(
-            "Markdown operativo suelto en raíz: " + ", ".join(unexpected_markdown)
+            "Markdown operativo suelto en raíz: "
+            + ", ".join(unexpected_markdown)
+            + " (decláralo en «root_markdown» de " + CONFIG_NAME + ")"
         )
+
+    failures.extend(check_reading_path())
 
     rows: list[tuple[str, int, int]] = []
     for relative in discover():
-        observed = count_text_lines(relative)
-        if observed is None:
-            continue
         name = relative.as_posix()
+        try:
+            observed = count_text_lines(relative)
+            if observed is None:
+                continue
+            if relative.name in REGISTRY_HOSTS:
+                text = (ROOT / relative).read_text(encoding="utf-8")
+                failures.extend(check_registry_block(relative, text))
+        except UnicodeDecodeError:
+            failures.append(
+                f"{name}: contenido no válido como UTF-8 "
+                "(si es binario, exéntalo con «exempt_paths» o "
+                f"«exempt_names» en {CONFIG_NAME})"
+            )
+            continue
+        except OSError:
+            # No volcar la excepción: puede contener rutas o datos del host.
+            failures.append(f"{name}: no se pudo leer el archivo")
+            continue
         limit = limit_for(name)
         rows.append((name, observed, limit))
         if observed > limit:
             failures.append(f"{name}: {observed} líneas > límite {limit}")
-        if relative.name in REGISTRY_HOSTS:
-            text = (ROOT / relative).read_text(encoding="utf-8")
-            failures.extend(check_registry_block(relative, text))
+
+    aviso = gate_staleness()
 
     if failures:
-        print("BLOQ — check_sizes encontró incumplimientos")
+        print(
+            "BLOQ — check_sizes encontró incumplimientos "
+            f"({GATE_VERSION}, {GATE_GENERATED_AT})"
+        )
         for failure in failures:
             print(f"- {failure}")
+        if aviso:
+            print(aviso)
         return 1
 
+    observado = READING_PATH_OBSERVED
+    ruta = (
+        f"; ruta de lectura {observado}/{READING_PATH['limit']}"
+        if observado is not None
+        else ""
+    )
     print(
         "OK — "
         f"{len(rows)} archivos de texto dentro de límites; "
-        "estructura y hogares canónicos verificados"
+        f"estructura y hogares canónicos verificados{ruta}"
+        f"; {GATE_VERSION} ({GATE_GENERATED_AT})"
     )
+    if aviso:
+        print(aviso)
     return 0
 
 

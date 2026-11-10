@@ -16,9 +16,44 @@ Los fallos más caros de un agente al crear un proyecto desde cero son:
 F0 existe para eliminar esos cuatro fallos. Su producto no es código: es
 información verificada.
 
-## 2. Recopilación de información
+## 2. Clasificación de la tarea
 
-### 2.1 Fuentes y su clasificación
+Antes de recopilar nada, clasifica la tarea. Esta guía asume proyecto nuevo;
+la mayoría del trabajo real sobre un repositorio existente son cambios
+acotados, y aplicar F0 completo a un bug de una línea es tan incorrecto como
+saltarse F0 en un cambio estructural (ADR-009).
+
+| Clase | Disparadores observables | Obligaciones de la clase |
+|---|---|---|
+| Spike | Declaración firmada en la TAREA: pregunta escrita y criterio de respuesta | Salida = respuesta con EV-* (§6); sin SPEC; sin plan (crear o extender uno escala a Architectural, ADR-013); código en rama no fusionada o fuera del repo |
+| Bounded | Toca sólo archivos de **producción** existentes en disco — producción es todo archivo excepto los que sólo ejecutan los comandos de test declarados del proyecto; los archivos de test nuevos no escalan la clase, o corregir un bug con su test reproductor sería siempre Architectural, peleando con §3.2 (ADR-012); sin dependencias nuevas; sin interfaz pública ni contrato nuevos; no activa ningún disparador de `04` §5.3 | El REQ que cubre, con su criterio (§4.1); EV-* (§6); la spec en la rama o PR; ADR sólo si cumple el criterio de `02` §3.1 |
+| Architectural | Cualquier condición de Bounded no cumplida — o el trabajo crea o extiende un plan de implementación, disparador de esta clase por sí mismo (ADR-013) | F0 completo: documento de §7 con REQ-*, no objetivos y preguntas cerradas |
+
+Reglas:
+
+- **Orden de evaluación: Spike → Architectural → Bounded.** Spike es una
+  declaración, no una inferencia, y se evalúa primero: quien la firma asume
+  sus obligaciones — sin SPEC, sin merge a `main`, pregunta y respuesta
+  registradas —, de modo que declararla en falso no elude proceso.
+  Architectural aplica por incumplimiento de cualquier disparador de Bounded;
+  Bounded exige **todos** sus disparadores cumplidos.
+- Los disparadores de Bounded son observables en disco, no calificativos:
+  "acotado", "chico" o "crítico" no clasifican nada — la misma lección que
+  ADR-008 aplicó al rigor de revisión.
+- Ante duda sobre si un disparador aplica, la clase superior.
+- **Ratchet:** complejidad descubierta a mitad de tarea sube la clase; nunca
+  baja. Reclasificar es parte del reporte de la tarea.
+- **Spike:** el código es `throwaway`, en rama no fusionada o fuera del repo;
+  nada del Spike llega a `main` sin reclasificarse.
+- **Bounded:** la spec vive en la rama de la tarea o en la descripción del
+  PR, nunca "en chat" — una spec que F3 y la ronda adversarial deben
+  contrastar tiene que ser visible para una sesión nueva (`04` §3 y §5.1).
+- La clase se registra en la TAREA (`04` §1). Bounded cubre un REQ aunque no
+  tenga SPEC; Spike no cubre REQ: produce una respuesta con EV-*.
+
+## 3. Recopilación de información
+
+### 3.1 Fuentes y su clasificación
 
 Clasifica cada dato que recojas según su confiabilidad:
 
@@ -32,10 +67,10 @@ Clasifica cada dato que recojas según su confiabilidad:
 Registra de dónde salió cada requisito. Un requisito sin fuente es un
 supuesto, y los supuestos materiales se preguntan.
 
-### 2.2 Qué debes conocer antes de diseñar
+### 3.2 Qué debes conocer antes de diseñar
 
 Responde estas preguntas. Las que no puedas responder con fuente de clase
-Autoridad o Evidencia van a la lista de preguntas abiertas (§4):
+Autoridad o Evidencia van a la lista de preguntas abiertas (§5):
 
 1. **Problema:** ¿qué dolor o necesidad resuelve esto? ¿Para quién?
 2. **Resultado observable:** ¿qué podrá hacer alguien (o algo) que hoy no
@@ -50,10 +85,13 @@ Autoridad o Evidencia van a la lista de preguntas abiertas (§4):
    un script.
 7. **Entorno existente:** ¿hay código, repo o convenciones previas? Léelos
    antes de proponer nada.
+8. **Idiomas:** registra las elecciones humanas y excepciones del estándar
+   §3.1 en el contexto de adopción; si existe una fuente local, enlázala
+   sin duplicarla (ADR-029). Distingue idioma de programación de idioma humano.
 
-## 3. Requerimientos
+## 4. Requerimientos
 
-### 3.1 Formato obligatorio
+### 4.1 Formato obligatorio
 
 Cada requisito se escribe así:
 
@@ -75,7 +113,7 @@ Reglas:
   Los no objetivos valen tanto como los objetivos: son tu defensa contra el
   scope creep.
 
-### 3.2 Definition of Ready
+### 4.2 Definition of Ready
 
 F0 está cerrado sólo cuando se cumple todo:
 
@@ -95,7 +133,7 @@ F0 está cerrado sólo cuando se cumple todo:
       real pero no su forma exacta; F1 diseñó sobre un esquema que
       resultó falso, y el error no se detectó hasta F2).
 
-## 4. Preguntas abiertas y cuándo detenerse
+## 5. Preguntas abiertas y cuándo detenerse
 
 Mantén una lista literal:
 
@@ -113,7 +151,12 @@ convenciones del repo, detalles internos reversibles, estilo.
 
 Prohibido: responder preguntas materiales con supuestos silenciosos.
 
-## 5. Registro de evidencia
+Antes de preguntar, investiga fuentes y opciones, separa hechos de hipótesis
+y recomienda una salida. Continúa las partes independientes de la TAREA
+autorizada; detén sólo la decisión dependiente. Procedencia: ADR-043; razón:
+reducir consultas rutinarias sin convertir inferencias en decisiones de diseño.
+
+## 6. Registro de evidencia
 
 Desde F0, conserva evidencia de todo lo que afirmes sobre el entorno:
 
@@ -125,7 +168,7 @@ Ejemplos: versión del runtime, dependencias ya instaladas, estado del repo,
 existencia de archivos. Esta evidencia alimenta el reporte de fase del
 índice y protege al proyecto de supuestos rotos sobre el entorno.
 
-## 6. Salida de F0
+## 7. Salida de F0
 
 Documento (en el repo si el proyecto lo justifica, en la conversación si es
 pequeño) con: problema, resultado observable, requisitos REQ-*, no objetivos,
