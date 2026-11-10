@@ -3,10 +3,13 @@
   "skip_dirs": [
     "node_modules",
     ".venv",
-    "docs/proposal",
+    "proposal",
     ".local-models",
     ".skevi",
     ".an-kla"
+  ],
+  "exempt_names": [
+    ".DS_Store"
   ],
   "root_markdown": [
     "AN-KLA.md",

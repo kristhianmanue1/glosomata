@@ -11,20 +11,45 @@ Antes de tocar código, fija la tarea en curso:
 ```text
 TAREA <id>
 Objetivo: <un solo resultado, cubre SPEC-<n> o REQ-<n>>
+Clase: <Spike | Bounded | Architectural> — según los disparadores de 01 §2
 Base: <commit o rama de partida>
+Plan: <ruta del plan de implementación, sólo si existe — ver abajo>
 Permitido: <archivos/operaciones concretas>
+Superficie: <herramientas, rutas, red y aislamiento habilitados — polaridad
+  cerrada: lo no enumerado está prohibido (estándar §6.8)>
 Prohibido: <lo que no se toca; por defecto: push, merge, release, deps nuevas>
-DoD: <checks ejecutables que deben pasar>
+Presupuesto: <techo de invocaciones, contexto o coste y qué pasa al agotarse —
+  sólo si aplica el disparador 3 de 06-componentes-con-llm.md §1>
+DoD: <checks ejecutables — o "ver PLAN <ruta>" si la tarea pertenece a un plan>
 Parada: <condición inequívoca para detenerse>
 ```
 
 Reglas:
 
 - Una tarea = un objetivo. Si aparece un segundo objetivo, es otra tarea.
+- La clase sale de los disparadores observables de `01` §2 (ADR-009), no de
+  un calificativo. Si a mitad de tarea se descubre complejidad, la clase
+  sube — ratchet — y la TAREA se re-fija antes de seguir.
+- Si la tarea es parte de un plan de implementación (ADR-010), la TAREA lo
+  referencia y **el plan es dueño de los criterios** (DoD, steps): nunca dos
+  documentos con criterios de aceptación paralelos. Una tarea sola no lleva
+  plan; el plan existe sólo a partir de trabajo multi-tarea.
 - Lo no listado en "Permitido" está prohibido. La autoridad se concede por
   operación: editar no implica commit; commit no implica push.
+- `Superficie` acota **con qué** se ejecuta lo permitido: herramientas y
+  servidores externos invocables, rutas legibles y escribibles, salida a red
+  y aislamiento del entorno. Sin declaración no hay red. Ampliarla a mitad de
+  tarea es operación con autoridad separada (§7), no un ajuste (estándar §6.8).
 - La condición de parada es obligatoria aunque parezca obvia: es lo que te
   impide seguir "mejorando" más allá del alcance.
+- En la TAREA vigente, investiga, implementa, verifica y corrige hasta el DoD,
+  sin pedir permiso por cada paso reversible. Tras dos fallos, aplica §8;
+  antes de cerrar, §§3-5. Si falta autoridad, pausa sólo la parte afectada.
+  Procedencia: ADR-043; razón: autonomía acotada por TAREA y gates.
+- `Presupuesto` es opcional salvo que la tarea consuma cuota tarifada o
+  recursos compartidos por invocación; ahí es obligatorio y su agotamiento
+  produce un estado de fallo explícito, nunca éxito inferido
+  (`06-componentes-con-llm.md` §4; principio 5 y §2.2 del estándar).
 
 ## 2. Implementación
 
@@ -45,6 +70,16 @@ Reglas:
 
 - Los casos DADO/CUANDO/ENTONCES de las specs se convierten en tests. Esa es
   la trazabilidad: SPEC → test → evidencia.
+- Si el proyecto tiene infraestructura de tests, todo cambio de comportamiento
+  sigue RED-GREEN-REFACTOR (ADR-011): (1) RED — escribe primero el test que
+  falla y verifica que falla por la razón correcta; (2) GREEN — el código
+  mínimo que lo pasa; (3) REFACTOR — limpieza con la suite en verde. El
+  reporte de la tarea incluye la **salida del RED** como evidencia: si no
+  viste fallar el test, no sabes si prueba lo correcto. La regla hereda la
+  condicionalidad del estándar §3.2 — aplicar donde exista infraestructura
+  de tests; crearla para un cambio acotado es decisión del contrato de tarea,
+  no obligación silenciosa. Excepciones declaradas en la TAREA: throwaway
+  (Spike), código generado, configuración.
 - Un bug se corrige con un test que falla antes del fix y pasa después.
 - Ejecuta primero los tests focales del cambio, después la suite. Ambos
   resultados entran en la evidencia.
@@ -62,6 +97,9 @@ Reglas:
 4. `git status --short` y `git diff --check` coherentes con la tarea;
 5. comentarios/docs actualizados al nuevo comportamiento;
 6. DoD de la tarea cumplido punto por punto.
+7. identificadores nuevos y textos humanos revisados contra el estándar
+   §3.1 y la elección local; excepciones justificadas (ADR-029). Un gate
+   estructural en verde no acredita cumplimiento del idioma.
 
 Si un paso no queda `pass`, deriva el estado como indica `00-INDICE.md`
 § «Formato de reporte de fase»; nunca declares `OK`.
@@ -100,6 +138,12 @@ actitud positiva: es intentar demostrar que está mal.
 ## Decisión
 proceed | fix-and-retry | escalate
 ```
+
+Ronda sobre tarea material: el reporte lleva las dos capas y el bloque
+de trazabilidad de ADR-016 (ver `00-INDICE.md`, §Reporte en dos capas);
+la decisión `proceed | fix-and-retry | escalate` vive en ambas capas.
+El informe y la disposición de sus hallazgos viven juntos en `docs/reviews/`,
+nunca dentro del documento que la ronda revisa (ADR-037, `02` §3.3).
 
 ### 5.3 Reglas de cierre
 
@@ -163,6 +207,7 @@ Al cerrar una tarea, reporta así:
 ```text
 TAREA <id>: <OK | PARCIAL | BLOQ>
 DoD: <cumplido / qué falta>
+RED: <salida del test en rojo — o por qué no aplica (ADR-011)>
 Rama de este cierre: <nombre> | main (si main, justifícalo — ver §4.1
   del estándar: "sin remoto" no es justificación válida por sí sola)
 Evidencia:
@@ -180,11 +225,34 @@ Hallazgos fuera de alcance: <lista o "ninguno">
 
 ## 7. Operaciones con autoridad separada
 
-Requieren autorización explícita del humano, una por una, cada vez: push,
-force-push, merge, rebase de historia compartida, reset destructivo,
-borrado de ramas remotas, tags, releases, publicación, instalación de
-dependencias nuevas en el entorno, cualquier comando destructivo. La
-autorización de una tarea anterior no se hereda.
+Requieren autorización explícita previa: push, force-push, merge, rebase de
+historia compartida, reset destructivo, borrado de ramas remotas, tags,
+releases, publicación, instalación de dependencias nuevas y su actualización
+cuando afecta archivos del repositorio, **ampliación de la superficie de
+ejecución declarada en la TAREA** (estándar §6.8), y cualquier comando
+destructivo. El
+otorgante, las condiciones y la aceptación por
+operación se rigen por el estándar §1.4, §4.3, §6.2 y §6.6, sujetos a
+`AGENTS.md` y a las instrucciones superiores aplicables. Una autorización
+anterior no habilita operaciones fuera de su alcance o vigencia. Si cubre
+explícitamente una secuencia aún vigente, se verifica esa cobertura; no
+se inventa una autorización distinta por cambiar de tarea. Ante duda se
+aplica fail-closed, sin ampliar ni renovar el permiso por inferencia.
+
+Al hito verificado, propón `push` ordinario o `merge` con dossier en dos capas
+(folio, destino, commit, evidencia, riesgos; §4.3, ADR-044), mejor un lote
+previo al primer efecto (en plan, `Lote:`); no cubre `force-push`. Ejecuta sólo
+con aceptación vigente registrada contra ese folio, por humano o gate futuro
+adoptado por humano e independiente; revalida justo antes de cada efecto.
+
+Procedencia: [ADR-018](../adr/ADR-018-coherencia-de-autoridad.md) y
+[ADR-044](../adr/ADR-044-push-merge-condicional.md).
+Razón: proponer operaciones oportunamente sin ampliar permisos vigentes.
+
+Instalar o actualizar una dependencia con efecto en archivos del
+repositorio es, como mínimo, tarea Bounded.
+Procedencia: [PROP-008](../history/PROP-008-integracion-ankla-por-contrato.md).
+Razón: el hueco textual de «dependencias nuevas» no cubría los upgrades.
 
 Ante un estado inesperado de Git (commit, rama o push que tú no hiciste):
 detente, audita (`reflog`, remoto) y reporta. No destruyas trabajo ajeno
@@ -203,6 +271,7 @@ para "dejarlo limpio".
 
 - [ ] contrato de tarea fijado y respetado;
 - [ ] tests focales y suite en verde, con evidencia;
+- [ ] salida del RED reportada, o su no-aplicación justificada (ADR-011);
 - [ ] diff mínimo, leído completo, sin sorpresas;
 - [ ] docs y comentarios coherentes con el código;
 - [ ] si la tarea toca un componente con CONTRATO (02 §4), cada campo de
