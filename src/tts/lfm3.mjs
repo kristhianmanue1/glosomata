@@ -6,7 +6,7 @@
 // completo, 503 sin cola, input 1..600 sin controles); decisión local:
 // ADR-011.
 
-import { access, constants, writeFile } from 'node:fs/promises';
+import { access, constants, writeFile, stat } from 'node:fs/promises';
 import { spawnGrupo, matarGrupo, stopPedido } from '../canal.mjs';
 
 const CURL = '/usr/bin/curl';
@@ -18,6 +18,10 @@ const MAX_WAV = 16 * 1024 * 1024;
 const MAX_INPUT = 600;
 const TIMEOUT_SINTESIS_S = 120;
 const TIMEOUT_PROBE_S = 3;
+// Archivo de credenciales (SPEC-i2 §2.1-2.2): dos cabeceras de texto,
+// 0600, tamaño acotado. El contenido JAMÁS se lee aquí: curl lo consume
+// directo con --header @ruta.
+const MAX_AUTH_BYTES = 4096;
 
 function ttsError(cause) {
   const err = new Error('tts_failed');
@@ -45,13 +49,20 @@ function validarEntrada(texto) {
   }
 }
 
-function curlArgs(path, timeoutS, post) {
+function curlArgs(path, timeoutS, post, authFile) {
   // -q primero: ignora .curlrc. URL fija y --noproxy: la síntesis no
   // sale del loopback por configuración de entorno. Sin --fail: el
   // veredicto es el código HTTP que el propio -w escribe al final.
   const args = ['-q', '--noproxy', '*', '--proto', '=http', '--max-redirs', '0',
     '--silent', '--show-error', '--max-time', String(timeoutS),
     '-w', '\n%{http_code}'];
+  if (typeof authFile === 'string' && authFile.length > 0) {
+    // Credencial por archivo (SPEC-i2 §2.1): el secreto vive en un
+    // archivo 0600 que curl lee solo — no entra a argv, memoria ni
+    // logs de glosomata. Guard de tipo: un auth_file no-string de una
+    // matriz editada a mano jamás llega a curl como "@null".
+    args.push('--header', `@${authFile}`);
+  }
   if (post) {
     args.push('--header', 'Content-Type: application/json',
       '--data-binary', '@-');
@@ -65,9 +76,11 @@ function curlArgs(path, timeoutS, post) {
 // confunde la separación. Código de salida != 0 es fallo de transporte
 // (conexión, timeout): tts_failed sin interpretar el cuerpo de error —
 // su contenido se descarta, jamás se registra (política de logs).
-function solicitar(bin, path, cuerpo, maxBytes, timeoutS, cancelable) {
+function solicitar(bin, path, cuerpo, maxBytes, timeoutS, cancelable,
+  authFile) {
   return new Promise((resolve, reject) => {
-    const child = spawnGrupo(bin, curlArgs(path, timeoutS, cuerpo !== null));
+    const child = spawnGrupo(bin,
+      curlArgs(path, timeoutS, cuerpo !== null, authFile));
     const chunks = [];
     let total = 0;
     let exceeded = false;
@@ -112,8 +125,8 @@ function solicitar(bin, path, cuerpo, maxBytes, timeoutS, cancelable) {
 // Inyección limitada a pruebas de frontera de proceso. CLI/MCP siempre
 // usan /usr/bin/curl; una matriz no puede sustituir el ejecutable.
 export function createRequesterForTesting(bin) {
-  return (path, cuerpo, maxBytes, timeoutS, cancelable) =>
-    solicitar(bin, path, cuerpo, maxBytes, timeoutS, cancelable);
+  return (path, cuerpo, maxBytes, timeoutS, cancelable, authFile) =>
+    solicitar(bin, path, cuerpo, maxBytes, timeoutS, cancelable, authFile);
 }
 
 const request = createRequesterForTesting(CURL);
@@ -150,6 +163,23 @@ function wavValido(wav) {
     && fmt.canales >= 1 && data !== null && data > 0;
 }
 
+// Frontera de la credencial SIN leerla: existencia, archivo regular,
+// modo 0600 exacto y tamaño acotado. La validez real del token la
+// decide el gateway con el probe autenticado; aquí sólo fail-closed
+// estructural (causa propia, distinguishable del rechazo del gateway).
+async function authFileEstructuraValida(authFile) {
+  if (typeof authFile !== 'string' || authFile.length === 0
+    || authFile.length > 4096) return false;
+  let s;
+  try {
+    s = await stat(authFile);
+  } catch {
+    return false;
+  }
+  return s.isFile() && (s.mode & 0o777) === 0o600
+    && s.size > 0 && s.size <= MAX_AUTH_BYTES;
+}
+
 export async function diagnostico(cfg, requester = request) {
   // Reproducción local por afplay: sin macOS no hay playback (misma
   // frontera que phonon_ollama; el gateway es del Operador, el altavoz
@@ -170,9 +200,12 @@ export async function diagnostico(cfg, requester = request) {
   if (cfg.bin !== undefined && cfg.bin !== CURL) {
     return { ok: false, causa: 'probe_fallido' };
   }
+  if (!(await authFileEstructuraValida(cfg.auth_file))) {
+    return { ok: false, causa: 'auth_ausente' };
+  }
   try {
     const r = await requester('/v1/capabilities', null,
-      MAX_CAPABILITIES, TIMEOUT_PROBE_S, false);
+      MAX_CAPABILITIES, TIMEOUT_PROBE_S, false, cfg.auth_file);
     if (r === 'stopped' || r.codigo !== '200') {
       return { ok: false, causa: 'probe_fallido' };
     }
@@ -196,7 +229,7 @@ export async function sintetizar(cfg, texto, tmpWav, requester = request) {
   if (stopPedido()) return 'stopped';
   const r = await requester('/v1/audio/speech',
     { input: texto, response_format: 'wav' },
-    MAX_WAV, TIMEOUT_SINTESIS_S, true);
+    MAX_WAV, TIMEOUT_SINTESIS_S, true, cfg.auth_file);
   if (r === 'stopped' || stopPedido()) return 'stopped';
   // 503 overloaded (exclusión mutua, sin cola) y cualquier otro estado
   // son tts_failed: el consumidor decide su reintento acotado; este

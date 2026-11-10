@@ -18,8 +18,8 @@ de loopback (`phonon_ollama`).
 
 ## Decisión
 
-Se incorpora `lfm3` como adaptador opcional de `EngineTTS`, sin claves
-de configuración propias: URL fija `http://127.0.0.1:8092`, voz fija
+Se incorpora `lfm3` como adaptador opcional de `EngineTTS`, con una
+sola clave de configuración (`auth_file`): URL fija `http://127.0.0.1:8092`, voz fija
 `es`; `bin` opcional sólo si es `/usr/bin/curl` (cualquier otro valor
 se rechaza en el probe, como en `phonon_ollama`). El texto viaja por
 stdin de curl — nunca en argv ni en logs. El probe exige
@@ -37,6 +37,22 @@ la taxonomía; no se inventan nuevos. El 503 `overloaded` del proveedor
 `tts_failed`: el adaptador no encola ni reintenta — el reintento
 acotado es decisión del consumidor (contrato de consumo C2).
 
+## Autenticación del gateway (adición 2026-11-10)
+
+El gateway exige credencial desde el piloto I2 (SPEC-i2 §2.1-2.3):
+cabeceras `Authorization: Bearer` y `X-Project-ID` en toda ruta salvo
+`/health`, con scopes por operación (`speech:synthesize` para
+`/v1/audio/speech`). El adaptador no incorpora el secreto: la matriz
+declara `auth_file`, un archivo 0600 con ambas cabeceras que curl
+consume directo con `--header @ruta` — el token no entra al proceso, a
+argv ni a los logs de glosomata. El probe valida la estructura SIN
+leer el contenido (archivo regular — `stat` resuelve symlinks —, modo
+0600 exacto, tamaño acotado): `auth_ausente` es el fallo estructural;
+el rechazo del gateway (401/403) se reporta como `probe_fallido` en el
+probe o `tts_failed` en la síntesis. El ciclo de vida de la credencial
+(emisión, revocación en `tokens.json` del proveedor, rotación) es del
+Operador.
+
 El WAV completo se valida — RIFF/WAVE con chunks íntegros (un tamaño
 declarado mayor que los bytes recibidos falla cerrado), PCM 16-bit y
 muestras no vacías: frontera igual o más estricta que la del propio
@@ -53,13 +69,19 @@ arranca ni los administra.
 - Una matriz que declare `lfm3` exige gateway vivo con voz contratada
   al ejecutar `doctor` o `config validate`, aun con `selected:false`
   (misma regla que `phonon_ollama`).
+- La credencial de `auth_file` y su hash en `config/tokens.json` del
+  proveedor son del Operador; una revocación o rotación se refleja como
+  `probe_fallido`/`tts_failed` sin cambios en glosomata (fail-closed).
+  Los límites de tasa del registro (peticiones por minuto, ráfaga,
+  cola) gobiernan la disponibilidad del motor; glosomata no los gestiona.
 - El texto se entrega al gateway local del equipo; su política de
   retención (`prompt.txt` 0600 borrado por petición, SPEC-i1-vs §2) es
   del proveedor y queda fuera de la garantía de glosomata.
-- Latencia por frase medida por el proveedor: 2.0–4.7 s (recarga de
-  modelo por llamada). No apto hoy para turnos conversacionales
-  rápidos; el bucle híbrido documentado por el proveedor usa los
-  motores propios calientes y LFM3 como boca opcional.
+- Latencia por frase de varios segundos (2.0–4.7 s medidos por el
+  proveedor; 6–9 s observados en vivo desde glosomata el 2026-11-10,
+  con recarga de modelo por llamada). No apto hoy para turnos
+  conversacionales rápidos; el bucle híbrido documentado por el
+  proveedor usa los motores propios calientes y LFM3 como boca opcional.
 - Sólo español y voz fija. La selección de voz premium (decisión B2
   del Operador) y el modo espejo realtime WS quedan fuera de esta
   decisión y exigen gates propios.

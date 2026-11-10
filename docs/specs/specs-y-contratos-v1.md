@@ -188,15 +188,19 @@ sin forma → `session_invalid`.
 
 `glosomata.json` (ruta override: GLOSOMATA_CONFIG): engines.tts[]
 {id, adapter, selected, kill_switch{type,target,max_latency_ms},
-bin?/model?/python?/script?/voice?/rate?/pitch_scale?/sample_rate?} —
+bin?/model?/python?/script?/voice?/rate?/pitch_scale?/sample_rate?/
+auth_file?} —
 para el adaptador kokoro `model` es obligatorio en la práctica: el
 probe lo declara no disponible si falta (fail-closed,
 `modelo_ausente`) y el script de síntesis lo exige —
 `from_pretrained` sin él descargaría de HuggingFace (prohibido: 100%
 local); el schema común de motor no expresa el condicional (nota en
-el propio schema). El adaptador `lfm3` no tiene claves propias: URL
-fija `http://127.0.0.1:8092` y voz fija `es` (ADR-011); su probe exige
-`GET /v1/capabilities` con `voz:true` y su frontera de entrada
+el propio schema). El adaptador `lfm3` declara `auth_file` (archivo
+0600 con las cabeceras `Authorization: Bearer` y `X-Project-ID` del
+gateway; SPEC-i2): URL fija `http://127.0.0.1:8092` y voz fija `es`
+(ADR-011); su probe exige estructura de credencial válida
+(`auth_ausente`) y `GET /v1/capabilities` autenticado con `voz:true`;
+su frontera de entrada
 (1..600 code points sin controles — `\n`/`\t` sobreviven a la
 canonización) responde `text_too_long`/`not_supported` antes de
 solicitar. engines.stt {whisper_bin?, whisper_model?} —

@@ -13,6 +13,12 @@ const schema = JSON.parse(read(new URL('../docs/schemas/glosomata-config-v1.sche
 const dir = mkdtempSync(join(tmpdir(), 'glosomata-lfm3-'));
 const fakeCurl = join(dir, 'curl');
 const wavPath = join(dir, 'out.wav');
+const authPath = join(dir, 'auth-glosomata.txt');
+// Credencial de prueba (el "token" es un valor fijo de test, no un
+// secreto): mismas dos cabeceras que exige SPEC-i2 §2.1.
+writeFileSync(authPath,
+  'Authorization: Bearer token-fijo-de-test\nX-Project-ID: glosomata\n');
+chmodSync(authPath, 0o600);
 
 // Emula el contrato de stdout de curl con -w '\n%{http_code}': CUERPO +
 // salto de línea + código de 3 dígitos. El texto privado JAMÁS viaja en
@@ -23,10 +29,38 @@ for await (const chunk of process.stdin) chunks.push(chunk);
 const stdin = Buffer.concat(chunks);
 if (process.argv.some((arg) => arg.includes('texto privado'))) process.exit(8);
 if (!process.argv.some((arg) => arg.includes('127.0.0.1:8092'))) process.exit(9);
+// Frontera de autenticación (SPEC-i2 §2.1-2.2): 401 sin Authorization
+// Bearer; 400 con Authorization pero sin X-Project-ID; 403
+// project_mismatch si el proyecto no es el registrado; autorizado sólo
+// con ambos correctos.
+const idxHeader = process.argv.indexOf('--header');
+let proyecto = null;
+let conBearer = false;
+if (idxHeader >= 0 && String(process.argv[idxHeader + 1]).startsWith('@')) {
+  try {
+    const fs2 = await import('node:fs');
+    const credenciales =
+      fs2.readFileSync(String(process.argv[idxHeader + 1]).slice(1), 'utf8');
+    conBearer = /^Authorization:\\s*Bearer\\s+\\S+/m.test(credenciales);
+    proyecto = /^X-Project-ID:\\s*(\\S+)/m.exec(credenciales)?.[1] ?? null;
+  } catch {}
+}
 const emitir = (cuerpo, codigo = '200') => {
   process.stdout.write(cuerpo);
   process.stdout.write('\\n' + codigo);
 };
+if (!conBearer) {
+  emitir(JSON.stringify({ error: { code: 'missing_token' } }), '401');
+  process.exit(0);
+}
+if (proyecto === null) {
+  emitir(JSON.stringify({ error: { code: 'missing_project_id' } }), '400');
+  process.exit(0);
+}
+if (proyecto !== 'glosomata') {
+  emitir(JSON.stringify({ error: { code: 'project_mismatch' } }), '403');
+  process.exit(0);
+}
 const ruta = process.argv.at(-1);
 if (ruta.endsWith('/v1/capabilities')) {
   if (process.env.FAKE_LFM3_SIN_VOZ === '1') {
@@ -95,6 +129,7 @@ chmodSync(fakeCurl, 0o700);
 test.after(() => rmSync(dir, { recursive: true, force: true }));
 
 const motor = { id: 'lfm3-es', adapter: 'lfm3',
+  auth_file: authPath,
   selected: false, kill_switch: { type: 'subprocess_kill',
     target: 'process_group', max_latency_ms: 500 } };
 
@@ -103,7 +138,7 @@ const motor = { id: 'lfm3-es', adapter: 'lfm3',
 const requesterProhibido = () =>
   Promise.reject(new Error('no debe solicitar'));
 
-test('schema admite LFM3 como motor sin claves propias', () => {
+test('schema admite LFM3 como motor con auth_file', () => {
   const cfg = { engines: { tts: [{ id: 'say', adapter: 'say',
     selected: true, kill_switch: { type: 'subprocess_kill',
       target: 'process_group', max_latency_ms: 200 } }, motor], stt: {} } };
@@ -125,6 +160,85 @@ test('probe exige capabilities con voz true', async (t) => {
   }
   assert.deepEqual(await diagnostico({ ...motor, bin: fakeCurl }, request),
     { ok: false, causa: 'probe_fallido' });
+});
+
+test('probe exige credencial 0600 con estructura válida', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('lfm3 reproduce con afplay (macOS)');
+  const { diagnostico, createRequesterForTesting } =
+    await import('../src/tts/lfm3.mjs');
+  const request = createRequesterForTesting(fakeCurl);
+  // sin auth_file declarado → causa estructural propia
+  const { auth_file, ...sinAuth } = motor;
+  assert.equal(auth_file, authPath); // fixture completa
+  assert.deepEqual(await diagnostico(sinAuth, request),
+    { ok: false, causa: 'auth_ausente' });
+  // ruta inexistente → auth_ausente
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: '/no/existe' },
+    request), { ok: false, causa: 'auth_ausente' });
+  // permisos distintos de 0600 → auth_ausente
+  const perms0644 = join(dir, 'auth-0644.txt');
+  writeFileSync(perms0644,
+    'Authorization: Bearer x\nX-Project-ID: glosomata\n');
+  chmodSync(perms0644, 0o644);
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: perms0644 },
+    request), { ok: false, causa: 'auth_ausente' });
+  // archivo vacío → auth_ausente
+  const vacio = join(dir, 'auth-vacio.txt');
+  writeFileSync(vacio, '');
+  chmodSync(vacio, 0o600);
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: vacio },
+    request), { ok: false, causa: 'auth_ausente' });
+  // tamaño fuera de cota (4097 bytes) → auth_ausente
+  const gigante = join(dir, 'auth-gigante.txt');
+  writeFileSync(gigante, 'x'.repeat(4097));
+  chmodSync(gigante, 0o600);
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: gigante },
+    request), { ok: false, causa: 'auth_ausente' });
+  // un directorio no es archivo de credencial → auth_ausente
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: dir },
+    request), { ok: false, causa: 'auth_ausente' });
+  // estructura válida pero credencial rechazada por el gateway (400):
+  // causa de probe, no estructural
+  const sinProyecto = join(dir, 'auth-sin-proyecto.txt');
+  writeFileSync(sinProyecto, 'Authorization: Bearer token-fijo-de-test\n');
+  chmodSync(sinProyecto, 0o600);
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: sinProyecto },
+    request), { ok: false, causa: 'probe_fallido' });
+  // proyecto registrado distinto → 403 project_mismatch → probe_fallido
+  const otroProyecto = join(dir, 'auth-otro-proyecto.txt');
+  writeFileSync(otroProyecto,
+    'Authorization: Bearer token-fijo-de-test\nX-Project-ID: otro\n');
+  chmodSync(otroProyecto, 0o600);
+  assert.deepEqual(await diagnostico({ ...motor, auth_file: otroProyecto },
+    request), { ok: false, causa: 'probe_fallido' });
+});
+
+test('síntesis rechazada por el gateway muere con el código del rechazo', async () => {
+  const { sintetizar, createRequesterForTesting } =
+    await import('../src/tts/lfm3.mjs');
+  const request = createRequesterForTesting(fakeCurl);
+  // sin auth_file la petición sale SIN credencial: la rechaza el
+  // gateway (401), no una validación local — documentado, fail-closed.
+  const { auth_file, ...sinAuth } = motor;
+  assert.equal(auth_file, authPath);
+  await assert.rejects(sintetizar(sinAuth, 'texto privado', wavPath,
+    request), (error) => error.code === 'tts_failed'
+      && error.cause === 'http_401');
+  // Authorization sin X-Project-ID → 400 missing_project_id
+  const sinProyecto = join(dir, 'auth-sin-proyecto.txt');
+  writeFileSync(sinProyecto, 'Authorization: Bearer token-fijo-de-test\n');
+  chmodSync(sinProyecto, 0o600);
+  await assert.rejects(sintetizar({ ...motor, auth_file: sinProyecto },
+    'texto privado', wavPath, request),
+    (error) => error.code === 'tts_failed' && error.cause === 'http_400');
+  // proyecto que no es el registrado → 403 project_mismatch
+  const otroProyecto = join(dir, 'auth-otro-proyecto.txt');
+  writeFileSync(otroProyecto,
+    'Authorization: Bearer token-fijo-de-test\nX-Project-ID: otro\n');
+  chmodSync(otroProyecto, 0o600);
+  await assert.rejects(sintetizar({ ...motor, auth_file: otroProyecto },
+    'texto privado', wavPath, request),
+    (error) => error.code === 'tts_failed' && error.cause === 'http_403');
 });
 
 test('síntesis pasa texto por stdin y escribe WAV del gateway', async () => {
