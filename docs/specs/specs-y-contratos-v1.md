@@ -22,9 +22,11 @@ Casos:
   CUANDO la segunda arriva ENTONCES `channel_busy` (flock global).
 
 Invariantes: 100% local; el adaptador TTS experimental `phonon_ollama`
-usa sólo loopback hacia el Ollama del equipo (ADR-010), sin servidor
-HTTP en glosomata. Temporales en dir 0700 per-user, borrados al
-cierre de cada operación y barridos por edad; logs sólo
+usa sólo loopback hacia el Ollama del equipo (ADR-010) y el adaptador
+`lfm3` sólo loopback hacia el gateway v2 de LFM3-Omni en 8092
+(ADR-011), sin servidor HTTP en glosomata. Temporales en dir 0700
+per-user, borrados al cierre de cada operación y barridos por edad;
+logs sólo
 ids/códigos/duraciones, JAMÁS texto, patrón, transcripción ni echo;
 logs MCP a stderr.
 
@@ -186,13 +188,22 @@ sin forma → `session_invalid`.
 
 `glosomata.json` (ruta override: GLOSOMATA_CONFIG): engines.tts[]
 {id, adapter, selected, kill_switch{type,target,max_latency_ms},
-bin?/model?/python?/script?/voice?/rate?/pitch_scale?/sample_rate?} —
+bin?/model?/python?/script?/voice?/rate?/pitch_scale?/sample_rate?/
+auth_file?} —
 para el adaptador kokoro `model` es obligatorio en la práctica: el
 probe lo declara no disponible si falta (fail-closed,
 `modelo_ausente`) y el script de síntesis lo exige —
 `from_pretrained` sin él descargaría de HuggingFace (prohibido: 100%
 local); el schema común de motor no expresa el condicional (nota en
-el propio schema). engines.stt {whisper_bin?, whisper_model?} —
+el propio schema). El adaptador `lfm3` declara `auth_file` (archivo
+0600 con las cabeceras `Authorization: Bearer` y `X-Project-ID` del
+gateway; SPEC-i2): URL fija `http://127.0.0.1:8092` y voz fija `es`
+(ADR-011); su probe exige estructura de credencial válida
+(`auth_ausente`) y `GET /v1/capabilities` autenticado con `voz:true`;
+su frontera de entrada
+(1..600 code points sin controles — `\n`/`\t` sobreviven a la
+canonización) responde `text_too_long`/`not_supported` antes de
+solicitar. engines.stt {whisper_bin?, whisper_model?} —
 sin claves el STT queda no disponible (fail-closed), el TTS sigue.
 constraints {validation_floor_ms*, confirmation_channels*,
 session_ttl_min, max_text_chars, max_pattern_chars*,

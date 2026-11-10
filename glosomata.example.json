@@ -36,6 +36,17 @@
           "target": "process_group",
           "max_latency_ms": 300
         }
+      },
+      {
+        "id": "lfm3-es",
+        "adapter": "lfm3",
+        "auth_file": "/ruta/0600/auth-glosomata.txt",
+        "selected": false,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 500
+        }
       }
     ],
     "stt": {

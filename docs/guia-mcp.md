@@ -137,7 +137,10 @@ Sin APIs externas ni retención deliberada en glosomata: los temporales
 se borran al cerrar la operación y se barren por edad si quedan huérfanos.
 Si se configura Phonon experimental, el adaptador consulta
 por loopback al Ollama local; su política de retención es independiente
-(ADR-010, `docs/phonon-ollama-experimental.md`). El servidor loguea a
+(ADR-010, `docs/phonon-ollama-experimental.md`). Igual con LFM3
+experimental: el adaptador `lfm3` consulta por loopback al gateway v2
+de LFM3-Omni en 8092 y la retención del texto entregado es política
+del proveedor (ADR-011, `docs/lfm3-omni-tts.md`). El servidor loguea a
 stderr sólo ids, códigos y duraciones —
 nunca texto, patrón, transcripción ni echo. Si tu cliente captura
 stderr, esa política se mantiene (ver `SECURITY.md`).
