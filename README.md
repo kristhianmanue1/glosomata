@@ -31,6 +31,8 @@ son metadata consultiva del agente.
   - Kokoro MLX (Apple Silicon, Python).
   - Phonon mediante Ollama local (experimental, macOS Apple Silicon;
     configuración y límites en `docs/phonon-ollama-experimental.md`).
+  - LFM3-Omni vía gateway local 8092 (experimental, macOS; voz fija
+    `es`, 1..600 caracteres; ADR-011, `docs/lfm3-omni-tts.md`).
 
 ## Comandos (contrato CLI v1)
 
@@ -89,7 +91,7 @@ src/
   cli.mjs        # entrada CLI (contrato CLI v1)
   mcp.mjs        # servidor MCP stdio (contrato MCP v1)
   canal.mjs      # half-duplex, lockfile, temporales, kill-switch
-  tts/           # adaptadores EngineTTS: say, piper, kokoro, phonon_ollama
+  tts/           # adaptadores EngineTTS: say, piper, kokoro, phonon_ollama, lfm3
   stt.mjs        # whisper.cpp (subprocess, 16 kHz mono PCM)
   plantillas.mjs # catálogo base + validación RE2-style + NFC
   sesion.mjs     # sesión efímera (metadata consultiva del agente)

@@ -11,6 +11,7 @@ const PROBES = {
   piper: (e) => import('./tts/piper.mjs').then((m) => m.diagnostico(e)),
   kokoro: (e) => import('./tts/kokoro.mjs').then((m) => m.diagnostico(e)),
   phonon_ollama: (e) => import('./tts/phonon_ollama.mjs').then((m) => m.diagnostico(e)),
+  lfm3: (e) => import('./tts/lfm3.mjs').then((m) => m.diagnostico(e)),
 };
 
 function errConfig(cause) {
@@ -150,7 +151,7 @@ const CLAVES_CONSTRAINTS = new Set([
   'validation_floor_ms', 'confirmation_channels', 'max_pattern_chars',
 ]);
 const PATRON_ID = /^[a-z0-9-]{1,64}$/;
-const ADAPTADORES = new Set(['say', 'piper', 'kokoro', 'phonon_ollama']);
+const ADAPTADORES = new Set(['say', 'piper', 'kokoro', 'phonon_ollama', 'lfm3']);
 
 const numeroONull = (v) => (typeof v === 'number' && Number.isFinite(v)
   ? v : null);
