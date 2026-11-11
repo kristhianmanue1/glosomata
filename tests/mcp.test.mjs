@@ -681,7 +681,8 @@ test('MCP: listen device_missing SIN detalle de nombres (privacidad)', async (t)
     const data = JSON.parse(r.result.content[0].text);
     if (process.platform !== 'darwin') {
       // la selección por nombre no existe ahí: not_supported
-      assert.deepEqual(data, { error: 'not_supported' });
+      // (por campo: el resultado lleva duration_ms añadido)
+      assert.equal(data.error, 'not_supported');
       return;
     }
     assert.equal(data.error, 'audio_device_error');
