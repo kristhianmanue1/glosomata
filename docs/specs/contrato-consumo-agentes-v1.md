@@ -74,6 +74,16 @@ lectura, JSON por stdout, exit 0/1 — semántica en
 `contrato-hardware-v1.md`; superficie ESTRICTA: cualquier argumento o
 flag extra → exit 2 `usage`.
 
+Además `listen --device <nombre-exacto>` (2026-11-11, ampliación G2):
+selección de ENTRADA por nombre exacto — resolución al abrir dentro de
+ffmpeg, validación 0/1/N contra el listado fresco ANTES de abrir,
+homónimos fail-closed, JAMÁS fallback a `:0` cuando hay petición
+(`contrato-hardware-v1.md` §3.1/§10). En hosts no-darwin la petición
+responde `not_supported`; sin petición, conducta original intacta. La
+preferencia por defecto (`engines.stt.input_device`) vive en matriz
+EXTERNA gobernada por `GLOSOMATA_CONFIG` — la matriz versionada del
+repo jamás lleva valores personales de hardware.
+
 ## 4. Superficie MCP (S2)
 
 Registro: `docs/guia-mcp.md` §Registro. Protocolo JSON-RPC 2.0 por líneas
@@ -88,6 +98,12 @@ Semántica que el consumidor DEBE conocer:
   `stopped`.
 - **`listen` es ventana fija**: la voz NO corta la captura; el turno
   dura al menos `timeout_s`. El consumidor debe comunicarlo en su UX.
+- **`listen` acepta `device`** (string opcional, 2026-11-11): nombre
+  EXACTO de la entrada (semántica en `contrato-hardware-v1.md` §10).
+  En los fallos de validación, la respuesta MCP JAMÁS lleva el detalle
+  de nombres disponibles del inventario — ése viaja sólo por CLI
+  (canal local del Operador); los homónimos sí reportan el conteo
+  («nombre ambiguo: N coincidencias»), que no divulga nombres.
 - **Errores de operación** llegan como `isError:true` en
   `content[0].text` — nunca como error JSON-RPC (ésos son de protocolo).
   La codificación es JSON `{"error":"<código>",...}` también cuando
@@ -122,13 +138,24 @@ configuración, espera de subprocess y adquisición del lock. No mide una
 cola de espera del consumidor, porque v1 no tiene cola.
 
 `causa` en fallos de audio es opcional y pertenece al conjunto cerrado
-`permission|device_missing|ffmpeg_missing|capture_failed|playback_failed|whisper_failed`.
+`permission|device_missing|ffmpeg_missing|capture_failed|playback_failed|whisper_failed|device_list_unavailable`.
 Un exit genérico de ffmpeg da `audio_device_error` con
 `causa:capture_failed`, no `mic_denied`: el exit no prueba que faltó
 permiso. Un WAV vacío, corto o ilegible también es `capture_failed`,
 no `mic_timeout`: sólo PCM válido con RMS bajo acredita silencio.
 `permission` y `device_missing` se reservan para una sonda que
-distinga esos estados. Fallos de reproducción TTS confirmados dan
+distinga esos estados — `device_missing` es además la respuesta
+contratada de la validación de selección por nombre (§3, G2a: ausente
+o ambiguo en el listado fresco). **`device_list_unavailable`**
+(alta 2026-11-11, ampliación G2): «no pude verificar el inventario
+para validar tu selección» — el listado ffmpeg de validación no corrió
+o no fue legible ANTES de una captura con petición de dispositivo;
+NI afirma ausencia (`device_missing`), NI afirma captura rota
+(`capture_failed`); no se abre micrófono y el ffmpeg de captura no se
+invoca para nada; JAMÁS fallback a `:0`. NO es el `devices_unavailable`
+de la superficie `devices` (G1): ese es el error del inventario;
+mezclar vocabularios de dos superficies confunde al consumidor.
+Fallos de reproducción TTS confirmados dan
 `playback_failed`; fallos de whisper, `whisper_failed`. Si no hay base
 para clasificar, se omite `causa`.
 
@@ -184,9 +211,17 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   `plataforma_no_soportada`, `afplay_ausente`, `binario_ausente`,
   `modelo_ausente`, `python_ausente`, `script_ausente`,
   `sin_kill_switch`, `adapter_desconocido`, `probe_fallido`.
-- `stt: {whisper: {ok, causa?}, ffmpeg: {ok, causa?}}` — causas:
-  `whisper_bin_ausente`, `whisper_model_ausente`, `config_unreadable`;
-  y para ffmpeg: `ffmpeg_ausente`, `plataforma_no_soportada`.
+- `stt: {whisper: {ok, causa?}, ffmpeg: {ok, causa?}, input_device?}` —
+  causas de whisper/ffmpeg: `whisper_bin_ausente`,
+  `whisper_model_ausente`, `config_unreadable`; y para ffmpeg:
+  `ffmpeg_ausente`, `plataforma_no_soportada`. La sección opcional
+  `input_device` (2026-11-11, G2a2) es el advisory INFORMATIVO de la
+  preferencia de entrada `{name, resuelve, causa?, detalle?}`: reporta
+  si hay preferencia y si resuelve contra el listado fresco; causas
+  cerradas `forma_invalida | plataforma_no_soportada |
+  device_missing | device_list_unavailable` (con `resuelve:null`
+  cuando el listado no pudo verificarse). El advisory JAMÁS afecta el
+  exit del veredicto.
 
 Exit 0 sólo con todo operativo (incluye ≥1 motor TTS disponible;
 `tts[]` vacío es no-operativo y ninguna sección lleva causa extra —
@@ -287,3 +322,14 @@ cosa.
   inventario de audio del host local, sólo lectura; alta de
   `devices_unavailable` en §2.1; variable `GLOSOMATA_SYSTEM_PROFILER`
   en §6; semántica completa en `contrato-hardware-v1.md`.
+- v1.3 (2026-11-11): ampliación G2 — `listen --device <nombre-exacto>`
+  (CLI) y campo opcional `device` en la tool MCP `listen`: selección de
+  ENTRADA por nombre exacto con validación 0/1/N previa, homónimos
+  fail-closed y NO-FALLBACK absoluto a `:0`; `not_supported` en
+  no-darwin; alta de `device_list_unavailable` en el conjunto de causas
+  de §5; preferencia por defecto `engines.stt.input_device` en matriz
+  EXTERNA (`GLOSOMATA_CONFIG`, 0600, fuera de Git — la matriz
+  versionada jamás lleva valores personales; `config validate` juzga
+  TIPO y FORMA, no presencia); advisory informativo `stt.input_device`
+  en doctor; `get_config` saneado sin la clave ni su valor (privacidad,
+  con test); semántica completa en `contrato-hardware-v1.md` §3.1/§10–§13.

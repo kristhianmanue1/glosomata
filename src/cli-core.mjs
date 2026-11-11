@@ -22,7 +22,8 @@ comandos:
   speak --text-stdin [--engine <id>]   ídem; texto completo por stdin
                                        UTF-8 (excluye --text: argv no
                                        ve la locución)
-  listen [--timeout <s>]               captura micrófono, imprime transcripción
+  listen [--timeout <s>] [--device <nombre-exacto>]
+                                       captura micrófono, imprime transcripción
   stop                                 interrumpe la operación de canal activa
   engines                              lista disponibilidad y selección
   version                              nombre y versión del paquete

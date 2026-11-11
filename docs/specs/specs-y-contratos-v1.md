@@ -56,11 +56,38 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 ## CONTRATO: CLI v1
 
 Operaciones: speak --text [--engine] | speak --text-stdin [--engine];
-listen [--timeout]; stop; engines;
+listen [--timeout] [--device nombre-exacto]; stop; engines;
 version; doctor; templates [--list|--show id]; session new
 [--template id]; validate --session archivo --text str; config list;
 config get engines|constraints — lectura CRUDA de la matriz (sin
 probes ni campos derivados; `config validate` juzga, la lectura no).
+
+`listen --device <nombre-exacto>` (adición compatible, 2026-11-11,
+G2a): selección de ENTRADA por nombre exacto — el selector que viaja a
+ffmpeg es `:<nombre>` y lo resuelve AVFoundation AL ABRIR, dentro del
+mismo proceso; el índice del listado JAMÁS viaja (la selección por
+índice está RECHAZADA: entre listado y captura puede reordenarse hacia
+OTRO micrófono válido en silencio — no es fail-closed para
+privacidad). ANTES de abrir: validación de FORMA (vacío, con `:` o
+comillas, o EXACTAMENTE los alias reservados `default`/`none` →
+`usage`) y validación 0/1/N contra el listado ffmpeg FRESCO (única
+fuente; sin system_profiler): 0 coincidencias → `audio_device_error`/
+`device_missing` con detalle de nombres disponibles (sólo CLI; MCP
+jamás lo lleva); >1 homónimos → `device_missing` con detalle «nombre
+ambiguo: N coincidencias»; listado no verificable →
+`device_list_unavailable` (contrato de consumo §5) — en ese fallo el
+ffmpeg de captura no se invoca para nada. Si el dispositivo desaparece
+tras validar, ffmpeg falla ruidoso → `capture_failed`. JAMÁS fallback
+a `:0` cuando hay petición. Fuera de darwin la petición responde
+`not_supported`; sin petición, la conducta original (`:0`) queda
+intacta. Precedencia: `--device` > `engines.stt.input_device` (matriz
+EFECTIVA) > `:0`; la preferencia es petición implícita con la MISMA
+revalidación en cada apertura y no-fallback, y vive en matriz EXTERNA
+fuera de Git (`GLOSOMATA_CONFIG`, 0600) — la matriz versionada del
+repo jamás lleva valores personales de hardware. `config validate`
+juzga TIPO y FORMA de la preferencia (charset/alias), NUNCA su
+presencia; `doctor` la reporta como advisory informativo sin afectar
+el exit. Semántica completa: `contrato-hardware-v1.md` §3.1/§10/§11.
 
 `speak --text-stdin` (adición compatible, 2026-11): el texto completo
 llega por stdin (UTF-8) en vez de `--text`; mutuamente excluyentes
@@ -144,12 +171,15 @@ para asentar el truncado en curso — la salida es la NATURAL del
 proceso si ésta se adelanta (p. ej. EOF de stdin del orquestador), o
 `exit 143` si decide la gracia.
 
-Tools: speak(text, engine?), listen(timeout_s?), stop(), session_new(template_id?),
+Tools: speak(text, engine?), listen(timeout_s?, device?), stop(), session_new(template_id?),
 list_engines(), get_config() — matriz SANEADA: disponibilidad, selección
 y constraints, sin rutas del filesystem —, list_templates() — incluye
 turns —, validate(session, text). Mismos códigos de error que CLI; un
 `listen` interrumpido por `stop` se resuelve con `stopped`. `validate`
-recibe la sesión inline como objeto.
+recibe la sesión inline como objeto. `device` (2026-11-11, G2a) es el
+nombre EXACTO de la entrada con la misma semántica que el CLI; los
+fallos de validación por MCP jamás llevan el detalle de nombres del
+inventario (privacidad).
 Los errores de operación MCP viajan como JSON `{ "error": "<código>" }`
 en `content[0].text`; los errores JSON-RPC son sólo de protocolo.
 `speak` y `listen` incluyen `duration_ms` entero no negativo aun cuando
@@ -203,8 +233,15 @@ gateway; SPEC-i2): URL fija `http://127.0.0.1:8092` y voz fija `es`
 su frontera de entrada
 (1..600 code points sin controles — `\n`/`\t` sobreviven a la
 canonización) responde `text_too_long`/`not_supported` antes de
-solicitar. engines.stt {whisper_bin?, whisper_model?} —
-sin claves el STT queda no disponible (fail-closed), el TTS sigue.
+solicitar. engines.stt {whisper_bin?, whisper_model?, input_device?} —
+sin claves de whisper el STT queda no disponible (fail-closed), el TTS
+sigue. `input_device` (G2a2, 2026-11-11): preferencia de entrada por
+nombre EXACTO — la matriz versionada de este repo NUNCA lleva valores
+personales del Operador: la preferencia vive en matriz externa 0600
+fuera de Git, elegida con `GLOSOMATA_CONFIG` (ruta efectiva = env ??
+repo); `config validate` la juzga por TIPO y FORMA (charset/alias,
+nunca presencia) y cada apertura la revalida contra el listado fresco
+con NO-FALLBACK (`device_missing`, jamás `:0` en silencio).
 constraints {validation_floor_ms*, confirmation_channels*,
 session_ttl_min, max_text_chars, max_pattern_chars*,
 listen_default_timeout_s} — (*) sin lector en src/, deprecadas en el

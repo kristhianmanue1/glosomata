@@ -12,17 +12,40 @@ import { measureOperation } from './duration.mjs';
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
 
 // Captura por plataforma (LOW ronda 3): backend de entrada de ffmpeg.
-// darwin→avfoundation :0, linux→alsa default; el resto fail-closed.
+// darwin→avfoundation: sin nombre → :0 (conducta original intacta);
+// con nombre exacto → binding por NOMBRE (G2a): `:<nombre>` — el nombre
+// lo resuelve AVFoundation AL ABRIR, dentro del mismo proceso ffmpeg;
+// el id numérico del listado JAMÁS viaja a ffmpeg. linux→alsa default;
+// la selección por nombre no existe ahí: con nombre, fail-closed (null)
+// y listen responde not_supported. El resto: fail-closed.
 // Función pura para testear sin micrófono ni binario.
-export function argsCaptura(plataforma) {
+export function argsCaptura(plataforma, nombre) {
   if (plataforma === 'darwin') {
     return { bin: '/opt/homebrew/bin/ffmpeg',
-      input: ['-f', 'avfoundation', '-i', ':0'] };
+      input: ['-f', 'avfoundation', '-i',
+        typeof nombre === 'string' ? `:${nombre}` : ':0'] };
   }
   if (plataforma === 'linux') {
+    if (typeof nombre === 'string') return null;
     return { bin: '/usr/bin/ffmpeg',
       input: ['-f', 'alsa', '-i', 'default'] };
   }
+  return null;
+}
+
+// Forma del nombre exacto (G2a, fail-closed ANTES de abrir): vacío, con
+// ':' o comillas (rompen la sintaxis `-i "[V]:[A]"`) o EXACTAMENTE un
+// alias reservado del backend avfoundation según sus docs oficiales
+// ('default'/'none' — indistinguible de un alias) se rechaza. La MISMA
+// regla gobierna listen (--device y preferencia) y config validate
+// (TIPO y FORMA de engines.stt.input_device; la PRESENCIA se juzga al
+// abrir contra el listado fresco, nunca aquí). Válida → null.
+const ALIAS_RESERVADOS = new Set(['default', 'none']);
+
+export function causaFormaNombre(nombre) {
+  if (typeof nombre !== 'string' || nombre.length === 0) return 'vacio';
+  if (/[:'"]/.test(nombre)) return 'charset';
+  if (ALIAS_RESERVADOS.has(nombre)) return 'alias';
   return null;
 }
 
@@ -134,11 +157,16 @@ function rmsS16(buf) {
   return n ? Math.sqrt(suma / n) : 0;
 }
 
-export async function listen(argv, stopAtStart = stopGeneration()) {
-  return measureOperation(() => listenRaw(argv, stopAtStart));
+export async function listen(argv, stopAtStart = stopGeneration(), opts = {}) {
+  return measureOperation(() => listenRaw(argv, stopAtStart, opts));
 }
 
-async function listenRaw(argv, stopAtStart) {
+async function listenRaw(argv, stopAtStart, opts = {}) {
+  // Inyectables para tests herméticos (mismo patrón que listarDispositivos):
+  // `plataforma` (not_supported fuera de darwin es testeable sin CI) y
+  // `detalleNombres` (MCP sin detalle de nombres — privacidad).
+  const plataforma = opts.plataforma ?? process.platform;
+  const detalleNombres = opts.detalleNombres !== false;
   const cfg = await cargarMatriz();
   let timeout = cfg.constraints?.listen_default_timeout_s ?? 10;
   const i = argv.indexOf('--timeout');
@@ -149,8 +177,25 @@ async function listenRaw(argv, stopAtStart) {
     }
     timeout = v;
   }
-  const cap = argsCaptura(process.platform);
+  // G2a: petición EXPLÍCITA por nombre exacto (`--device`). G2a2: la
+  // preferencia de la matriz EFECTIVA es petición implícita. Precedencia:
+  // --device > input_device > :0. Una petición se REVALIDA en cada
+  // apertura contra el listado fresco y JAMÁS cae a :0 en silencio.
+  const iDev = argv.indexOf('--device');
+  const pedidoCli = iDev >= 0 ? argv[iDev + 1] : undefined;
+  const preferencia = typeof cfg.engines?.stt?.input_device === 'string'
+    ? cfg.engines.stt.input_device : undefined;
+  const pedido = pedidoCli !== undefined ? pedidoCli : preferencia;
+  if (pedido !== undefined && causaFormaNombre(pedido) !== null) {
+    return { code: 2, data: { error: 'usage' } };
+  }
+  const cap = argsCaptura(plataforma, pedido);
   if (!cap) {
+    if (pedido !== undefined) {
+      // Una plataforma sin backend no sirve la selección por nombre:
+      // la petición (explícita o implícita) no es servible ahí.
+      return { code: 1, data: { error: 'not_supported' } };
+    }
     // Una plataforma sin backend no prueba que falte un dispositivo.
     return { code: 1, data: { error: 'audio_device_error' } };
   }
@@ -161,6 +206,34 @@ async function listenRaw(argv, stopAtStart) {
   } catch {
     return { code: 1, data: { error: 'audio_device_error',
       causa: 'ffmpeg_missing' } };
+  }
+  // Validación 0/1/N contra el listado fresco (SÓLO la fuente ffmpeg),
+  // ANTES de abrir e INNEGOCIABLE: jamás se captura por nombre sin
+  // chequeo de homónimos. Fuera de este bloque la captura no se invoca.
+  if (pedido !== undefined) {
+    const { listarEntradasFfmpeg } = await import('./devices.mjs');
+    const listado = await listarEntradasFfmpeg();
+    if (listado === null) {
+      // No pude verificar el inventario para validar la selección:
+      // ni afirma ausencia (device_missing) ni fallo de captura
+      // (capture_failed). Fail-closed sin abrir el micrófono.
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'device_list_unavailable' } };
+    }
+    const nombres = listado.map((d) => d.name);
+    const coincidencias = nombres.filter((x) => x === pedido).length;
+    if (coincidencias === 0) {
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'device_missing',
+        ...(detalleNombres ? { detalle: { disponibles: nombres } } : {}) } };
+    }
+    if (coincidencias > 1) {
+      // Homónimos observados: fail-closed, sin adivinar. El detalle NO
+      // incluye nombres (viaja también por MCP).
+      return { code: 1, data: { error: 'audio_device_error',
+        causa: 'device_missing',
+        detalle: `nombre ambiguo: ${coincidencias} coincidencias` } };
+    }
   }
   try {
     await adquirirCanal();

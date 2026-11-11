@@ -58,7 +58,8 @@ test('schema: TODAS las claves opcionales validan (el example pasa vacío)', () 
           kill_switch: { type: 'subprocess_kill', target: 'process_group',
             max_latency_ms: 300 } },
       ],
-      stt: { whisper_bin: '/bin/whisper-cli', whisper_model: '/m/ggml.bin' },
+      stt: { whisper_bin: '/bin/whisper-cli', whisper_model: '/m/ggml.bin',
+        input_device: 'Entrada Generica Preferida' },
     },
     constraints: {
       validation_floor_ms: 50, confirmation_channels: 2,
@@ -151,6 +152,18 @@ test('schema: rate string "rapido" → rechazo de tipo', () => {
 test('schema: sin engines.stt → rechazo (estructura de matriz)', () => {
   const errores = validar({ engines: { tts: [] } }, schema);
   assert.notEqual(errores.length, 0);
+});
+
+test('schema: input_device no-string → rechazo de tipo (G2a2)', () => {
+  const cfg = configValida();
+  cfg.engines.stt.input_device = 42;
+  assert.notEqual(validar(cfg, schema).length, 0);
+});
+
+test('schema: input_device vacía → rechazo (minLength 1)', () => {
+  const cfg = configValida();
+  cfg.engines.stt.input_device = '';
+  assert.notEqual(validar(cfg, schema).length, 0);
 });
 
 // —— ronda adversarial: puntos ciegos del validador ——

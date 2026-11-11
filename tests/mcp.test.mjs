@@ -633,3 +633,86 @@ test('MCP: stop inmediato tras speak no se pierde durante imports', async (t) =>
     assert.ok(Number.isInteger(data.duration_ms) && data.duration_ms >= 0);
   });
 });
+
+// —— G2a/G2a2: listen con `device` y get_config sin la preferencia ——
+
+// Fakes propios (hermético): los de la sección devices se borran en su
+// test; aquí el listado es el mismo fixture genérico de nombres.
+const dirG2 = mkdtempSync(join(tmpdir(), 'glosomata-mcp-g2-'));
+const ffmpegG2 = falsoDevices2('ffmpeg-g2',
+  `process.stderr.write(${JSON.stringify(LISTADO_FAKE)});process.exit(251);`);
+function falsoDevices2(nombre, cuerpo) {
+  const ruta = join(dirG2, nombre);
+  writeFileSync(ruta, `#!/usr/bin/env node\n${cuerpo}\n`);
+  chmodSync(ruta, 0o755);
+  return ruta;
+}
+
+test('MCP: listen — device opcional en el schema (G2a)', async () => {
+  await conCliente(async (c) => {
+    c.enviar({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    const { result: { tools } } = await c.esperar(1);
+    const listen = tools.find((t) => t.name === 'listen');
+    assert.deepEqual(listen.inputSchema.properties.device,
+      { type: 'string', minLength: 1 });
+    // opcional: el required previo no crece
+    assert.equal(listen.inputSchema.required, undefined);
+    assert.equal(listen.inputSchema.additionalProperties, false);
+  });
+});
+
+test('MCP: listen campo espurio o device no-string → usage', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'listen', { nope: 1 }));
+    c.enviar(llamada(2, 'listen', { device: 5 }));
+    const [r1, r2] = await Promise.all([c.esperar(1), c.esperar(2)]);
+    for (const r of [r1, r2]) {
+      assert.equal(r.result.isError, true);
+      assert.equal(JSON.parse(r.result.content[0].text).error, 'usage');
+    }
+  });
+});
+
+test('MCP: listen device_missing SIN detalle de nombres (privacidad)', async (t) => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'listen', { device: 'Entrada Fantasma' }));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, true);
+    const data = JSON.parse(r.result.content[0].text);
+    if (process.platform !== 'darwin') {
+      // la selección por nombre no existe ahí: not_supported
+      // (por campo: el resultado lleva duration_ms añadido)
+      assert.equal(data.error, 'not_supported');
+      return;
+    }
+    assert.equal(data.error, 'audio_device_error');
+    assert.equal(data.causa, 'device_missing');
+    const plano = r.result.content[0].text;
+    // la respuesta MCP jamás lista hardware disponible (canal local)
+    assert.equal(plano.includes('disponibles'), false);
+    assert.equal(plano.includes('Entrada Cero'), false);
+    assert.equal(plano.includes('Entrada Uno'), false);
+  }, { GLOSOMATA_FFMPEG: ffmpegG2 });
+  rmSync(dirG2, { recursive: true, force: true });
+});
+
+test('MCP: get_config saneado jamás lleva input_device ni su valor', async () => {
+  const dirCfg = mkdtempSync(join(tmpdir(), 'glosomata-mcp-g2c-'));
+  const rutaCfg = join(dirCfg, 'glosomata.json');
+  writeFileSync(rutaCfg, JSON.stringify({
+    engines: { tts: [],
+      stt: { input_device: 'Entrada Personal Generica' } },
+    constraints: {},
+  }));
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'get_config'));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, false, r.result.content[0].text);
+    const plano = r.result.content[0].text;
+    assert.equal(plano.includes('input_device'), false);
+    assert.equal(plano.includes('Entrada Personal Generica'), false);
+    const cfg = JSON.parse(plano);
+    assert.deepEqual(Object.keys(cfg.engines.stt), ['available']);
+  }, { GLOSOMATA_CONFIG: rutaCfg });
+  rmSync(dirCfg, { recursive: true, force: true });
+});

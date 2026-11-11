@@ -4,7 +4,8 @@
 
 import { cargarMatriz } from './matriz.mjs';
 import { canonizar } from './plantillas.mjs';
-import { rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper } from './stt.mjs';
+import { rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper,
+  causaFormaNombre } from './stt.mjs';
 import {
   adquirirCanal, liberarCanal, resetStop, stopGeneration, stopPedido,
   detenerCanalRemoto, nuevoTemporal, registrarEspera, liberarEspera,
@@ -282,9 +283,10 @@ async function speakRaw(args, stopAtStart) {
   }
 }
 
-export async function listenOp(argv, stopAtStart = stopGeneration()) {
+export async function listenOp(argv, stopAtStart = stopGeneration(),
+  opts = {}) {
   const { listen } = await import('./stt.mjs');
-  return listen(argv, stopAtStart);
+  return listen(argv, stopAtStart, opts);
 }
 
 export async function stopOp() {
@@ -333,7 +335,41 @@ export async function doctorOp() {
     ? await diagnosticoWhisper(cfg)
     : { ok: false, causa: 'config_unreadable' };
 
-  const data = { node, config, tts, stt: { whisper, ffmpeg } };
+  // G2a2: preferencia de entrada — sección INFORMATIVA: reporta si hay
+  // preferencia y si resuelve contra el listado fresco (advisory
+  // device_missing si no); JAMÁS afecta el exit del veredicto.
+  const preferida = typeof cfg?.engines?.stt?.input_device === 'string'
+    ? cfg.engines.stt.input_device : null;
+  let entrada = null;
+  if (preferida !== null) {
+    const causaForma = causaFormaNombre(preferida);
+    if (causaForma !== null) {
+      entrada = { name: preferida, resuelve: false,
+        causa: 'forma_invalida' };
+    } else if (process.platform !== 'darwin') {
+      entrada = { name: preferida, resuelve: false,
+        causa: 'plataforma_no_soportada' };
+    } else {
+      const { listarEntradasFfmpeg } = await import('./devices.mjs');
+      const listado = await listarEntradasFfmpeg();
+      if (listado === null) {
+        // no pude verificar el inventario: ni resuelve ni ausente
+        entrada = { name: preferida, resuelve: null,
+          causa: 'device_list_unavailable' };
+      } else {
+        const n = listado.filter((d) => d.name === preferida).length;
+        entrada = n === 1
+          ? { name: preferida, resuelve: true }
+          : { name: preferida, resuelve: false, causa: 'device_missing',
+              ...(n > 1
+                ? { detalle: `nombre ambiguo: ${n} coincidencias` } : {}) };
+      }
+    }
+  }
+
+  const data = { node, config, tts,
+    stt: { whisper, ffmpeg,
+      ...(entrada ? { input_device: entrada } : {}) } };
   const operativo = node.ok && config.ok && tts.length > 0
     && tts.every((t) => t.available) && whisper.ok && ffmpeg.ok;
   return { code: operativo ? 0 : 1, data };
