@@ -4,6 +4,7 @@
 import { readFile } from 'node:fs/promises';
 import { speakOp, listenOp, stopOp, enginesOp, templatesOp, sessionOp,
   validateOp, doctorOp, configOp } from './ops.mjs';
+import { listarDispositivos } from './devices.mjs';
 
 // Fuente única de versión: package.json (C0.1). Lectura diferida y
 // cacheada; sin hardcode en CLI ni en el serverInfo de MCP.
@@ -36,10 +37,15 @@ comandos:
   config validate [--file <ruta>]      veredicto: estructura + probes
   config set <archivo-json>            replace atómico validado + backup
 
+  devices                              inventario de audio del host local
+                                       (sólo lectura; sin flags: cualquier
+                                       argumento extra → usage)
+
 errores: engine_unavailable tts_failed stt_failed mic_denied mic_timeout
   template_invalid not_found text_too_long session_invalid session_expired
   session_abandoned channel_busy not_supported config_unreadable
-  config_write_failed usage internal_error audio_device_error`;
+  config_write_failed usage internal_error audio_device_error
+  devices_unavailable`;
 
 const COMANDOS = Object.create(null);
 Object.assign(COMANDOS, {
@@ -58,6 +64,11 @@ Object.assign(COMANDOS, {
   session: (a) => sessionOp(a),
   validate: (a) => validateOp(a),
   config: (a) => configOp(a),
+  // superficie NUEVA estricta (contrato-hardware-v1): sin flags; nada
+  // hereda la tolerancia legacy — cualquier argumento extra → usage
+  devices: (a) => (a.length === 0
+    ? listarDispositivos()
+    : { code: 2, data: { error: 'usage' } }),
 });
 
 export async function main(argv) {

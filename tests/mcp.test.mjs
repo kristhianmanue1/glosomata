@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import {
   readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync,
+  chmodSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -144,7 +145,7 @@ test('MCP: initialize y tools/list por stdio', async () => {
     const pkg = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     assert.equal(init.result.serverInfo.version, pkg.version);
-    assert.equal(lista.result.tools.length, 8);
+    assert.equal(lista.result.tools.length, 9);
   });
 });
 
@@ -485,6 +486,92 @@ test('MCP: get_config con args inesperados → usage (schema cerrado)', async ()
     assert.equal(r.result.isError, true);
     assert.equal(JSON.parse(r.result.content[0].text).error, 'usage');
   });
+});
+
+// —— devices (9ª tool, G0+G1): inventario local de sólo lectura ——
+
+// Binarios falsos (hermético en cualquier plataforma): emiten un
+// listado/JSON sintético; jamás un dispositivo real.
+const dirDevices = mkdtempSync(join(tmpdir(), 'glosomata-mcp-devices-'));
+const LISTADO_FAKE = [
+  '[AVFoundation indev @ 0x1] AVFoundation video devices:',
+  '[AVFoundation indev @ 0x1] [0] Cámara Video',
+  '[AVFoundation indev @ 0x1] AVFoundation audio devices:',
+  '[AVFoundation indev @ 0x1] [0] Entrada Cero',
+  '[AVFoundation indev @ 0x1] [1] Entrada Uno',
+].join('\n');
+const SP_FAKE = JSON.stringify({
+  SPAudioDataType: [{ _name: 'audio', _items: [
+    { _name: 'Entrada Uno', coreaudio_device_input: 1,
+      coreaudio_default_audio_input_device: 'spaudio_yes' },
+    { _name: 'Salida Uno', coreaudio_device_output: 2,
+      coreaudio_default_audio_output_device: 'spaudio_yes' },
+  ] }],
+});
+function falsoDevices(nombre, cuerpo) {
+  const ruta = join(dirDevices, nombre);
+  writeFileSync(ruta, `#!/usr/bin/env node\n${cuerpo}\n`);
+  chmodSync(ruta, 0o755);
+  return ruta;
+}
+const ffmpegFalsoMcp = falsoDevices('ffmpeg-falso',
+  `process.stderr.write(${JSON.stringify(LISTADO_FAKE)});process.exit(251);`);
+const spFalsoMcp = falsoDevices('sp-falso',
+  `process.stdout.write(${JSON.stringify(SP_FAKE)});process.exit(0);`);
+
+test('MCP: devices — schema cerrado, sin propiedades', async () => {
+  await conCliente(async (c) => {
+    c.enviar({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    const { result: { tools } } = await c.esperar(1);
+    const devices = tools.find((t) => t.name === 'devices');
+    assert.ok(devices, 'devices falta en tools/list');
+    assert.deepEqual(devices.inputSchema.properties, {});
+    assert.equal(devices.inputSchema.additionalProperties, false);
+    assert.deepEqual(devices.inputSchema.required, undefined);
+  });
+});
+
+test('MCP: devices con campo espurio → usage (schema cerrado en server)', async () => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'devices', { device: '0' }));
+    const r = await c.esperar(1);
+    assert.equal(r.result.isError, true);
+    assert.equal(JSON.parse(r.result.content[0].text).error, 'usage');
+  });
+});
+
+test('MCP: devices — inventario saneado (darwin) o fail-closed (resto)', async (t) => {
+  await conCliente(async (c) => {
+    c.enviar(llamada(1, 'devices'));
+    const r = await c.esperar(1);
+    const data = JSON.parse(r.result.content[0].text);
+    if (process.platform === 'darwin') {
+      assert.equal(r.result.isError, false, r.result.content[0].text);
+      assert.equal(data.platform, 'darwin');
+      assert.deepEqual(data.limits,
+        { id_estable: false, seleccion_salida: false });
+      // 2 entradas ffmpeg + 1 entrada system + 1 salida system = 4
+      // (literales de los fixtures sintéticos de arriba)
+      assert.equal(data.devices.length, 4);
+      for (const d of data.devices) {
+        assert.ok(['input', 'output'].includes(d.kind), JSON.stringify(d));
+        assert.ok(['ffmpeg', 'system'].includes(d.source));
+        assert.equal(typeof d.name, 'string');
+      }
+      const plano = r.result.content[0].text;
+      assert.equal(plano.includes(dirDevices), false, 'ruta del fixture');
+      assert.equal(plano.includes('/private/var'), false);
+      // match por nombre del default de entrada del SO sobre ffmpeg
+      const marcadas = data.devices.filter(
+        (d) => d.source === 'ffmpeg' && d.is_default_so === true);
+      assert.equal(marcadas.map((d) => d.name).join('|'), 'Entrada Uno');
+    } else {
+      assert.equal(r.result.isError, true);
+      assert.deepEqual(data,
+        { error: 'devices_unavailable', causa: 'plataforma_no_soportada' });
+    }
+  }, { GLOSOMATA_FFMPEG: ffmpegFalsoMcp, GLOSOMATA_SYSTEM_PROFILER: spFalsoMcp });
+  rmSync(dirDevices, { recursive: true, force: true });
 });
 
 test('MCP: stop durante speak largo → speak truncated, stop atendido en curso', async (t) => {

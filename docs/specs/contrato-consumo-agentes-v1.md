@@ -13,8 +13,8 @@ tres perfiles de consumidor:
 
 | Perfil | Superficie | Estado v1 |
 |---|---|---|
-| Agente con cliente MCP | MCP stdio (8 tools) | Contratado |
-| Agente/script con shell | CLI v1 (10 comandos) | Contratado |
+| Agente con cliente MCP | MCP stdio (9 tools) | Contratado |
+| Agente/script con shell | CLI v1 (11 comandos) | Contratado |
 | Programa Node (import directo) | `src/ops.mjs` etc. | **NO contratado** |
 | Cliente HTTP/remoto | — | No-objetivo declarado |
 
@@ -25,7 +25,9 @@ Dentro de la misma versión mayor (`v1.x`):
 1. **Taxonomía de errores cerrada**: los códigos de
    `specs-y-contratos-v1.md` §CLI v1 (17 originales más
    `config_write_failed`, alta 2026-10-17 — fallo de la escritura
-   gobernada de config, comandos `config` del plan de configuración)
+   gobernada de config, comandos `config` del plan de configuración, y
+   `devices_unavailable`, alta 2026-11-11 — inventario de dispositivos
+   de audio, contrato de hardware v1)
    nunca se renombran ni se eliminan; sólo se añaden códigos nuevos.
    Un consumidor que conozca la lista de 2026-08-18 sigue siendo
    compatible.
@@ -66,7 +68,11 @@ estas dos operaciones.
 Comandos: `speak`, `listen`, `stop`, `engines`, `templates`,
 `session new`, `validate`, `config list`, `config get
 engines|constraints`, `config validate [--file ruta]`, `config set
-<archivo>` — semántica en §CLI v1 del spec canónico.
+<archivo>` — semántica en §CLI v1 del spec canónico. Además
+`devices` (2026-11-11): inventario de audio del host local, sólo
+lectura, JSON por stdout, exit 0/1 — semántica en
+`contrato-hardware-v1.md`; superficie ESTRICTA: cualquier argumento o
+flag extra → exit 2 `usage`.
 
 ## 4. Superficie MCP (S2)
 
@@ -152,6 +158,7 @@ del dominio de runtime.
 | `GLOSOMATA_CONFIG` | ruta alternativa de `glosomata.json` | cliente MCP (`env`) |
 | `GLOSOMATA_RUNTIME` | lock, temporales y stop (§5.1) | tests, aislados |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura (STT) | rutas no estándar |
+| `GLOSOMATA_SYSTEM_PROFILER` | binario system_profiler del inventario `devices` | tests herméticos |
 
 Toda variable futura se documentará aquí antes de existir en código.
 
@@ -276,3 +283,7 @@ cosa.
 - v1.1 (2026-11-11): §5.1 dominios de runtime (contención y stop por
   GLOSOMATA_RUNTIME); precisión §6; Phonon/Ollama registrado en matriz
   canónica con latencia observada documentada.
+- v1.2 (2026-11-11): comando `devices` y tool MCP `devices` (9ª) —
+  inventario de audio del host local, sólo lectura; alta de
+  `devices_unavailable` en §2.1; variable `GLOSOMATA_SYSTEM_PROFILER`
+  en §6; semántica completa en `contrato-hardware-v1.md`.
