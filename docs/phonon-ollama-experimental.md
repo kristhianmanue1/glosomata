@@ -33,10 +33,10 @@ En `engines.tts`, agrega motores como éstos, conservando un único
 
 ```json
 {
-  "id": "phonon-rebeca",
+  "id": "phonon-lalo",
   "adapter": "phonon_ollama",
   "model": "nombre-del-modelo-local",
-  "voice": "Rebeca",
+  "voice": "Lalo",
   "selected": false,
   "kill_switch": {
     "type": "subprocess_kill",
@@ -46,14 +46,16 @@ En `engines.tts`, agrega motores como éstos, conservando un único
 }
 ```
 
-Para `Lalo`, usa otro ID y `"voice":"Lalo"`. Sustituye el modelo por
-un nombre que `ollama show` confirme. Una instalación estándar de
-`phonon:es` puede exponer sólo `default`; los nombres del catálogo no
-se vuelven utilizables por declararlos en esta matriz.
+Cada motor agregado necesita un ID único en esa matriz copiada:
+`config validate` rechaza ids duplicados, y la matriz canónica ya
+declara `phonon-rebeca` —por eso el ejemplo usa otra voz. Sustituye el
+modelo por un nombre que `ollama show` confirme. Una instalación
+estándar de `phonon:es` puede exponer sólo `default`; los nombres del
+catálogo no se vuelven utilizables por declararlos en esta matriz.
 
 ```bash
 GLOSOMATA_CONFIG=/ruta/config-phonon.json node src/cli.mjs config validate
-GLOSOMATA_CONFIG=/ruta/config-phonon.json node src/cli.mjs speak --engine phonon-rebeca --text "Hola, ¿cómo estás?"
+GLOSOMATA_CONFIG=/ruta/config-phonon.json node src/cli.mjs speak --engine phonon-lalo --text "Hola, ¿cómo estás?"
 ```
 
 `doctor` y `config validate` prueban **todos** los motores declarados,

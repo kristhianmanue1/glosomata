@@ -91,9 +91,10 @@ Semántica que el consumidor DEBE conocer:
 
 ## 5. Semántica transversal de contención
 
-El canal es half-duplex GLOBAL por usuario: una operación de canal a la
-vez, intra o cross-proceso (`channel_busy` si no). Consumidores
-concurrentes (varios agentes en la misma máquina):
+El canal es half-duplex por usuario dentro de cada runtime: una
+operación de canal a la vez, intra o cross-proceso (`channel_busy` si
+no). Entre runtimes distintos no hay contención ni `stop` compartido
+(§5.1). Consumidores concurrentes (varios agentes en la misma máquina):
 
 1. Ante `channel_busy`, reintentar con backoff exponencial (base 1s,
    tope 30s, jitter recomendado) hasta un límite de política propia.
@@ -149,7 +150,7 @@ del dominio de runtime.
 | Variable | Efecto | Consumidor típico |
 |---|---|---|
 | `GLOSOMATA_CONFIG` | ruta alternativa de `glosomata.json` | cliente MCP (`env`) |
-| `GLOSOMATA_RUNTIME` | directorio base de lock, temporales y socket de stop: define el dominio de contención y stop (§5.1) | tests, sandboxes, consumidores con runtime propio |
+| `GLOSOMATA_RUNTIME` | base de lock, temporales y socket de stop (§5.1: dominio de contención) | tests, sandboxes, runtimes propios |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura (STT) | rutas no estándar |
 
 Toda variable futura se documentará aquí antes de existir en código.
