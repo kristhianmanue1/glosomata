@@ -6,7 +6,19 @@ instala Ollama ni descarga modelos. El modelo debe existir y declarar
 figuran como es-mx en el catálogo de Gradium, pero la calidad del
 acento requiere evaluación humana con las muestras.
 
+## Estado en la matriz canónica
+
+`phonon-rebeca` ya está declarado en `glosomata.json` (`selected:false`,
+con su `kill_switch`), usable directamente con `--engine phonon-rebeca`
+en CLI o `engine:"phonon-rebeca"` en MCP cuando el proceso comparte esa
+matriz. `config validate` y `doctor` lo prueban como a cualquier motor
+declarado: requieren Ollama local activo.
+
 ## Preparación sin alterar la matriz habitual
+
+Este flujo —copiar la config fuera del repositorio y agregar motores—
+queda como el camino para probar otras voces y modelos (p. ej. `Lalo`)
+sin tocar la matriz; ya no es el único camino para `Rebeca`.
 
 Comprueba el modelo y las voces que **tu** instalación expone:
 
@@ -21,10 +33,10 @@ En `engines.tts`, agrega motores como éstos, conservando un único
 
 ```json
 {
-  "id": "phonon-rebeca",
+  "id": "phonon-lalo",
   "adapter": "phonon_ollama",
   "model": "nombre-del-modelo-local",
-  "voice": "Rebeca",
+  "voice": "Lalo",
   "selected": false,
   "kill_switch": {
     "type": "subprocess_kill",
@@ -34,14 +46,16 @@ En `engines.tts`, agrega motores como éstos, conservando un único
 }
 ```
 
-Para `Lalo`, usa otro ID y `"voice":"Lalo"`. Sustituye el modelo por
-un nombre que `ollama show` confirme. Una instalación estándar de
-`phonon:es` puede exponer sólo `default`; los nombres del catálogo no
-se vuelven utilizables por declararlos en esta matriz.
+Cada motor agregado necesita un ID único en esa matriz copiada:
+`config validate` rechaza ids duplicados, y la matriz canónica ya
+declara `phonon-rebeca` —por eso el ejemplo usa otra voz. Sustituye el
+modelo por un nombre que `ollama show` confirme. Una instalación
+estándar de `phonon:es` puede exponer sólo `default`; los nombres del
+catálogo no se vuelven utilizables por declararlos en esta matriz.
 
 ```bash
 GLOSOMATA_CONFIG=/ruta/config-phonon.json node src/cli.mjs config validate
-GLOSOMATA_CONFIG=/ruta/config-phonon.json node src/cli.mjs speak --engine phonon-rebeca --text "Hola, ¿cómo estás?"
+GLOSOMATA_CONFIG=/ruta/config-phonon.json node src/cli.mjs speak --engine phonon-lalo --text "Hola, ¿cómo estás?"
 ```
 
 `doctor` y `config validate` prueban **todos** los motores declarados,
@@ -56,8 +70,16 @@ agregar una opción con `selected:false`. MCP también acepta
   `127.0.0.1:11434`. No hay URL configurable ni conexión externa.
 - Envía texto por stdin a `curl`; el WAV completo se valida antes de
   reproducirlo. Glosomata no entrega audio incremental al consumidor.
+- **Latencia observada** (ensayo real 2026-11-10, macOS arm64, Ollama
+  local; `speak` completo = síntesis + reproducción bloqueante): ~4,5 s
+  para una frase corta y ~7–23 s para respuestas de una a tres frases.
+  Es una observación puntual, NO una cota contratada ni garantía.
 - `stop` interrumpe los subprocesos locales. La cancelación de la
   inferencia dentro del daemon de Ollama no está comprobada.
+- **Runtime y contención**: la contención (`channel_busy`) y el alcance
+  de `stop` operan por directorio de runtime; un consumidor con runtime
+  propio queda fuera de esa contención (detalle en
+  `docs/specs/contrato-consumo-agentes-v1.md` §5.1).
 - El WAV temporal se borra al terminar la operación. Los logs de
   glosomata no incluyen texto; la retención del daemon Ollama queda
   fuera de esa garantía.

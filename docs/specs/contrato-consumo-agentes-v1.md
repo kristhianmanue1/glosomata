@@ -91,9 +91,10 @@ Semántica que el consumidor DEBE conocer:
 
 ## 5. Semántica transversal de contención
 
-El canal es half-duplex GLOBAL por usuario: una operación de canal a la
-vez, intra o cross-proceso (`channel_busy` si no). Consumidores
-concurrentes (varios agentes en la misma máquina):
+El canal es half-duplex por usuario dentro de cada runtime: una
+operación de canal a la vez, intra o cross-proceso (`channel_busy` si
+no). Entre runtimes distintos no hay contención ni `stop` compartido
+(§5.1). Consumidores concurrentes (varios agentes en la misma máquina):
 
 1. Ante `channel_busy`, reintentar con backoff exponencial (base 1s,
    tope 30s, jitter recomendado) hasta un límite de política propia.
@@ -125,12 +126,31 @@ distinga esos estados. Fallos de reproducción TTS confirmados dan
 `playback_failed`; fallos de whisper, `whisper_failed`. Si no hay base
 para clasificar, se omite `causa`.
 
+### 5.1 Dominios de runtime: contención y stop
+
+La contención half-duplex y el `stop` no son globales: operan dentro del
+directorio de runtime. Quienes comparten el runtime por defecto se
+excluyen entre sí (`channel_busy`) y comparten el `stop`, como describe
+§5. Un consumidor con runtime propio (`GLOSOMATA_RUNTIME`) queda fuera
+de ese dominio: sus operaciones pueden solaparse con las de otros
+runtimes, y un `stop` ajeno no lo alcanza (ni el suyo alcanza a otros).
+Motivo legítimo conocido: la cota `sun_path` del socket de stop en
+Darwin obliga a runtimes cortos propios bajo prefijos TMPDIR largos.
+
+En v1 glosomata no unifica runtimes ni arbitra entre ellos: sin cola ni
+prioridad cross-runtime. Elegir runtime es decisión del consumidor, y
+las consecuencias del aislamiento son suyas: audio que se solapa,
+`stop` que no llega. Quien deba convivir con otros consumidores en la
+misma máquina debe usar el runtime por defecto o coordinarse por su
+cuenta. Kill-switch y privacidad se rigen por §10, con independencia
+del dominio de runtime.
+
 ## 6. Variables de entorno contractuales
 
 | Variable | Efecto | Consumidor típico |
 |---|---|---|
 | `GLOSOMATA_CONFIG` | ruta alternativa de `glosomata.json` | cliente MCP (`env`) |
-| `GLOSOMATA_RUNTIME` | directorio base de lock/temporales | tests, sandboxes |
+| `GLOSOMATA_RUNTIME` | lock, temporales y stop (§5.1) | tests, aislados |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura (STT) | rutas no estándar |
 
 Toda variable futura se documentará aquí antes de existir en código.
@@ -253,3 +273,6 @@ cosa.
 
 - v1 (2026-10-17): propuesta inicial; superficies S1/S2 contratadas,
   S3 declarada no contratada, huecos declarados con plan.
+- v1.1 (2026-11-11): §5.1 dominios de runtime (contención y stop por
+  GLOSOMATA_RUNTIME); precisión §6; Phonon/Ollama registrado en matriz
+  canónica con latencia observada documentada.
