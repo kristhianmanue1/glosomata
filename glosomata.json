@@ -51,6 +51,18 @@
           "target": "process_group",
           "max_latency_ms": 300
         }
+      },
+      {
+        "id": "phonon-rebeca",
+        "adapter": "phonon_ollama",
+        "model": "phonon-es-mx-eval-20261027:latest",
+        "voice": "Rebeca",
+        "selected": false,
+        "kill_switch": {
+          "type": "subprocess_kill",
+          "target": "process_group",
+          "max_latency_ms": 500
+        }
       }
     ],
     "stt": {
