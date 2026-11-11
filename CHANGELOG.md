@@ -6,6 +6,25 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **inventario de dispositivos (`devices`, G0+G1)** — comando CLI
+  (superficie estricta: sin flags, extra → `usage`) y 9ª tool MCP sin
+  parámetros: lista dispositivos de audio del HOST LOCAL, sólo lectura,
+  sin tocar `canal.lock` ni abrir micrófono. Dos fuentes con
+  degradación honesta (`degraded: ["ffmpeg"|"system_profiler"]`):
+  ffmpeg avfoundation (entradas con índice de backend; decisión por
+  CONTENIDO aunque el exit final sea I/O error, como se observa en
+  darwin) y `system_profiler SPAudioDataType -json` (defaults del SO;
+  el default de ENTRADA se marca sobre las entradas ffmpeg por match de
+  nombre, best-effort). Código nuevo de taxonomía
+  `devices_unavailable` con causas cerradas
+  `plataforma_no_soportada|ffmpeg_ausente|listado_ilegible` — jamás se
+  infiere permiso o ausencia de un exit genérico. Límites declarados:
+  ids NO estables, default del SO ≠ default usado, salida no
+  seleccionable, residual de homónimos. Variable nueva
+  `GLOSOMATA_SYSTEM_PROFILER`. Contrato nuevo
+  `docs/specs/contrato-hardware-v1.md` (PROPUESTA) y contrato de
+  consumo v1.2 en el mismo commit.
+
 - feat: **`speak --text-stdin`** — el texto llega completo por stdin
   (UTF-8) en vez de `--text`: argv es visible en `ps` para otros
   usuarios locales, así que la superficie CLI aplica al texto de

@@ -54,6 +54,12 @@ const TOOLS = [  { name: 'speak', description: 'Reproduce texto por voz localmen
       additionalProperties: false,
       properties: { session: { type: 'object' },
         text: { type: 'string', maxLength: 2000 } } } },
+  { name: 'devices', description: 'Inventario de audio del HOST LOCAL '
+      + '(sólo lectura): entradas avfoundation + defaults del SO. Ids de '
+      + 'backend NO estables; sin selección de salida ni mute '
+      + '(contrato-hardware-v1)',
+    inputSchema: { type: 'object', additionalProperties: false,
+      properties: {} } },
 ];
 
 // Error JSON-RPC 2.0 estándar. id null cuando es indetectable (parse).
@@ -111,6 +117,16 @@ async function llamar(name, args) {
     }
     case 'list_engines':
       return ops.enginesOp();
+    case 'devices': {
+      // schema cerrado validado también en server (mismo patrón que
+      // get_config): la tool no acepta parámetro alguno.
+      if (args === null || typeof args !== 'object'
+          || Array.isArray(args) || Object.keys(args).length > 0) {
+        return { code: 2, data: { error: 'usage' } };
+      }
+      const { listarDispositivos } = await import('./devices.mjs');
+      return listarDispositivos();
+    }
     case 'get_config': {
       // P2.1: sana igual que engines (curación ronda 5 intacta):
       // disponibilidad y constraints, JAMÁS rutas — el agente MCP

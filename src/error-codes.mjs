@@ -6,7 +6,7 @@ const ERROR_CODES = new Set([
   'text_too_long', 'session_invalid', 'session_expired',
   'session_abandoned', 'channel_busy', 'not_supported',
   'config_unreadable', 'config_write_failed', 'usage', 'internal_error',
-  'stopped',
+  'devices_unavailable', 'stopped',
 ]);
 
 export function normalizeErrorCode(code) {

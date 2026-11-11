@@ -33,6 +33,7 @@ Contrato documental (plan de consumo C0.3): toda variable leída por
 | `GLOSOMATA_CONFIG` | ruta alternativa de la matriz (`glosomata.json`) |
 | `GLOSOMATA_RUNTIME` | directorio base del lock y temporales (tests, sandboxes) |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura STT (rutas no estándar) |
+| `GLOSOMATA_SYSTEM_PROFILER` | binario system_profiler del inventario `devices` (tests herméticos) |
 
 Protocolo: JSON-RPC 2.0 por líneas. `initialize` (protocolVersion
 `2024-11-05`), `tools/list`, `tools/call`, `ping`. Requests desconocidos
@@ -51,6 +52,7 @@ inválidos → `-32600`.
 | `get_config` | — | matriz **saneada**: disponibilidad, selección y `constraints` — sin rutas del filesystem (la config COMPLETA es canal del operador: CLI `config get` / proyecto externo autenticado) |
 | `list_templates` | — | catálogo de plantillas base **con `turns`** |
 | `validate` | `session` (objeto inline), `text` | evalúa texto contra plantilla+turno |
+| `devices` | — | inventario de audio del HOST LOCAL (sólo lectura): entradas avfoundation + defaults del SO; ids NO estables; sin selección ni mute (`contrato-hardware-v1.md`) |
 
 Notas: el `≤2000` del schema de `speak` es sobre el texto crudo; el
 límite aplicado es post-canonización contra `constraints.max_text_chars`
@@ -119,7 +121,8 @@ a la taxonomía se entrega como `internal_error`:
 `mic_timeout`, `audio_device_error`, `template_invalid`, `not_found`,
 `text_too_long`, `session_invalid`, `session_expired`,
 `session_abandoned`, `channel_busy`, `not_supported`,
-`config_unreadable`, `config_write_failed`, `usage`, `internal_error` — más `stopped` cuando
+`config_unreadable`, `config_write_failed`, `usage`, `internal_error`,
+`devices_unavailable` — más `stopped` cuando
 `stop` interrumpe un `listen` en curso.
 
 El campo `causa` de audio, cuando se conoce, pertenece a
