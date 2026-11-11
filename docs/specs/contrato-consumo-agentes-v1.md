@@ -150,7 +150,7 @@ del dominio de runtime.
 | Variable | Efecto | Consumidor típico |
 |---|---|---|
 | `GLOSOMATA_CONFIG` | ruta alternativa de `glosomata.json` | cliente MCP (`env`) |
-| `GLOSOMATA_RUNTIME` | base de lock, temporales y socket de stop (§5.1: dominio de contención) | tests, sandboxes, runtimes propios |
+| `GLOSOMATA_RUNTIME` | lock, temporales y stop (§5.1) | tests, aislados |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura (STT) | rutas no estándar |
 
 Toda variable futura se documentará aquí antes de existir en código.
