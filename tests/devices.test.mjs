@@ -250,6 +250,20 @@ test('listarDispositivos: system cae pero ffmpeg lista → exit 0 degraded', asy
   });
 });
 
+test('listarDispositivos: timeout de ffmpeg en fallo total → listado_ilegible (R2)', async () => {
+  // Repro del capitán (r2): el binario EXISTE y corrió — se colgó y el
+  // tope lo aborta. Expectativa escrita a mano del contrato §3:
+  // listado_ilegible, jamás ffmpeg_ausente.
+  await conEnv({ GLOSOMATA_FFMPEG: ffmpegDormilon,
+    GLOSOMATA_SYSTEM_PROFILER: spBasura }, async () => {
+    const r = await listarDispositivos(
+      { plataforma: 'darwin', timeoutMs: 300 });
+    assert.equal(r.code, 1);
+    assert.deepEqual(r.data, { error: 'devices_unavailable',
+      causa: 'listado_ilegible' });
+  });
+});
+
 test('listarDispositivos: fallo total — precedencia de causas', async () => {
   await conEnv({ GLOSOMATA_FFMPEG: ffmpegBasura,
     GLOSOMATA_SYSTEM_PROFILER: spAusente }, async () => {

@@ -168,11 +168,13 @@ export async function listarDispositivos(
     ? parseSystemProfilerJson(sp.stdout) : null;
 
   if (entradas === null && items === null) {
-    // Fallo total. Precedencia contratada: binario ausente (o intocable)
-    // se nombra antes que listado ilegible; un exit genérico de ffmpeg
-    // con contenido ilegible NO prueba ausencia de dispositivos.
+    // Fallo total. Sólo el binario que NO pudo ejecutarse (spawn
+    // fallido o ruta vacía) nombra ffmpeg_ausente; un timeout (el
+    // binario existe y corrió) o un listado ilegible tras correr son
+    // listado_ilegible — jamás se infiere ausencia de dispositivos de
+    // un exit genérico o de un proceso colgado (contrato §3).
     return { code: 1, data: { error: 'devices_unavailable',
-      causa: ff.exit === undefined ? 'ffmpeg_ausente' : 'listado_ilegible' } };
+      causa: ff.fallo === 'spawn' ? 'ffmpeg_ausente' : 'listado_ilegible' } };
   }
 
   const devices = [];
