@@ -31,7 +31,10 @@ const TOOLS = [  { name: 'speak', description: 'Reproduce texto por voz localmen
   { name: 'listen', description: 'Captura micrófono y devuelve transcripción',
     inputSchema: { type: 'object', additionalProperties: false,
       properties: { timeout_s: { type: 'number', default: 10,
-        exclusiveMinimum: 0, maximum: 120 } } } },
+          exclusiveMinimum: 0, maximum: 120 },
+        // G2a: selección de ENTRADA por nombre EXACTO (contrato-hardware):
+        // homónimos y ausencia fail-closed; jamás índice.
+        device: { type: 'string', minLength: 1 } } } },
   { name: 'stop', description: 'Interrumpe la operación de canal activa',
     inputSchema: { type: 'object', additionalProperties: false,
       properties: {} } },
@@ -100,8 +103,21 @@ async function llamar(name, args) {
       return ops.speakMcp(args, stopAtStart);
     }
     case 'listen': {
+      // Fail-closed aunque el cliente ignore el schema (misma barrera
+      // que devices/get_config): sólo timeout_s y device, tipos exactos.
+      if (args === null || typeof args !== 'object'
+          || Array.isArray(args)) {
+        return { code: 2, data: { error: 'usage' } };
+      }
+      for (const [k, v] of Object.entries(args)) {
+        const ok = (k === 'timeout_s' && typeof v === 'number')
+          || (k === 'device' && typeof v === 'string');
+        if (!ok) return { code: 2, data: { error: 'usage' } };
+      }
       const argv = ['--timeout', String(args.timeout_s ?? 10)];
-      return ops.listenOp(argv, stopAtStart);
+      if (args.device !== undefined) argv.push('--device', args.device);
+      // MCP sin detalle de nombres en los errores (privacidad)
+      return ops.listenOp(argv, stopAtStart, { detalleNombres: false });
     }
     case 'stop':
       return ops.stopOp();

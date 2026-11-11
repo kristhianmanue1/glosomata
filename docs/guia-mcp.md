@@ -45,11 +45,11 @@ inválidos → `-32600`.
 | Tool | Args | Qué hace |
 |---|---|---|
 | `speak` | `text` (requerido), `engine?` | reproduce por voz localmente; `{played, engine, echo, truncated}` |
-| `listen` | `timeout_s?` (0<v≤120) | captura una **ventana fija** de hasta `timeout_s` y transcribe; la voz NO corta la captura — espera el timeout completo |
+| `listen` | `timeout_s?` (0<v≤120), `device?` (nombre exacto) | captura una **ventana fija** de hasta `timeout_s` y transcribe; la voz NO corta la captura — espera el timeout completo. Con `device`, selecciona la ENTRADA por nombre exacto (validación 0/1/N previa; homónimos y ausencia → `device_missing`; JAMÁS fallback a `:0`; fuera de darwin → `not_supported`) |
 | `stop` | — | interrumpe la operación de canal activa (kill-switch) |
 | `session_new` | `template_id?` | acuña sesión efímera v1 (la posee el agente); sin template → `template:null`; id desconocido → `not_found` |
 | `list_engines` | — | matriz de disponibilidad TTS/STT |
-| `get_config` | — | matriz **saneada**: disponibilidad, selección y `constraints` — sin rutas del filesystem (la config COMPLETA es canal del operador: CLI `config get` / proyecto externo autenticado) |
+| `get_config` | — | matriz **saneada**: disponibilidad, selección y `constraints` — sin rutas del filesystem (la config COMPLETA es canal del operador: CLI `config get` / proyecto externo autenticado); la whitelist tampoco incluye `engines.stt.input_device`: la preferencia de hardware JAMÁS sale por MCP |
 | `list_templates` | — | catálogo de plantillas base **con `turns`** |
 | `validate` | `session` (objeto inline), `text` | evalúa texto contra plantilla+turno |
 | `devices` | — | inventario de audio del HOST LOCAL (sólo lectura): entradas avfoundation + defaults del SO; ids NO estables; sin selección ni mute (`contrato-hardware-v1.md`) |
@@ -58,7 +58,16 @@ Notas: el `≤2000` del schema de `speak` es sobre el texto crudo; el
 límite aplicado es post-canonización contra `constraints.max_text_chars`
 (con config menor, textos ≤2000 fallan con `text_too_long`). El default
 de `timeout_s` por MCP es fijo (`10`); `constraints.listen_default_timeout_s`
-de la matriz rige sólo el CLI.
+de la matriz rige sólo el CLI. En los fallos de `listen` con `device`,
+la respuesta MCP JAMÁS lista los nombres disponibles del inventario
+(viajan sólo por CLI, canal local del Operador); los homónimos sí
+reportan el conteo («nombre ambiguo: N coincidencias»). La preferencia
+por defecto de entrada (`engines.stt.input_device`) vive en matriz
+EXTERNA fuera de Git (`GLOSOMATA_CONFIG`, 0600): la matriz versionada
+del repo jamás la lleva con valores personales, y el flujo es
+`config get engines` / `config set` / `config validate` contra la ruta
+efectiva — cada apertura revalida con no-fallback
+(`contrato-hardware-v1.md` §11).
 
 ## Semántica del canal
 
@@ -126,7 +135,10 @@ a la taxonomía se entrega como `internal_error`:
 `stop` interrumpe un `listen` en curso.
 
 El campo `causa` de audio, cuando se conoce, pertenece a
-`permission|device_missing|ffmpeg_missing|capture_failed|playback_failed|whisper_failed`.
+`permission|device_missing|ffmpeg_missing|capture_failed|playback_failed|whisper_failed|device_list_unavailable`
+(alta 2026-11-11: el listado de validación no fue verificable antes de
+una captura con `device` o preferencia — ni ausencia ni fallo de
+captura; sin apertura de micrófono y sin fallback a `:0`).
 Un fallo genérico de ffmpeg usa `capture_failed`; no se presenta como
 permiso denegado sin evidencia adicional.
 

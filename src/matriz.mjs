@@ -112,6 +112,19 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
     if (nSel !== 1) {
       veredicto.estructura.push(`selected: exactamente 1 motor en true (hay ${nSel})`);
     }
+    // G2a2: la preferencia de entrada se valida por TIPO y FORMA
+    // (charset/alias — la MISMA regla que listen aplica antes de abrir;
+    // el schema ya garantizó el tipo string). La PRESENCIA del
+    // dispositivo no se juzga aquí: se revalida contra el listado
+    // fresco en cada apertura, con no-fallback (contrato-hardware).
+    if (typeof cfg.engines.stt.input_device === 'string') {
+      const { causaFormaNombre } = await import('./stt.mjs');
+      const causa = causaFormaNombre(cfg.engines.stt.input_device);
+      if (causa !== null) {
+        veredicto.estructura.push(
+          `engines.stt.input_device: forma inválida (${causa})`);
+      }
+    }
     if (veredicto.estructura.length > 0) {
       return { code: 1, data: veredicto };
     }

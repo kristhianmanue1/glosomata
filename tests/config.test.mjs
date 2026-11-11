@@ -195,6 +195,31 @@ test('config validate: --file sin valor o args extra → usage (exit 2)', () => 
     (e) => e.status === 2);
 });
 
+// —— G2a2: la preferencia se valida por TIPO y FORMA (charset/alias),
+// NUNCA por presencia en el hardware (eso se revalida al abrir) ——
+
+test('config validate: input_device con forma inválida → rechazo', () => {
+  for (const mala of ['', 'default', 'none', 'a:b', 'con "comillas"']) {
+    const cfg = structuredClone(CONFIG_VALIDA);
+    cfg.engines.stt.input_device = mala;
+    const r = veredicto(['config', 'validate'], configAislada(cfg));
+    assert.equal(r.code, 1, JSON.stringify(mala));
+    assert.ok(r.data.estructura.length > 0, JSON.stringify(mala));
+    // '' lo rechaza el schema (minLength); el resto, la regla de forma
+    if (mala !== '') {
+      assert.ok(r.data.estructura.some((x) => x.includes('input_device')),
+        JSON.stringify(mala));
+    }
+  }
+});
+
+test('config validate: input_device válida → estructura limpia', () => {
+  const cfg = structuredClone(CONFIG_VALIDA);
+  cfg.engines.stt.input_device = 'Entrada Generica Preferida';
+  const r = veredicto(['config', 'validate'], configAislada(cfg));
+  assert.deepEqual(r.data.estructura, []);
+});
+
 // —— config set (P1.2): replace atómico validado + backup ——
 
 const { readFileSync, readdirSync, statSync,

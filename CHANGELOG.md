@@ -6,6 +6,42 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **selección de entrada por nombre y preferencia externa
+  (G2a/G2a2/G2b)** — `listen --device "<nombre-exacto>"` (CLI) y campo
+  opcional `device` en la tool MCP `listen` (schema
+  `additionalProperties:false` actualizado en el mismo commit): binding
+  por NOMBRE (`:<nombre>` resuelto por AVFoundation al abrir, dentro
+  del mismo proceso ffmpeg) — el índice del listado JAMÁS viaja (la
+  selección por índice está rechazada: puede reordenarse hacia otro
+  micrófono válido en silencio). Validación 0/1/N contra el listado
+  ffmpeg fresco ANTES de abrir: 0 → `device_missing` (+ nombres
+  disponibles, sólo CLI; MCP jamás los lleva), >1 homónimos →
+  `device_missing` con «nombre ambiguo: N coincidencias», forma
+  inválida (vacío, `:` o comillas, alias `default`/`none`) → `usage`,
+  listado no verificable → `audio_device_error` con causa NUEVA
+  `device_list_unavailable` (alta en el §5 del contrato de consumo:
+  ni ausencia ni captura rota; sin abrir micrófono y sin invocar el
+  ffmpeg de captura; jamás fallback a `:0`). Fuera de darwin con
+  petición → `not_supported`; sin petición, conducta original intacta.
+  G2a2: preferencia por defecto `engines.stt.input_device` (schema
+  aditivo) que vive en matriz EXTERNA 0600 fuera de Git
+  (`GLOSOMATA_CONFIG`) — la matriz versionada del repo jamás lleva
+  valores personales de hardware; `config validate` juzga TIPO y
+  FORMA (charset/alias, no presencia); precedencia
+  `--device` > `input_device` > `:0` con revalidación en cada apertura
+  y NO-FALLBACK; `doctor` la reporta como advisory informativo sin
+  afectar el exit; `get_config` saneado sin la clave ni su valor (test
+  que lo afirma). G2b: mute documentado en
+  `contrato-hardware-v1.md` §12 (glosomata NO ofrece mute; omitir
+  `speak`/`listen` es política del consumidor; el mute del sistema
+  exige CoreAudio nativo, ADR) y §13 frontera de integración con el
+  consumidor de voz (inventario compartido, semántica por referencia,
+  control NO unificado). Residuales SIN atenuación en
+  `contrato-hardware-v1.md` §10: el nombre NO es identidad estable,
+  sin UID no hay garantía absoluta ante hotplug (build 8.1.1 sin
+  `-audio_device_id`), exposición del nombre en argv declarada,
+  binding físico `inconclusive` hasta ensayo vivo autorizado.
+
 - feat: **inventario de dispositivos (`devices`, G0+G1)** — comando CLI
   (superficie estricta: sin flags, extra → `usage`) y 9ª tool MCP sin
   parámetros: lista dispositivos de audio del HOST LOCAL, sólo lectura,

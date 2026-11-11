@@ -83,7 +83,12 @@
       "additionalProperties": false,
       "properties": {
         "whisper_bin": { "type": "string", "minLength": 1 },
-        "whisper_model": { "type": "string", "minLength": 1 }
+        "whisper_model": { "type": "string", "minLength": 1 },
+        "input_device": {
+          "type": "string",
+          "minLength": 1,
+          "description": "G2a2: preferencia POR DEFECTO de entrada por nombre EXACTO (semántica: docs/specs/contrato-hardware-v1.md). REGLA DE PRIVACIDAD: la matriz versionada de este repo NUNCA lleva el valor real del Operador — la preferencia personal vive en matriz EXTERNA 0600 fuera de Git, elegida con GLOSOMATA_CONFIG. La PRESENCIA del dispositivo no se valida aquí: se revalida contra el listado ffmpeg fresco en cada apertura (no-fallback, jamás :0 en silencio); config validate sólo juzga TIPO y FORMA (charset/alias)."
+        }
       },
       "description": "Claves opcionales: sin ellas el STT queda no disponible (fail-closed de diagnosticoWhisper), el TTS sigue operativo."
     },

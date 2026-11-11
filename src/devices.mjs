@@ -131,6 +131,22 @@ function correr(argv, timeoutMs) {
   });
 }
 
+// Listado de ENTRADAS según ffmpeg — la ÚNICA fuente de la validación
+// de la selección por nombre (G2a): sin system_profiler y sin defaults
+// del SO, la decisión de captura no se apoya en otra fuente. → array
+// de parseListadoFfmpeg o null si el binario no corrió o el listado no
+// es legible (fail-closed, jamás throw; sólo lectura, no abre canal).
+export async function listarEntradasFfmpeg(
+  { timeoutMs = TIMEOUT_MS } = {}
+) {
+  const ffmpeg = rutaFfmpeg();
+  if (!ffmpeg) return null;
+  const ff = await correr([ffmpeg, '-hide_banner', '-f', 'avfoundation',
+    '-list_devices', 'true', '-i', ''], timeoutMs);
+  if (ff.exit === undefined) return null;
+  return parseListadoFfmpeg(`${ff.stderr}\n${ff.stdout}`);
+}
+
 // Inventario de audio del host local (sólo lectura). {code, data}:
 //   exit 0 → {devices, platform, captured_at,
 //             limits: {id_estable: false, seleccion_salida: false},

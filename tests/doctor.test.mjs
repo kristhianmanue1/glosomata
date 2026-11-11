@@ -1,7 +1,7 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -183,3 +183,115 @@ test('doctor: motor sin kill_switch → sin_kill_switch, probe no corre', () => 
   assert.equal(say.available, false);
   assert.equal(say.causa, 'sin_kill_switch');
 });
+
+// —— G2a2: advisory de preferencia de entrada (INFORMATIVO: reporta si
+// hay preferencia y si resuelve; JAMÁS afecta el exit del veredicto) ——
+
+const LISTADO_PREF = [
+  '[AVFoundation indev @ 0x1] AVFoundation audio devices:',
+  '[AVFoundation indev @ 0x1] [0] Entrada Cero',
+  '[AVFoundation indev @ 0x1] [1] Entrada Uno',
+  '[AVFoundation indev @ 0x1] [2] Entrada Doble',
+  '[AVFoundation indev @ 0x1] [3] Entrada Doble',
+].join('\n');
+
+const dirPref = mkdtempSync(join(tmpdir(), 'glosomata-doctor-g2-'));
+function falsoPref(nombre, cuerpo) {
+  const ruta = join(dirPref, nombre);
+  writeFileSync(ruta, `#!/usr/bin/env node\n${cuerpo}\n`);
+  chmodSync(ruta, 0o755);
+  return ruta;
+}
+const ffmpegPref = falsoPref('ffmpeg-pref',
+  `process.stderr.write(${JSON.stringify(LISTADO_PREF)});process.exit(251);`);
+const ffmpegPrefBasura = falsoPref('ffmpeg-pref-basura',
+  `process.stderr.write('basura\\nsin seccion\\n');process.exit(1);`);
+
+test('doctor: preferencia resuelve → advisory presente, exit intacto', (t) => {
+  if (process.platform !== 'darwin') {
+    return t.skip('el listado avfoundation sólo se consulta en darwin');
+  }
+  const con = configTemporal({
+    engines: { tts: [], stt: { input_device: 'Entrada Cero' } },
+    constraints: {},
+  });
+  const sin = configTemporal({
+    engines: { tts: [], stt: {} },
+    constraints: {},
+  });
+  const rCon = doctor({ GLOSOMATA_CONFIG: con, GLOSOMATA_FFMPEG: ffmpegPref });
+  const rSin = doctor({ GLOSOMATA_CONFIG: sin, GLOSOMATA_FFMPEG: ffmpegPref });
+  // el advisory jamás decide el exit: mismo veredicto con y sin preferencia
+  assert.equal(rCon.code, rSin.code);
+  const d = JSON.parse(rCon.out);
+  assert.deepEqual(d.stt.input_device,
+    { name: 'Entrada Cero', resuelve: true });
+  assert.equal(JSON.parse(rSin.out).stt.input_device, undefined);
+});
+
+test('doctor: preferencia ausente → device_missing advisory; homónima → detalle', (t) => {
+  if (process.platform !== 'darwin') return t.skip('listado sólo en darwin');
+  const ausente = configTemporal({
+    engines: { tts: [], stt: { input_device: 'Entrada Fantasma' } },
+    constraints: {},
+  });
+  const r = doctor({ GLOSOMATA_CONFIG: ausente, GLOSOMATA_FFMPEG: ffmpegPref });
+  const d = JSON.parse(r.out);
+  assert.deepEqual(d.stt.input_device,
+    { name: 'Entrada Fantasma', resuelve: false, causa: 'device_missing' });
+
+  const ambigua = configTemporal({
+    engines: { tts: [], stt: { input_device: 'Entrada Doble' } },
+    constraints: {},
+  });
+  const r2 = doctor({ GLOSOMATA_CONFIG: ambigua, GLOSOMATA_FFMPEG: ffmpegPref });
+  const d2 = JSON.parse(r2.out);
+  assert.equal(d2.stt.input_device.resuelve, false);
+  assert.equal(d2.stt.input_device.causa, 'device_missing');
+  assert.equal(d2.stt.input_device.detalle, 'nombre ambiguo: 2 coincidencias');
+});
+
+test('doctor: preferencia con forma inválida → forma_invalida (sin listar)', (t) => {
+  // sin GLOSOMATA_FFMPEG: la forma se juzga ANTES de cualquier sonda
+  const ruta = configTemporal({
+    engines: { tts: [], stt: { input_device: 'a:b' } },
+    constraints: {},
+  });
+  const { code, out } = doctor({ GLOSOMATA_CONFIG: ruta });
+  const d = JSON.parse(out);
+  assert.deepEqual(d.stt.input_device,
+    { name: 'a:b', resuelve: false, causa: 'forma_invalida' });
+  // el exit sigue siendo el del veredicto base (tts vacío → 1)
+  assert.equal(code, 1);
+});
+
+test('doctor: listado ilegible con preferencia → device_list_unavailable', (t) => {
+  if (process.platform !== 'darwin') return t.skip('listado sólo en darwin');
+  const ruta = configTemporal({
+    engines: { tts: [], stt: { input_device: 'Entrada Uno' } },
+    constraints: {},
+  });
+  const r = doctor({
+    GLOSOMATA_CONFIG: ruta, GLOSOMATA_FFMPEG: ffmpegPrefBasura,
+  });
+  const d = JSON.parse(r.out);
+  // ni resuelve ni ausente: no pude verificar el inventario
+  assert.deepEqual(d.stt.input_device,
+    { name: 'Entrada Uno', resuelve: null, causa: 'device_list_unavailable' });
+});
+
+test('doctor: preferencia en host sin darwin → plataforma_no_soportada', (t) => {
+  if (process.platform === 'darwin') {
+    return t.skip('sólo observable en hosts no-darwin (CI linux)');
+  }
+  const ruta = configTemporal({
+    engines: { tts: [], stt: { input_device: 'Entrada Uno' } },
+    constraints: {},
+  });
+  const r = doctor({ GLOSOMATA_CONFIG: ruta, GLOSOMATA_FFMPEG: ffmpegPref });
+  const d = JSON.parse(r.out);
+  assert.deepEqual(d.stt.input_device,
+    { name: 'Entrada Uno', resuelve: false, causa: 'plataforma_no_soportada' });
+});
+
+after(() => rmSync(dirPref, { recursive: true, force: true }));
