@@ -6,6 +6,25 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **ADR-012 + contrato de diarización v1 (PROPUESTA, fase D0)** —
+  diarización efímera sin retención con pyannote
+  speaker-diarization-community-1 (código MIT, pesos CC-BY-4.0 espejados
+  en disco por el Operador; inferencia 100% local por subprocess Python
+  con venv separado). Comando `diarize` CLI-only (sin tool MCP en v1):
+  recibe audio de entrada en sólo lectura y devuelve turnos de hablante
+  en modo EXCLUSIVO (única salida v1) sin persistir nada — la
+  persistencia de embeddings, enrollment e identificación vive en el
+  consumidor tequio. Entorno del subprocess fijado:
+  `PYANNOTE_METRICS_ENABLED=0` (telemetría OFF) y `HF_HUB_OFFLINE=1`.
+  Alta propuesta de `diar_failed` con causas cerradas; `engines.diar`
+  ausente → `not_supported`. Topes EVALUABLES: `diar_max_duration_s`
+  (default 14400) y `diar_max_wall_s` (default 7200). doctor: `diar`
+  declarado-but-roto tumbará el exit (criterio phonon_ollama/lfm3;
+  wiring en D1/D2). Enmienda quirúrgica del no-objetivo «WAV externo
+  como entrada»: acotado a `listen`. D0 es sólo documentación; el
+  contrato pasa a normativo con su aceptación y ronda adversarial
+  (D3); ensayo vivo pendiente de autorización expresa del Operador.
+
 - feat: **selección de entrada por nombre y preferencia externa
   (G2a/G2a2/G2b)** — `listen --device "<nombre-exacto>"` (CLI) y campo
   opcional `device` en la tool MCP `listen` (schema

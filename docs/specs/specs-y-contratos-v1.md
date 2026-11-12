@@ -267,5 +267,7 @@ glosomata (ADR-001).
 
 Streaming de audio; cola/prioridad de turnos (REQ-12 pospuesto a v2);
 expectation intent-free; servidor HTTP/socket; WAV externo como entrada
-(listen captura del micrófono, 16 kHz mono PCM interno); multiusuario;
-VAD/barge-in (candidato v1.1 con ADR propio).
+en `listen` (listen captura del micrófono, 16 kHz mono PCM interno —
+el consumo de audio externo es superficie propia de `diarize` desde
+ADR-012: `contrato-diarizacion-v1.md`); multiusuario; VAD/barge-in
+(candidato v1.1 con ADR propio).
