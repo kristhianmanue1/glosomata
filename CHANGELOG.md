@@ -33,8 +33,10 @@ generadas desde commits/PRs reales.
   subprocess acotado a 16 MiB. Docs en el mismo commit: spec §CLI
   (operación diarize), contrato de consumo §2.1/§3/§7.1 (forma
   `diar:null` — LOW del issue #43)/historia v1.5, contrato de
-  diarización §3.1/§4/§5/§6/historia v1.2. Tests: +11 herméticos con
-  falso python que registra argv/env (29 en tests/diar.test.mjs);
+  diarización §3.1/§4/§5/§6/historia v1.2. Tests: +14 herméticos con
+  falso python que registra argv/env (32 en tests/diar.test.mjs, ronda
+  r1 incluida: frontera Node↔script con python3 del sistema, turno
+  sub-milisegundo y tope de stdout);
   `get_config` pineado limpio con matriz diar (LOW del issue #43).
   El venv `.venv-diar`, el espejo de pesos y el ensayo vivo D3 quedan
   pendientes de decisión y autorización expresa del Operador;
