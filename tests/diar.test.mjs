@@ -5,7 +5,7 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync,
   readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,6 +67,12 @@ const modos = {
     { speaker: 'y', start_s: 1, end_s: 3 },
   ] }),
   plano: () => emitir({ turns: [{ speaker: 'x', start_s: 1, end_s: 1 }] }),
+  subms: () => emitir({ turns: [
+    { speaker: 'x', start_s: 1.0001, end_s: 1.0002 },
+  ] }),
+  gigante: () => {
+    process.stdout.write('x'.repeat(17 * 1024 * 1024)); salir(0);
+  },
   lento: () => setTimeout(() => emitir({ turns: [] }), 30000),
 };
 (modos[modo] ?? (() => salir(1)))();
@@ -450,6 +456,51 @@ test('diarize: resultados inválidos → inferencia_fallida (fail-closed)', () =
     assert.match(r.err, /diar_failed/, modo);
     assert.match(r.err, /inferencia_fallida/, modo);
   }
+});
+
+test('diarize: turno sub-milisegundo colapsa al redondear → fallo (H-2 r1)', () => {
+  // crudo 1.0001→1.0002 valida como end>start pero redondea a 1,1
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_MODE: 'subms' });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /inferencia_fallida/);
+});
+
+test('diarize: stdout sobre el tope 16 MiB → inferencia_fallida (H-3 r1)', () => {
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_MODE: 'gigante' });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /diar_failed/);
+  assert.match(r.err, /inferencia_fallida/);
+});
+
+// H-1 (r1, BLOCKER): anclar la frontera Node↔script REAL — el script
+// del repo con python3 DEL SISTEMA (stdlib sólo; los imports de
+// pyannote viven DESPUÉS de estos guards): la forma exacta que
+// diar.mjs construye debe pasar el guard de argv, y los exits
+// tempranos (2/3) deben ser los contratados.
+test('script real: guard de argv y exits tempranos sin pyannote', () => {
+  const script = new URL('../src/diar/diarize_pyannote.py',
+    import.meta.url).pathname;
+  const correr = (args, env) => spawnSync('python3',
+    [script, ...args], { encoding: 'utf8', env: { ...process.env,
+      ...env } });
+  const ENV_OK = { PYANNOTE_METRICS_ENABLED: '0', HF_HUB_OFFLINE: '1' };
+
+  // env sin las dos variables exigidas → exit 2 (rehúsa)
+  const sinEnv = correr(['/no/pipeline', '/no/audio.wav', '14400'],
+    { PYANNOTE_METRICS_ENABLED: undefined, HF_HUB_OFFLINE: undefined });
+  assert.equal(sinEnv.status, 2);
+
+  // forma EXACTA de diar.mjs (4 tokens tras el intérprete): el guard
+  // acepta y el audio inexistente responde exit 3 ANTES de importar
+  const formaReal = correr(['/no/pipeline', '/no/audio.wav', '14400'],
+    ENV_OK);
+  assert.equal(formaReal.status, 3);
+
+  // token extra → exit 2 de nuevo
+  const extra = correr(['/no/p', '/no/a.wav', '1', 'extra'], ENV_OK);
+  assert.equal(extra.status, 2);
 });
 
 test('diarize: wall-clock evaluado → diar_failed/timeout_inferencia', () => {

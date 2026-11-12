@@ -95,6 +95,12 @@ export function canonizarTurnos(turns) {
   for (let i = 1; i < validos.length; i++) {
     if (validos[i - 1].end_s > validos[i].start_s) return null; // solape
   }
+  // el redondeo a milésimas es monótono (no crea solapes) pero puede
+  // COLAPSAR un turno sub-milisegundo a end == start (hallazgo H-2,
+  // ronda r1): re-chequeo tras redondear, fail-closed
+  for (const t of validos) {
+    if (t.end_s <= t.start_s) return null;
+  }
   const etiquetas = new Map();
   const out = validos.map((t) => {
     if (!etiquetas.has(t.speaker)) {
@@ -211,7 +217,9 @@ function correrDiarizacion(d, rutaAudio, maxDurS, maxWallS, detenido) {
       if (detenido()) matarGrupo(child);
     }, 50);
     child.stdout.on('data', (x) => {
-      // cota de memoria: lo que excede el tope se descarta y falla
+      // cota de memoria en unidades UTF-16 (equivalente aproximada
+      // del tope en bytes para el JSON del motor; hallazgo H-6 r1:
+      // declarado, no convertido): lo que excede se descarta y falla
       if (stdout.length <= TOPE_STDOUT) stdout += x.toString();
     });
     child.on('error', () => {

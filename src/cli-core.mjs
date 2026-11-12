@@ -28,6 +28,8 @@ comandos:
                                        exclusivo; sin persistir nada; sin
                                        canal.lock) — requiere engines.diar
   stop                                 interrumpe la operación de canal activa
+                                       (y la diarización en curso de su
+                                       runtime, vía registro de esperador)
   engines                              lista disponibilidad y selección
   version                              nombre y versión del paquete
   doctor                               diagnóstico de instalación (JSON)

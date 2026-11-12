@@ -14,7 +14,7 @@ tres perfiles de consumidor:
 | Perfil | Superficie | Estado v1 |
 |---|---|---|
 | Agente con cliente MCP | MCP stdio (9 tools) | Contratado |
-| Agente/script con shell | CLI v1 (11 comandos) | Contratado |
+| Agente/script con shell | CLI v1 (12 comandos) | Contratado |
 | Programa Node (import directo) | `src/ops.mjs` etc. | **NO contratado** |
 | Cliente HTTP/remoto | — | No-objetivo declarado |
 

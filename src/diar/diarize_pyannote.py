@@ -33,7 +33,9 @@ def mal_uso(mensaje: str) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) != 5:
+    # sys.argv NO incluye al intérprete: [script, pipeline, audio, max]
+    # son CUATRO elementos (contrato §4: 5 tokens a nivel OS).
+    if len(sys.argv) != 4:
         mal_uso(
             "uso: diarize_pyannote.py <pipeline_dir> <audio> "
             "<max_duration_s>"
