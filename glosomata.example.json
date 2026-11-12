@@ -52,6 +52,11 @@
     "stt": {
       "whisper_bin": "/ruta/a/whisper-cli",
       "whisper_model": "/ruta/a/ggml-small.bin"
+    },
+    "diar": {
+      "python": "/ruta/a/.venv-diar/bin/python",
+      "script": "src/diar/diarize_pyannote.py",
+      "pipeline": "/ruta/a/.local-models/pyannote/speaker-diarization-community-1"
     }
   },
   "constraints": {
@@ -60,6 +65,8 @@
     "session_ttl_min": 15,
     "max_text_chars": 2000,
     "max_pattern_chars": 200,
-    "listen_default_timeout_s": 10
+    "listen_default_timeout_s": 10,
+    "diar_max_duration_s": 14400,
+    "diar_max_wall_s": 7200
   }
 }

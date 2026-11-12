@@ -6,6 +6,26 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **D1 de diarización (ADR-012): schema, alta de `engines.diar`
+  y wiring de doctor/config** — el schema formal abre `engines.diar`
+  {python, script, pipeline} (las TRES requeridas si se declara:
+  python del venv SEPARADO, script del repo, pipeline = espejo local
+  con `config.yaml` como firma estructural) y los constraints
+  evaluables `diar_max_duration_s` (60–86400, default 14400) y
+  `diar_max_wall_s` (60–86400, default 7200). `src/diar.mjs` añade el
+  probe ESTRUCTURAL `diagnosticoDiar` (causas cerradas
+  `python_ausente | script_ausente | pesos_ausentes |
+  probe_fallido`; jamás ejecuta nada); `config validate`/`config set`
+  lo sondean: diar DECLARADO debe pasar (regla phonon_ollama/lfm3,
+  veredicto `diar: {declarado, available, causa?}`); `doctor` gana la
+  sección opcional `diar` con gate — declarado-but-roto tumba el
+  exit, no declarado no afecta a las matrices existentes (tests de
+  regresión). `get_config` de MCP sin exposición: diarización es
+  CLI-only v1. Sin comando `diarize` todavía (D2, con el alta de
+  `diar_failed`); H-1/H-2 del issue #43 quedan para D2. Spec §matriz,
+  contrato de consumo §7.1 + historia v1.4 y
+  contrato-diarizacion-v1 §6/§7/historia en el mismo commit.
+
 - docs: **ADR-012 + contrato de diarización v1 (PROPUESTA, fase D0)** —
   diarización efímera sin retención con pyannote
   speaker-diarization-community-1 (código MIT, pesos CC-BY-4.0 espejados

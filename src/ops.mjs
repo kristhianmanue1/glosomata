@@ -335,6 +335,12 @@ export async function doctorOp() {
     ? await diagnosticoWhisper(cfg)
     : { ok: false, causa: 'config_unreadable' };
 
+  // D1 (ADR-012): sección diar SÓLO si la matriz declara engines.diar.
+  // Declarado-but-roto TUMBA el exit (criterio phonon_ollama/lfm3);
+  // no declarado: ni sección ni efecto (matrices existentes intactas).
+  const { diagnosticoDiar } = await import('./diar.mjs');
+  const diar = cfg ? await diagnosticoDiar(cfg) : null;
+
   // G2a2: preferencia de entrada — sección INFORMATIVA: reporta si hay
   // preferencia y si resuelve contra el listado fresco (advisory
   // device_missing si no); JAMÁS afecta el exit del veredicto.
@@ -369,9 +375,13 @@ export async function doctorOp() {
 
   const data = { node, config, tts,
     stt: { whisper, ffmpeg,
-      ...(entrada ? { input_device: entrada } : {}) } };
+      ...(entrada ? { input_device: entrada } : {}) },
+    ...(diar ? { diar: { ok: diar.ok,
+      ...(diar.ok ? {} : { causa: diar.causa ?? 'probe_fallido' }) } }
+      : {}) };
   const operativo = node.ok && config.ok && tts.length > 0
-    && tts.every((t) => t.available) && whisper.ok && ffmpeg.ok;
+    && tts.every((t) => t.available) && whisper.ok && ffmpeg.ok
+    && (diar === null || diar.ok);
   return { code: operativo ? 0 : 1, data };
 }
 

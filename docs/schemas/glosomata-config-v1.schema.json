@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "glosomata/config/v1",
   "title": "glosomata.json — matriz de configuración v1",
-  "description": "Referencia formal de la matriz; la autoridad en runtime es src/matriz.mjs. Claves por adaptador: voice/rate (say), bin/model/sample_rate (piper), python/script/model/voice/pitch_scale (kokoro), model/voice (phonon_ollama; bin opcional sólo si es /usr/bin/curl, validado en probe), lfm3 con auth_file obligatorio en la práctica (archivo 0600 con las cabeceras Bearer y X-Project-ID del gateway; URL fija http://127.0.0.1:8092, voz fija es; bin opcional sólo si es /usr/bin/curl, validado en probe; ADR-011). constraints.max_text_chars aplica en TODAS las superficies con 2000 como tope duro (H1); las claves marcadas deprecated no tienen lector en src/ y su endgame es remoción del example (max_pattern_chars duplica el límite duro 200 del contrato §plantilla).",
+  "description": "Referencia formal de la matriz; la autoridad en runtime es src/matriz.mjs. Claves por adaptador: voice/rate (say), bin/model/sample_rate (piper), python/script/model/voice/pitch_scale (kokoro), model/voice (phonon_ollama; bin opcional sólo si es /usr/bin/curl, validado en probe), lfm3 con auth_file obligatorio en la práctica (archivo 0600 con las cabeceras Bearer y X-Project-ID del gateway; URL fija http://127.0.0.1:8092, voz fija es; bin opcional sólo si es /usr/bin/curl, validado en probe; ADR-011). engines.diar (D1, ADR-012): opcional; si se declara, las TRES rutas son requeridas (python del venv SEPARADO, script del repo, pipeline = espejo local de pyannote/speaker-diarization-community-1, un directorio con config.yaml; glosomata jamás descarga pesos). constraints.max_text_chars aplica en TODAS las superficies con 2000 como tope duro (H1); los topes diar_max_duration_s/diar_max_wall_s son EVALUADOS por la superficie diarize (D2) con defaults 14400/7200; las claves marcadas deprecated no tienen lector en src/ y su endgame es remoción del example (max_pattern_chars duplica el límite duro 200 del contrato §plantilla).",
   "type": "object",
   "additionalProperties": false,
   "required": ["engines"],
@@ -16,12 +16,36 @@
           "type": "array",
           "items": { "$ref": "#/definitions/motor" }
         },
-        "stt": { "$ref": "#/definitions/stt" }
+        "stt": { "$ref": "#/definitions/stt" },
+        "diar": { "$ref": "#/definitions/diar" }
       }
     },
     "constraints": { "$ref": "#/definitions/constraints" }
   },
   "definitions": {
+    "diar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "script", "pipeline"],
+      "properties": {
+        "python": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Intérprete del venv SEPARADO de diarización (p. ej. .venv-diar/bin/python): pyannote.audio >= 4 y sus dependencias (torch, torchcodec) viven ahí, no en el venv de kokoro/piper (ADR-012). Instalación del Operador; glosomata jamás instala dependencias."
+        },
+        "script": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Script Python del adaptador (D2; p. ej. src/diar/diarize_pyannote.py). El script no escribe artefactos de datos."
+        },
+        "pipeline": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ruta al espejo LOCAL del pipeline pyannote/speaker-diarization-community-1 (clonado con git-lfs tras aceptar condiciones): directorio con config.yaml — la firma estructural que el probe exige (pesos_ausentes si falta). La carga es por ruta, jamás por red (HF_HUB_OFFLINE=1 en el subprocess, D2)."
+        }
+      },
+      "description": "Motor de diarización (opcional, ADR-012). Ausente: la superficie diarize responde not_supported. Declarado: config validate/set y doctor exigen que el probe estructural pase (regla phonon_ollama/lfm3). No es un motor tts[]: sin kill_switch ni selected (contrato-diarizacion-v1.md §6)."
+    },
     "motor": {
       "type": "object",
       "additionalProperties": false,
@@ -107,6 +131,18 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 120
+        },
+        "diar_max_duration_s": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400,
+          "description": "D1 (ADR-012): tope EVALUADO de duración del audio de entrada de diarize (D2). Default 14400; excedido → diar_failed/audio_demasiado_largo (contrato-diarizacion-v1.md §3.1)."
+        },
+        "diar_max_wall_s": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400,
+          "description": "D1 (ADR-012): presupuesto wall-clock EVALUADO por operación diarize (D2). Default 7200; excedido → SIGKILL al grupo y diar_failed/timeout_inferencia. A diferencia del max_latency_ms de TTS (declarativo), este tope sí se evalúa."
         },
         "validation_floor_ms": {
           "type": "integer",

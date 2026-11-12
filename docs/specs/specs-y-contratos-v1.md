@@ -235,7 +235,15 @@ su frontera de entrada
 canonización) responde `text_too_long`/`not_supported` antes de
 solicitar. engines.stt {whisper_bin?, whisper_model?, input_device?} —
 sin claves de whisper el STT queda no disponible (fail-closed), el TTS
-sigue. `input_device` (G2a2, 2026-11-11): preferencia de entrada por
+sigue. `engines.diar` {python, script, pipeline} es OPCIONAL (D1,
+ADR-012): las tres rutas requeridas si se declara — python del venv
+SEPARADO, script del repo, pipeline = espejo local de pyannote
+speaker-diarization-community-1 (directorio con `config.yaml`) —;
+declarado, el probe estructural debe pasar en `config validate`/`set`
+y `doctor` (regla phonon_ollama/lfm3); ausente, la superficie
+`diarize` (D2) responde `not_supported`. Semántica:
+`contrato-diarizacion-v1.md`. `input_device` (G2a2, 2026-11-11):
+preferencia de entrada por
 nombre EXACTO — la matriz versionada de este repo NUNCA lleva valores
 personales del Operador: la preferencia vive en matriz externa 0600
 fuera de Git, elegida con `GLOSOMATA_CONFIG` (ruta efectiva = env ??
@@ -244,8 +252,11 @@ nunca presencia) y cada apertura la revalida contra el listado fresco
 con NO-FALLBACK (`device_missing`, jamás `:0` en silencio).
 constraints {validation_floor_ms*, confirmation_channels*,
 session_ttl_min, max_text_chars, max_pattern_chars*,
-listen_default_timeout_s} — (*) sin lector en src/, deprecadas en el
-schema; `max_pattern_chars` duplica el límite duro 200 de §plantilla.
+listen_default_timeout_s, diar_max_duration_s?, diar_max_wall_s?} —
+(*) sin lector en src/, deprecadas en el schema; `max_pattern_chars`
+duplica el límite duro 200 de §plantilla. Los topes de diarización
+(D1, ADR-012) son EVALUADOS por la superficie `diarize` (D2), con
+defaults 14400/7200 s y rangos 60–86400 en el schema.
 Referencia formal con rangos:
 `docs/schemas/glosomata-config-v1.schema.json` (ADR-008); `matriz.mjs`
 sigue siendo la autoridad en runtime. `max_text_chars`: tope duro 2000

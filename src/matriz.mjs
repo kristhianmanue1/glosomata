@@ -75,7 +75,7 @@ const SECCIONES = new Set(['engines', 'constraints']);
 // lo DECLARADO pasa (stt sin claves declaradas no invalida: es
 // no-disponible fail-closed, no config rota).
 export async function validarConfig(ruta = RUTA_CONFIG) {
-  const veredicto = { estructura: [], motores: null, stt: null };
+  const veredicto = { estructura: [], motores: null, stt: null, diar: null };
 
   let cfg;
   try {
@@ -146,8 +146,19 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
     declarado: sttDeclarado, available: whisper.ok,
     ...(whisper.ok ? {} : { causa: whisper.causa }),
   };
+  // D1 (ADR-012): diar declarado debe pasar el probe estructural
+  // (misma regla que los motores tts: declarado-but-roto bloquea el
+  // set). No declarado → null (la superficie responde not_supported,
+  // no es config rota).
+  const { diagnosticoDiar } = await import('./diar.mjs');
+  const diar = await diagnosticoDiar(sondeada);
+  veredicto.diar = diar === null ? null : {
+    declarado: true, available: diar.ok,
+    ...(diar.ok ? {} : { causa: diar.causa }),
+  };
   const ok = veredicto.motores.every((m) => m.available)
-    && (!sttDeclarado || whisper.ok);
+    && (!sttDeclarado || whisper.ok)
+    && (veredicto.diar === null || veredicto.diar.available);
   return { code: ok ? 0 : 1, data: veredicto };
 }
 
@@ -231,7 +242,7 @@ export async function escribirConfig(rutaCandidata, destino = RUTA_CONFIG) {
     if (v.code !== 0) {
       return { code: 1, data: { error: 'config_write_failed',
         estructura: v.data.estructura, motores: v.data.motores,
-        stt: v.data.stt } };
+        stt: v.data.stt, diar: v.data.diar } };
     }
     // backup del actual (si existe): junto al lock, 0600, últimas 5
     const { rutaBackups } = await import('./canal.mjs');
@@ -257,7 +268,7 @@ export async function escribirConfig(rutaCandidata, destino = RUTA_CONFIG) {
     await rename(tmp, destino);
     return { code: 0, data: { ok: true,
       ...(backup ? { backup } : {}), motores: v.data.motores,
-      stt: v.data.stt } };
+      stt: v.data.stt, diar: v.data.diar } };
   } catch (e) {
     return { code: 1, data: { error: 'config_write_failed',
       causa: String(e.code ?? e.message) } };

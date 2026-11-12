@@ -222,6 +222,15 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   device_missing | device_list_unavailable` (con `resuelve:null`
   cuando el listado no pudo verificarse). El advisory JAMÁS afecta el
   exit del veredicto.
+- `diar: {ok, causa?}` (D1, 2026-11-12, ADR-012) — sección OPCIONAL:
+  aparece sólo si la matriz declara `engines.diar` {python, script,
+  pipeline} (semántica en `contrato-diarizacion-v1.md` §6-§7).
+  Causas del conjunto cerrado `python_ausente | script_ausente |
+  pesos_ausentes | probe_fallido`. DECLARADO-BUT-ROTO tumba el exit
+  (criterio `phonon_ollama`/`lfm3`); no declarado: ni sección ni
+  efecto en el veredicto (las matrices existentes siguen iguales).
+  `config validate`/`config set` aplican la misma regla (veredicto
+  `diar: {declarado, available, causa?}`).
 
 Exit 0 sólo con todo operativo (incluye ≥1 motor TTS disponible;
 `tts[]` vacío es no-operativo y ninguna sección lleva causa extra —
@@ -333,3 +342,10 @@ cosa.
   TIPO y FORMA, no presencia); advisory informativo `stt.input_device`
   en doctor; `get_config` saneado sin la clave ni su valor (privacidad,
   con test); semántica completa en `contrato-hardware-v1.md` §3.1/§10–§13.
+- v1.4 (2026-11-12): D1 de diarización (ADR-012) — schema y matriz
+  abiertos a `engines.diar` + constraints evaluables
+  `diar_max_duration_s`/`diar_max_wall_s`; `config validate`/`set`
+  sondean el diar declarado (regla phonon_ollama/lfm3); `doctor`
+  gana la sección opcional `diar` con gate (§7.1). Sin superficie
+  `diarize` todavía (D2, con el alta de `diar_failed`); `get_config`
+  de MCP sin exposición (CLI-only v1).

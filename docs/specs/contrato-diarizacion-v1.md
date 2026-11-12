@@ -136,7 +136,7 @@ este conjunto sólo crecen.
   despacharla es política del consumidor; la contención de CPU del
   host no es de este contrato.
 
-## 6. Matriz de configuración (referencia; wiring en D1/D2)
+## 6. Matriz de configuración (schema, validate y doctor cableados en D1)
 
 ```json
 "engines": {
@@ -150,9 +150,8 @@ este conjunto sólo crecen.
 }
 ```
 
-- `engines.diar` es OPCIONAL (el schema `additionalProperties:false`
-  se abre a `diar` en el commit de la conducta). Ausente →
-  `not_supported` (§3). `config validate`/`config set`: `diar`
+- `engines.diar` es OPCIONAL (abierto al schema formal en D1). Ausente
+  → `not_supported` (§3). `config validate`/`config set`: `diar`
   DECLARADO debe pasar el probe (misma regla que `phonon_ollama`/
   `lfm3`: declarado-but-roto bloquea el set).
 - NO es un motor `tts[]`: no declara `kill_switch` (el corte es por
@@ -169,7 +168,7 @@ este conjunto sólo crecen.
   (default 7200; mínimo 60). Ambos EVALUADOS (§3.1), a diferencia del
   `max_latency_ms` de TTS, que es declarativo.
 
-## 7. doctor
+## 7. doctor (cableado en D1)
 
 - `engines.diar` ausente: la sección `diar` NO aparece y el veredicto
   NO cambia (las matrices existentes siguen dando el mismo exit).
@@ -177,7 +176,9 @@ este conjunto sólo crecen.
   causas del conjunto cerrado de §3.1 (parte estructural:
   `python_ausente`, `script_ausente`, `pesos_ausentes`,
   `probe_fallido`). DECLARADO-BUT-ROTO TUMBA EL EXIT (criterio
-  `phonon_ollama`/`lfm3`; decisión del Operador 2026-11-12).
+  `phonon_ollama`/`lfm3`; decisión del Operador 2026-11-12). El probe
+  es ESTRUCTURAL (existencia y forma de python/script/pipeline con
+  `config.yaml`): no ejecuta nada.
 
 ## 8. No-retención, privacidad y logs
 
@@ -265,3 +266,9 @@ propios.
   wall-clock), doctor con gate en declarado-but-roto, telemetría OFF
   por entorno fijado. Ensayo vivo (D3) pendiente de autorización
   expresa.
+- v1.1 (2026-11-12): D1 ejecutado — schema abierto a `engines.diar`
+  (tres rutas requeridas si se declara) y a los constraints
+  evaluables; `config validate`/`set` sondean el diar declarado;
+  `doctor` gana la sección con gate (§7). La superficie `diarize`,
+  el script Python y el alta de `diar_failed` siguen en D2; H-1/H-2
+  del issue #43 son trabajo de D2, H-3 del guion D3.
