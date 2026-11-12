@@ -91,18 +91,29 @@ distintos:
 | `probe_fallido` | El probe estructural del motor falló de forma no clasificable. |
 
 Sin base para clasificar, `causa` se omite. El alta de `diar_failed`
-en la taxonomía (contrato de consumo §2.1) ocurre en el commit de la
-conducta (fase D2); este documento es la propuesta. La taxonomía y
-este conjunto sólo crecen.
+en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
+(fase D2, 2026-11-12). La taxonomía y este conjunto sólo crecen.
 
 ## 4. Motor y entorno del subprocess (EngineDiar)
 
-- Invocación: `<python> <script> <pipeline_dir> <audio_ruta>` — argv
-  sin contenido alguno: el audio no viaja por argv (sólo su RUTA;
-  exposición declarada §8). stdin cerrado. stdout del subprocess: UN
-  objeto JSON con la forma §2; cualquier otra cosa es
-  `inferencia_fallida`. stderr del subprocess: drenado y descartado
-  (política de logs).
+- Invocación: `<python> <script> <pipeline_dir> <audio_ruta>
+  <max_duration_s>` — argv sin contenido alguno: sólo rutas (la del
+  audio es exposición declarada, §8) y el tope de duración en
+  segundos (H-1 del issue #43, resuelto en D2: el límite
+  configurable llega al motor como 5º token; el script reporta la
+  duración ANTES de inferir y responde exit 4 si excede). stdin
+  cerrado (EOF limpio). stdout del subprocess: UN objeto JSON con la
+  forma `{"turns":[…]}` (etiquetas crudas; glosomata canóniza §2),
+  acotado a 16 MiB (más allá → `inferencia_fallida`); cualquier otra
+  cosa es `inferencia_fallida`. stderr del subprocess: drenado y
+  descartado (política de logs).
+- Exit codes del script (contrato Node↔script, D2): `0` ok; `3`
+  `audio_ilegible` (no existe, ilegible, vacío o sin duración
+  decodificable en la sonda); `4` `audio_demasiado_largo`; `2` mal
+  uso del propio script — incluido un entorno sin las dos variables
+  exigidas: el script REHÚSA correr sin telemetría OFF (fail-closed,
+  defensa en profundidad de la decisión del Operador); cualquier otro
+  → `inferencia_fallida`.
 - Entorno FIJADO por glosomata, no heredado:
   `PYANNOTE_METRICS_ENABLED=0` — telemetría OFF por contrato, sin
   importar el ambiente del proceso padre — y `HF_HUB_OFFLINE=1` —
@@ -130,7 +141,11 @@ este conjunto sólo crecen.
 - `stop` (y SIGINT/SIGTERM) del PROPIO runtime la alcanzan: el
   subprocess corre en grupo registrado; el corte es SIGKILL al grupo y
   la operación resuelve truncada (§2). Sin alcance cross-runtime
-  (contrato de consumo §5.1).
+  (contrato de consumo §5.1). H-2 del issue #43, resuelto en D2:
+  aunque `diarize` no toma `canal.lock`, se REGISTRA como esperador
+  (socket propio bajo `espera/` del runtime, el mismo mecanismo de
+  `speak --text-stdin`): `glosomata stop` de otro proceso le entrega
+  la orden con acuse. Sin registro, la operación falla (fail-closed).
 - La inferencia es CPU-intensiva por naturaleza; glosomata no la
   serializa ni la acota por debajo del wall-clock de §3.1. Cuándo
   despacharla es política del consumidor; la contención de CPU del
@@ -165,8 +180,9 @@ este conjunto sólo crecen.
   transversal de la guía).
 - constraints nuevos (opcionales, con default): `diar_max_duration_s`
   (default 14400; tope duro del schema 86400) y `diar_max_wall_s`
-  (default 7200; mínimo 60). Ambos EVALUADOS (§3.1), a diferencia del
-  `max_latency_ms` de TTS, que es declarativo.
+  (default 7200; mínimo 60). Ambos EVALUADOS (§3.1) — lectores
+  cableados en D2 —, a diferencia del `max_latency_ms` de TTS, que es
+  declarativo.
 
 ## 7. doctor (cableado en D1)
 
@@ -272,3 +288,12 @@ propios.
   `doctor` gana la sección con gate (§7). La superficie `diarize`,
   el script Python y el alta de `diar_failed` siguen en D2; H-1/H-2
   del issue #43 son trabajo de D2, H-3 del guion D3.
+- v1.2 (2026-11-12): D2 ejecutado — comando `diarize --file`
+  (superficie estricta §2) con turnos canónicos, modo exclusive,
+  truncado espejo de speak; alta de `diar_failed` (contrato de
+  consumo §2.1) con causas cerradas §3.1; script
+  `src/diar/diarize_pyannote.py` con exit codes 0/3/4/2 (§4); H-1
+  resuelto (tope de duración como 5º token de argv) y H-2 resuelto
+  (registro en `espera/` para el stop cross-process); tope de stdout
+  16 MiB. Verificación física del motor sigue `inconclusive` hasta el
+  ensayo vivo D3 (pendiente de autorización expresa).

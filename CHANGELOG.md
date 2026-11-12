@@ -6,6 +6,40 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **D2 de diarización (ADR-012): comando `diarize`, script
+  Python y alta de `diar_failed`** — `diarize --file <ruta-audio>`
+  (superficie ESTRICTA: sólo `--file`; cualquier extra → `usage`),
+  fuera del canal (sin `canal.lock`), devuelve turnos en modo
+  EXCLUSIVO canónicos (orden temporal; etiquetas opacas por primera
+  aparición `SPEAKER_NN` — las crudas del motor jamás salen;
+  fail-closed ante solapes o formas inválidas →
+  `inferencia_fallida`), `num_speakers`, `mode:"exclusive"` y
+  `duration_ms`. Truncado por stop/señal: exit 1 por stdout
+  `{turns:null, truncated:true}` con stderr vacío (espejo de speak).
+  Alta de `diar_failed` en la taxonomía (error-codes, contrato de
+  consumo §2.1) con causas cerradas (§3.1 del contrato de
+  diarización). Script `src/diar/diarize_pyannote.py` con exit codes
+  0/3/4/2 (ok/audio_ilegible/audio_demasiado_largo/mal uso — incluido
+  REHUSAR correr sin telemetría OFF) y sonda de duración previa.
+  Entorno del subprocess fijado y verificado por test:
+  `PYANNOTE_METRICS_ENABLED=0` (telemetría OFF sin heredar el
+  ambiente del padre) y `HF_HUB_OFFLINE=1`. H-1 del issue #43
+  resuelto: el tope configurable `diar_max_duration_s` viaja al
+  script como 5º token de argv. H-2 resuelto: `diarize` se registra
+  como esperador (socket en `espera/`, mecanismo de
+  `speak --text-stdin`) para que `glosomata stop` de OTRO proceso la
+  alcance sin tomar el lock (test de proceso real). `diar_max_wall_s`
+  EVALUADO (SIGKILL al grupo → `timeout_inferencia`). Stdout del
+  subprocess acotado a 16 MiB. Docs en el mismo commit: spec §CLI
+  (operación diarize), contrato de consumo §2.1/§3/§7.1 (forma
+  `diar:null` — LOW del issue #43)/historia v1.5, contrato de
+  diarización §3.1/§4/§5/§6/historia v1.2. Tests: +11 herméticos con
+  falso python que registra argv/env (29 en tests/diar.test.mjs);
+  `get_config` pineado limpio con matriz diar (LOW del issue #43).
+  El venv `.venv-diar`, el espejo de pesos y el ensayo vivo D3 quedan
+  pendientes de decisión y autorización expresa del Operador;
+  conducta física del motor = `inconclusive` hasta entonces.
+
 - feat: **D1 de diarización (ADR-012): schema, alta de `engines.diar`
   y wiring de doctor/config** — el schema formal abre `engines.diar`
   {python, script, pipeline} (las TRES requeridas si se declara:

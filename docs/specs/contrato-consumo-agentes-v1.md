@@ -27,7 +27,8 @@ Dentro de la misma versión mayor (`v1.x`):
    `config_write_failed`, alta 2026-10-17 — fallo de la escritura
    gobernada de config, comandos `config` del plan de configuración, y
    `devices_unavailable`, alta 2026-11-11 — inventario de dispositivos
-   de audio, contrato de hardware v1)
+   de audio, contrato de hardware v1, y `diar_failed`, alta 2026-11-12
+   — operación de diarización, contrato de diarización v1 §3.1)
    nunca se renombran ni se eliminan; sólo se añaden códigos nuevos.
    Un consumidor que conozca la lista de 2026-08-18 sigue siendo
    compatible.
@@ -83,6 +84,15 @@ responde `not_supported`; sin petición, conducta original intacta. La
 preferencia por defecto (`engines.stt.input_device`) vive en matriz
 EXTERNA gobernada por `GLOSOMATA_CONFIG` — la matriz versionada del
 repo jamás lleva valores personales de hardware.
+
+Además `diarize --file <ruta-audio>` (2026-11-12, D2/ADR-012):
+turnos de hablante del archivo en modo EXCLUSIVO, efímero sin
+retención, FUERA del canal (sin `canal.lock`); superficie ESTRICTA
+(sólo `--file`; cualquier extra → exit 2 `usage`); semántica
+completa — formas, truncado, causas cerradas de `diar_failed`,
+entorno del subprocess con telemetría OFF, stop cross-process — en
+`contrato-diarizacion-v1.md`. Sin `engines.diar` declarado responde
+`not_supported`.
 
 ## 4. Superficie MCP (S2)
 
@@ -230,7 +240,9 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   (criterio `phonon_ollama`/`lfm3`); no declarado: ni sección ni
   efecto en el veredicto (las matrices existentes siguen iguales).
   `config validate`/`config set` aplican la misma regla (veredicto
-  `diar: {declarado, available, causa?}`).
+  `diar: {declarado, available, causa?}` cuando está declarado;
+  NO declarado, la clave `diar` viaja como `null` — presencia
+  explícita de la sección, no ausencia de clave).
 
 Exit 0 sólo con todo operativo (incluye ≥1 motor TTS disponible;
 `tts[]` vacío es no-operativo y ninguna sección lleva causa extra —
@@ -349,3 +361,12 @@ cosa.
   gana la sección opcional `diar` con gate (§7.1). Sin superficie
   `diarize` todavía (D2, con el alta de `diar_failed`); `get_config`
   de MCP sin exposición (CLI-only v1).
+- v1.5 (2026-11-12): D2 de diarización (ADR-012) — comando CLI
+  `diarize --file <ruta-audio>` (superficie estricta, fuera del
+  canal, modo exclusivo, truncado espejo de speak); alta de
+  `diar_failed` en §2.1 con causas cerradas (contrato de diarización
+  §3.1); H-1 (tope de duración como 5º token del argv del script) y
+  H-2 (registro en `espera/` para stop cross-process) del issue #43
+  resueltos; precisión §7.1 de la forma `diar: null`; `get_config`
+  pineado limpio con matriz diar. Ensayo vivo D3 pendiente de
+  autorización expresa.

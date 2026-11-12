@@ -2,7 +2,7 @@
 // Exit codes: 0 ok; 1 error con código en stderr; 2 usage.
 
 import { readFile } from 'node:fs/promises';
-import { speakOp, listenOp, stopOp, enginesOp, templatesOp, sessionOp,
+import { speakOp, listenOp, diarizeOp, stopOp, enginesOp, templatesOp, sessionOp,
   validateOp, doctorOp, configOp } from './ops.mjs';
 import { listarDispositivos } from './devices.mjs';
 
@@ -24,6 +24,9 @@ comandos:
                                        ve la locución)
   listen [--timeout <s>] [--device <nombre-exacto>]
                                        captura micrófono, imprime transcripción
+  diarize --file <ruta-audio>          turnos de hablante del archivo (modo
+                                       exclusivo; sin persistir nada; sin
+                                       canal.lock) — requiere engines.diar
   stop                                 interrumpe la operación de canal activa
   engines                              lista disponibilidad y selección
   version                              nombre y versión del paquete
@@ -46,12 +49,13 @@ errores: engine_unavailable tts_failed stt_failed mic_denied mic_timeout
   template_invalid not_found text_too_long session_invalid session_expired
   session_abandoned channel_busy not_supported config_unreadable
   config_write_failed usage internal_error audio_device_error
-  devices_unavailable`;
+  devices_unavailable diar_failed`;
 
 const COMANDOS = Object.create(null);
 Object.assign(COMANDOS, {
   speak: (a) => speakOp(a),
   listen: (a) => listenOp(a),
+  diarize: (a) => diarizeOp(a),
   stop: () => stopOp(),
   engines: () => enginesOp(),
   doctor: () => doctorOp(),

@@ -5,8 +5,9 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync,
+  readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -34,6 +35,55 @@ writeFileSync(join(fixPipeline, 'config.yaml'), '');
 
 const DIAR_SANO = { python: fixPython, script: fixScript,
   pipeline: fixPipeline };
+
+// —— D2: falso python (hermético: registra argv/env y emite conductas
+// del contrato §4; jamás toca pyannote ni el disco del audio) ——
+
+const dirFalso = mkdtempSync(join(tmpdir(), 'glosomata-diar-fake-'));
+const FALSO_PY = join(dirFalso, 'fake-diar-python');
+writeFileSync(FALSO_PY, `#!/usr/bin/env node
+const fs = require('node:fs');
+const modo = process.env.GLOSOMATA_DIAR_FAKE_MODE ?? 'ok';
+const log = process.env.GLOSOMATA_DIAR_FAKE_LOG;
+if (log) fs.writeFileSync(log, JSON.stringify({
+  argv: process.argv.slice(2),
+  PYANNOTE_METRICS_ENABLED: process.env.PYANNOTE_METRICS_ENABLED,
+  HF_HUB_OFFLINE: process.env.HF_HUB_OFFLINE,
+}));
+const salir = (c) => process.exit(c);
+const emitir = (o) => { process.stdout.write(JSON.stringify(o)); salir(0); };
+const modos = {
+  ok: () => emitir({ turns: [
+    { speaker: 'voz_b', start_s: 1.5, end_s: 2.5 },
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+    { speaker: 'voz_b', start_s: 3, end_s: 4 },
+  ] }),
+  ilegible: () => salir(3),
+  largo: () => salir(4),
+  crash: () => salir(1),
+  basura: () => { process.stdout.write('esto no es json'); salir(0); },
+  solape: () => emitir({ turns: [
+    { speaker: 'x', start_s: 0, end_s: 2 },
+    { speaker: 'y', start_s: 1, end_s: 3 },
+  ] }),
+  plano: () => emitir({ turns: [{ speaker: 'x', start_s: 1, end_s: 1 }] }),
+  lento: () => setTimeout(() => emitir({ turns: [] }), 30000),
+};
+(modos[modo] ?? (() => salir(1)))();
+`);
+chmodSync(FALSO_PY, 0o755);
+
+const DIAR_FALSO = { python: FALSO_PY, script: fixScript,
+  pipeline: fixPipeline };
+const AUDIO_X = join(dirFalso, 'reunion.wav');
+writeFileSync(AUDIO_X, 'audio-falso');
+
+function configDiarizable(constraints) {
+  const cfg = structuredClone(CONFIG_TTS_ROTO);
+  cfg.engines.diar = DIAR_FALSO;
+  if (constraints !== undefined) cfg.constraints = constraints;
+  return cfg;
+}
 
 function configTemporal(contenido) {
   const dir = mkdtempSync(join(tmpdir(), 'glosomata-diar-cfg-'));
@@ -293,3 +343,182 @@ test('config set válido con diar sano: escribe y reporta diar', (t) => {
 });
 
 after(() => rmSync(dirFix, { recursive: true, force: true }));
+
+// —— D2: operación diarize (contrato §2-§5) ——
+
+// exit≠1 con stdout JSON (errores diar_failed), o exit 2 usage
+function salidaDiarize(argvCli, rutaCfg, extra = {}) {
+  try {
+    const out = cli(argvCli, rutaCfg, extra);
+    return { code: 0, out };
+  } catch (e) {
+    return { code: e.status, out: String(e.stdout ?? ''),
+      err: String(e.stderr ?? '') };
+  }
+}
+
+const CFG_DIAR = () => configTemporal(configDiarizable());
+
+test('diarize: superficie estricta — cualquier desviación → usage', () => {
+  const ruta = CFG_DIAR();
+  for (const args of [[], ['--file'], ['--file', AUDIO_X, 'extra'],
+    ['--file', '--otro'], ['--file', ''], ['-f', AUDIO_X],
+    ['--audio', AUDIO_X]]) {
+    const r = salidaDiarize(['diarize', ...args], ruta);
+    assert.equal(r.code, 2, JSON.stringify(args));
+    assert.match(r.err, /usage/, JSON.stringify(args));
+  }
+});
+
+test('diarize: sin engines.diar → not_supported (fail-closed)', () => {
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X],
+    configTemporal(CONFIG_TTS_ROTO));
+  assert.equal(r.code, 1);
+  assert.match(r.err, /not_supported/);
+});
+
+test('diarize: declarado con python ausente → diar_failed/python_ausente', () => {
+  const cfg = structuredClone(CONFIG_TTS_ROTO);
+  cfg.engines.diar = { ...DIAR_FALSO, python: '/no/existe/python' };
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X],
+    configTemporal(cfg));
+  assert.equal(r.code, 1);
+  assert.match(r.err, /diar_failed/);
+  assert.match(r.err, /python_ausente/);
+});
+
+test('diarize: ok → turnos canónicos, modo exclusive y duration_ms', () => {
+  const rutaLog = join(dirFalso, 'log-ok.json');
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_LOG: rutaLog });
+  assert.equal(r.code, 0);
+  const d = JSON.parse(r.out);
+  // canónización: orden temporal + etiquetas por primera aparición
+  assert.deepEqual(d.turns, [
+    { speaker: 'SPEAKER_00', start_s: 0.2, end_s: 1 },
+    { speaker: 'SPEAKER_01', start_s: 1.5, end_s: 2.5 },
+    { speaker: 'SPEAKER_01', start_s: 3, end_s: 4 },
+  ]);
+  assert.equal(d.num_speakers, 2);
+  assert.equal(d.mode, 'exclusive');
+  assert.ok(Number.isInteger(d.duration_ms) && d.duration_ms >= 0);
+  // H-1: el tope de duración viaja como 5º token del argv del script
+  const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
+  assert.deepEqual(log.argv, [fixScript, fixPipeline, AUDIO_X, '14400']);
+});
+
+test('diarize: entorno del subprocess FIJADO (telemetría OFF sin herencia)', () => {
+  const rutaLog = join(dirFalso, 'log-env.json');
+  // el padre prende la telemetría: glosomata debe forzar 0 igual
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_LOG: rutaLog,
+      PYANNOTE_METRICS_ENABLED: '1', HF_HUB_OFFLINE: '0' });
+  assert.equal(r.code, 0);
+  const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
+  assert.equal(log.PYANNOTE_METRICS_ENABLED, '0');
+  assert.equal(log.HF_HUB_OFFLINE, '1');
+});
+
+test('diarize: constraint diar_max_duration_s viaja al script', () => {
+  const rutaLog = join(dirFalso, 'log-dur.json');
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X],
+    configTemporal(configDiarizable({ diar_max_duration_s: 300 })),
+    { GLOSOMATA_DIAR_FAKE_LOG: rutaLog });
+  assert.equal(r.code, 0);
+  const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
+  assert.equal(log.argv[3], '300');
+});
+
+test('diarize: exit 3 → audio_ilegible; exit 4 → audio_demasiado_largo', () => {
+  const r3 = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_MODE: 'ilegible' });
+  assert.equal(r3.code, 1);
+  assert.match(r3.err, /diar_failed/);
+  assert.match(r3.err, /audio_ilegible/);
+
+  const r4 = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_MODE: 'largo' });
+  assert.equal(r4.code, 1);
+  assert.match(r4.err, /audio_demasiado_largo/);
+});
+
+test('diarize: resultados inválidos → inferencia_fallida (fail-closed)', () => {
+  for (const modo of ['crash', 'basura', 'solape', 'plano']) {
+    const r = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+      { GLOSOMATA_DIAR_FAKE_MODE: modo });
+    assert.equal(r.code, 1, modo);
+    assert.match(r.err, /diar_failed/, modo);
+    assert.match(r.err, /inferencia_fallida/, modo);
+  }
+});
+
+test('diarize: wall-clock evaluado → diar_failed/timeout_inferencia', () => {
+  // valor 1 s (runtime lee el constraint tal cual; el piso 60 es de
+  // schema, no del lector): el falso duerme 30 s y el muro gana
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X],
+    configTemporal(configDiarizable({ diar_max_wall_s: 1 })),
+    { GLOSOMATA_DIAR_FAKE_MODE: 'lento' });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /diar_failed/);
+  assert.match(r.err, /timeout_inferencia/);
+});
+
+// H-2 (issue #43): stop CROSS-PROCESS alcanza a diarize por el socket
+// de esperadores, aunque no tome canal.lock. Runtime corto: sun_path.
+test('diarize: stop de otro proceso → truncado por stdout, stderr vacío', async () => {
+  const rt = `/tmp/glo-d2-${Math.random().toString(36).slice(2, 8)}`;
+  const ruta = CFG_DIAR();
+  const hijo = spawn('node', [CLI, 'diarize', '--file', AUDIO_X], {
+    cwd: CWD, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, GLOSOMATA_CONFIG: ruta,
+      GLOSOMATA_RUNTIME: rt, GLOSOMATA_DIAR_FAKE_MODE: 'lento' },
+  });
+  let out = '';
+  let err = '';
+  hijo.stdout.on('data', (x) => { out += x; });
+  hijo.stderr.on('data', (x) => { err += x; });
+  const cerrar = new Promise((res) => hijo.on('close', res));
+
+  // espera el registro del esperador (socket bajo espera/)
+  const dirEspera = join(rt, `glosomata-${process.getuid()}`, 'espera');
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      if (readdirSync(dirEspera).some((f) => f.endsWith('.sock'))) break;
+    } catch {}
+    await new Promise((res) => setTimeout(res, 50));
+  }
+  execFileSync('node', [CLI, 'stop'], {
+    cwd: CWD,
+    env: { ...process.env, GLOSOMATA_RUNTIME: rt },
+  });
+  const guardia = setTimeout(() => hijo.kill('SIGKILL'), 15_000);
+  guardia.unref();
+  const code = await cerrar;
+  clearTimeout(guardia);
+  assert.equal(code, 1);
+  const d = JSON.parse(out);
+  assert.equal(d.turns, null);
+  assert.equal(d.truncated, true);
+  assert.ok(Number.isInteger(d.duration_ms));
+  assert.equal(err, ''); // truncado: stdout, sin código en stderr
+  rmSync(rt, { recursive: true, force: true });
+}, 30_000);
+
+// LOW-2 (issue #43): get_config queda pineado LIMPIO con matriz diar
+test('get_config (configSaneada): matriz CON diar → sin exposición', () => {
+  const ruta = CFG_DIAR();
+  const modulo = new URL('../src/matriz.mjs', import.meta.url).href;
+  const out = JSON.parse(execFileSync('node', ['--input-type=module',
+    '-e', `const m = await import(${JSON.stringify(modulo)});`
+      + 'console.log(JSON.stringify(await m.configSaneada()));'],
+  { cwd: CWD, encoding: 'utf8',
+    env: { ...process.env, GLOSOMATA_CONFIG: ruta } }));
+  assert.deepEqual(Object.keys(out.engines), ['tts', 'stt']);
+  assert.equal('diar' in out.engines, false);
+  assert.ok(!JSON.stringify(out).includes('diar'));
+  assert.ok(!Object.keys(out.constraints ?? {})
+    .some((k) => k.startsWith('diar')));
+});
+
+after(() => rmSync(dirFalso, { recursive: true, force: true }));

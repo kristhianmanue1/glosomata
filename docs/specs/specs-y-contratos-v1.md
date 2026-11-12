@@ -56,7 +56,9 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 ## CONTRATO: CLI v1
 
 Operaciones: speak --text [--engine] | speak --text-stdin [--engine];
-listen [--timeout] [--device nombre-exacto]; stop; engines;
+listen [--timeout] [--device nombre-exacto]; diarize --file
+ruta-audio (ADR-012: turnos de hablante efímeros, fuera del canal;
+contrato: contrato-diarizacion-v1.md); stop; engines;
 version; doctor; templates [--list|--show id]; session new
 [--template id]; validate --session archivo --text str; config list;
 config get engines|constraints — lectura CRUDA de la matriz (sin

@@ -289,6 +289,12 @@ export async function listenOp(argv, stopAtStart = stopGeneration(),
   return listen(argv, stopAtStart, opts);
 }
 
+export async function diarizeOp(argv, stopAtStart = stopGeneration(),
+  opts = {}) {
+  const { diarize } = await import('./diar.mjs');
+  return diarize(argv, stopAtStart, opts);
+}
+
 export async function stopOp() {
   // intra-proceso (MCP: el speak local ve el flag) o cross-process (señal)
   const { pedirStop } = await import('./canal.mjs');
