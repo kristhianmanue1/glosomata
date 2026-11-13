@@ -3,11 +3,14 @@
 > **Estado:** NORMATIVO desde 2026-11-13 — aceptación explícita del
 > Operador («adelante con recomendaciones», 2026-11-13; recomendación del
 > punto 4 del issue #54) tras la ronda adversarial de DeepSeek V4.1 Flash
-> (r1 `fix-and-retry` con 2 HIGH, corregidos; r2 `proceed`; historia
-> v1.8). Los contratos base (CLI, MCP, plantilla, sesión, matriz)
-> siguen mandando en `docs/specs/specs-y-contratos-v1.md`; este documento
-> añade la capa de estabilidad y obligaciones para quien CONSUME glosomata
-> sin leer su código.
+> (r1 `fix-and-retry` sobre `41a88d2`, con 2 HIGH corregidos; r2
+> `proceed` anclado a `99a92af`, con 1 MEDIUM y 6 LOW corregidos después;
+> historia v1.8). La semántica detallada de `devices` y `--device` vive
+> en `contrato-hardware-v1.md`, aún PROPUESTA: aquí es normativo su
+> resumen (§3, §7.1). Los contratos base (CLI, MCP, plantilla, sesión,
+> matriz) siguen mandando en `docs/specs/specs-y-contratos-v1.md`; este
+> documento añade la capa de estabilidad y obligaciones para quien
+> CONSUME glosomata sin leer su código.
 
 ## 1. Alcance
 
@@ -49,8 +52,9 @@ Dentro de la misma versión mayor (`v1.x`):
 4. **Sesión**: `glosomata/sesion-v1` es la única versión; glosomata jamás
    muta una sesión ni depende de ella para seguridad (ADR-001).
 5. **Exit codes CLI**: 0 ok, 1 error de operación, 2 usage. Estables.
-   Además 143: terminación por SIGTERM (tras una gracia de 250 ms), fuera
-   de la taxonomía; no es un resultado de la operación
+   Ante SIGTERM: 143 si vence la gracia de 250 ms; si la operación
+   asienta antes, gana su salida natural (0/1). El 143 está fuera de la
+   taxonomía; no es un resultado de la operación
    (`specs-y-contratos-v1.md` §CLI v1).
 6. **No-objetivos v1** (pacto de no sorpresa): sin servidor HTTP/socket,
    sin streaming de audio, sin cola de turnos, sin retención de audio o
@@ -84,10 +88,10 @@ Comandos (12 de nivel superior): `speak`, `listen`, `diarize`, `stop`,
 `set <archivo>`) y `devices` — semántica en §CLI v1 del spec canónico.
 
 `speak --text <str>` pone el texto en argv, visible en `ps` para otros
-procesos del mismo usuario. `speak --text-stdin` lo lee completo de
-stdin (UTF-8, excluye `--text`) y es la forma recomendada para texto
-del usuario (spec canónico §CLI v1). `stop` responde `{stopped: true,
-senal_remota}` con exit 0 aunque no haya operación activa:
+usuarios locales (ADR-005). `speak --text-stdin` lo lee de stdin hasta
+`max_text_chars` (UTF-8, excluye `--text`) y es la forma recomendada
+para texto del usuario (spec canónico §CLI v1). `stop` responde
+`{stopped: true, senal_remota}` con exit 0 aunque no haya operación activa:
 `stopped:true` confirma el pedido, no una interrupción, y
 `senal_remota` sólo indica que se entregó una señal a otro proceso.
 
@@ -100,8 +104,10 @@ Además `listen --device <nombre-exacto>` (2026-11-11, ampliación G2):
 selección de ENTRADA por nombre exacto — resolución al abrir dentro de
 ffmpeg, validación 0/1/N contra el listado fresco ANTES de abrir,
 homónimos fail-closed, JAMÁS fallback a `:0` cuando hay petición
-(`contrato-hardware-v1.md` §3.1/§10). `--device` sin valor es petición
-vacía → exit 2 `usage`, sin abrir ningún micrófono. En hosts
+(`contrato-hardware-v1.md` §3.1/§10). `--device` al final del argv, sin
+valor, es petición vacía → exit 2 `usage`, sin abrir ningún micrófono;
+seguido de otro flag, ese token se toma como nombre y falla la
+validación (tampoco abre micrófono). En hosts
 no-darwin la petición responde `not_supported`; sin petición, conducta
 original intacta. La preferencia por defecto
 (`engines.stt.input_device`) vive en matriz EXTERNA gobernada por
@@ -430,7 +436,8 @@ cosa.
   `GLOSOMATA_TONO`, que llegó al código en el PR #51 sin documentarse.
 - v1.8 (2026-11-13, issue #54 punto 4): PROPUESTA → NORMATIVO, sin
   cambios de conducta salvo una corrección: `listen --device` sin valor
-  caía en silencio a `:0` y ahora responde `usage`. Revisión r1:
+  caía en silencio a la preferencia o a `:0` y ahora responde `usage`.
+  Revisión r1:
   `auth_ausente` entra al conjunto de causas de §7.1; §9.4 acota qué
   parte de stderr es contrato; §2 declara el 143 por SIGTERM, `stopped`
   fuera de la taxonomía y el truncado sin `engine`; §2 y §10 nombran el
