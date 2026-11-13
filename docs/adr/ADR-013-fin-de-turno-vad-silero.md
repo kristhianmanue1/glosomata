@@ -30,7 +30,8 @@ pero se medía mal en dos situaciones:
 2. **Detector por volumen** (siempre disponible, sin dependencias): piso
    de ruido = percentil 10 de todo lo escuchado, umbral = 2.5× piso + 150,
    y corte tras 1.5 s de silencio posterior a la voz. Sin voz detectada no
-   corta: rige el tope y `mic_timeout`, como antes (PR #50, #51).
+   corta y rige el tope; si el RMS final es bajo, `mic_timeout`, como
+   antes (PR #50, #51).
 3. **Silero VAD opcional** (PR #52): con `engines.stt.vad_bin` (whisper.cpp
    `whisper-vad-speech-segments`) y `vad_model` (ggml Silero v6.2.0)
    declarados, decide la **voz humana**. Cada 500 ms evalúa una ventana con

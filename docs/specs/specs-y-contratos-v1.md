@@ -21,7 +21,8 @@ Casos:
 - DADO silencio > timeout CUANDO listen ENTONCES `mic_timeout`, estado
   limpio.
 - DADO voz seguida de 1.5 s de silencio CUANDO listen ENTONCES la
-  captura termina antes del tope y se transcribe (ADR-013).
+  captura termina antes del tope y se transcribe si supera la puerta
+  RMS de silencio (exenta cuando cortó el VAD; ADR-013).
 - DADO dos operaciones de canal concurrentes (intra o cross-process)
   CUANDO la segunda arriva ENTONCES `channel_busy` (flock global).
 
@@ -187,7 +188,8 @@ config_write_failed, usage, internal_error, devices_unavailable
 (inventario de audio, alta 2026-11-11, `contrato-hardware-v1.md`),
 diar_failed (diarización, alta 2026-11-12, `contrato-diarizacion-v1.md`
 §3.1). Cuando un código define causas cerradas, viven en
-`contrato-consumo-agentes-v1.md` §5 (audio) y §7.1 (`doctor`) y en
+`contrato-consumo-agentes-v1.md` §5 (audio) y §7.1 (`doctor`), en
+`contrato-hardware-v1.md` §3 (`devices_unavailable`) y en
 `contrato-diarizacion-v1.md` §3.1. `stopped` no es de la
 taxonomía: señala exclusivamente la interrupción de un `listen` por
 `stop`. `config_write_failed`: fallo de la escritura gobernada de
@@ -210,7 +212,8 @@ session_new(template_id?), list_engines(), devices() — inventario de
 audio del host local, `contrato-hardware-v1.md` —, get_config() —
 matriz SANEADA: disponibilidad, selección y constraints, sin rutas del
 filesystem —, list_templates() — incluye
-turns —, validate(session, text). Mismos códigos de error que CLI; un
+turns —, validate(session, text). Mismos códigos de error que CLI
+salvo `diar_failed` (`diarize` es CLI-only, ADR-012); un
 `listen` interrumpido por `stop` se resuelve con `stopped`. `validate`
 recibe la sesión inline como objeto. `device` (2026-11-11, G2a) es el
 nombre EXACTO de la entrada con la misma semántica que el CLI; los

@@ -109,7 +109,9 @@ Semántica que el consumidor DEBE conocer:
 - **`listen` termina con el silencio del humano** (ADR-013,
   2026-11-13): `timeout_s` es el TOPE, no la duración. La captura se
   cierra 1.5 s después de la voz (Silero VAD si la matriz lo declara;
-  si no, por volumen). Sin voz detectada rige el tope y `mic_timeout`.
+  si no, por volumen). Sin voz detectada rige el tope; si el RMS final
+  es bajo → `mic_timeout` (salvo que haya cortado el VAD); con música o
+  ruido alto se transcribe lo capturado.
   En darwin suena un tono antes de abrir el micrófono. El consumidor
   NO debe prometer «habla al menos N segundos»; sí puede avisar que una
   pausa larga cierra el turno.
@@ -355,7 +357,7 @@ cosa.
   canónica con latencia observada documentada.
 - v1.2 (2026-11-11): comando `devices` y tool MCP `devices` (9ª) —
   inventario de audio del host local, sólo lectura; alta de
-  `devices_unavailable` en §2.1; variable `GLOSOMATA_SYSTEM_PROFILER`
+  `devices_unavailable` en §2 (garantía 1); variable `GLOSOMATA_SYSTEM_PROFILER`
   en §6; semántica completa en `contrato-hardware-v1.md`.
 - v1.3 (2026-11-11): ampliación G2 — `listen --device <nombre-exacto>`
   (CLI) y campo opcional `device` en la tool MCP `listen`: selección de
@@ -378,7 +380,7 @@ cosa.
 - v1.5 (2026-11-12): D2 de diarización (ADR-012) — comando CLI
   `diarize --file <ruta-audio>` (superficie estricta, fuera del
   canal, modo exclusivo, truncado espejo de speak); alta de
-  `diar_failed` en §2.1 con causas cerradas (contrato de diarización
+  `diar_failed` en §2 (garantía 1) con causas cerradas (contrato de diarización
   §3.1); H-1 (tope de duración como 5º token del argv del script) y
   H-2 (registro en `espera/` para stop cross-process) del issue #43
   resueltos; precisión §7.1 de la forma `diar: null`; `get_config`

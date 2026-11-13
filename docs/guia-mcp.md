@@ -123,7 +123,8 @@ texto mientras el operador revisa el dispositivo y sus permisos.
 
 ## Códigos de error
 
-Taxonomía cerrada, mismos códigos que el CLI, siempre en
+Taxonomía cerrada, mismos códigos que el CLI salvo `diar_failed`
+(`diarize` es CLI-only), siempre en
 `content[0].text` como JSON `{"error":"<código>",...}` con
 `isError:true` para errores de operación. Un código de excepción ajeno
 a la taxonomía se entrega como `internal_error`:
