@@ -66,9 +66,12 @@ probes ni campos derivados; `config validate` juzga, la lectura no).
 
 `listen` fin de turno por silencio (adición compatible, 2026-11-13):
 `--timeout` es el TOPE de captura, no su duración. Tras detectar voz
-(umbral = 3× el piso de ruido de los primeros 300 ms + 250), 1 s de
+(umbral = 3× el piso de ruido de los primeros 300 ms + 250), 1.5 s de
 silencio cierra la captura (`q` a ffmpeg; SIGINT a los 2 s). Sin voz
 detectada no corta: rige el timeout y `mic_timeout` como antes.
+Tono de turno (2026-11-13): en darwin suena `Tink.aiff` con `afplay`
+ANTES de abrir el micrófono; best-effort (un fallo no impide
+escuchar). `GLOSOMATA_TONO=''` lo apaga y otra ruta lo reemplaza.
 
 `listen --device <nombre-exacto>` (adición compatible, 2026-11-11,
 G2a): selección de ENTRADA por nombre exacto — el selector que viaja a

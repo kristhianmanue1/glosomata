@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { argsCaptura, causaFormaNombre, crearDetectorFin } from '../src/stt.mjs';
+import {
+  argsCaptura, causaFormaNombre, crearDetectorFin, rutaTono,
+} from '../src/stt.mjs';
 
 test('argsCaptura: darwin usa avfoundation', () => {
   const c = argsCaptura('darwin');
@@ -77,14 +79,25 @@ const tramo = (amp) => {
 };
 const alimentar = (d, tramos) => tramos.map((t) => d.alimentar(t));
 
-test('detector: voz y luego 1 s de silencio corta en el décimo tramo', () => {
+test('detector: voz y luego 1.5 s de silencio corta en el tramo 15', () => {
   const d = crearDetectorFin();
   const r = alimentar(d, [
     ...Array(3).fill(tramo(50)), // calibración
     ...Array(5).fill(tramo(3000)), // voz
-    ...Array(10).fill(tramo(50)), // silencio
+    ...Array(15).fill(tramo(50)), // silencio
   ]);
   assert.equal(r.indexOf(true), r.length - 1);
+});
+
+test('detector: pausa de 1 s para pensar ya no corta', () => {
+  const d = crearDetectorFin();
+  const r = alimentar(d, [
+    ...Array(3).fill(tramo(50)),
+    ...Array(5).fill(tramo(3000)),
+    ...Array(10).fill(tramo(50)), // 1 s: antes cortaba aquí
+    ...Array(5).fill(tramo(3000)),
+  ]);
+  assert.ok(r.every((x) => !x));
 });
 
 test('detector: sólo silencio jamás corta (decide el timeout)', () => {
@@ -107,11 +120,21 @@ test('detector: tramos partidos en trozos arbitrarios equivalen', () => {
   const d = crearDetectorFin();
   const todo = Buffer.concat([
     ...Array(3).fill(tramo(50)), ...Array(5).fill(tramo(3000)),
-    ...Array(10).fill(tramo(50)),
+    ...Array(15).fill(tramo(50)),
   ]);
   let corto = false;
   for (let i = 0; i < todo.length; i += 1000) {
     corto = d.alimentar(todo.subarray(i, i + 1000)) || corto;
   }
   assert.ok(corto);
+});
+
+test('rutaTono: darwin suena Tink por defecto; otras plataformas sin tono', () => {
+  assert.equal(rutaTono('darwin', {}), '/System/Library/Sounds/Tink.aiff');
+  assert.equal(rutaTono('linux', {}), null);
+});
+
+test('rutaTono: GLOSOMATA_TONO vacío apaga y una ruta lo reemplaza', () => {
+  assert.equal(rutaTono('darwin', { GLOSOMATA_TONO: '' }), null);
+  assert.equal(rutaTono('darwin', { GLOSOMATA_TONO: '/x/t.aiff' }), '/x/t.aiff');
 });

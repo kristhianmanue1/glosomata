@@ -12,11 +12,34 @@ import { measureOperation } from './duration.mjs';
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
 
 // Fin de turno por silencio: `--timeout` es el TOPE, no la duración. Tras
-// detectar voz, ~1 s de silencio cierra la captura (antes el micrófono
+// detectar voz, ~1.5 s de silencio cierra la captura (antes el micrófono
 // quedaba abierto el timeout completo). Tramos de 100 ms a 16 kHz s16le.
+// 1 s cortaba al humano en las pausas para pensar (medido en vivo,
+// 2026-11-13): 1.5 s.
 const TRAMO_BYTES = 3200;
 const TRAMOS_CALIBRACION = 3; // piso de ruido: primeros 300 ms
-const TRAMOS_SILENCIO_FIN = 10; // 1 s de silencio tras voz
+const TRAMOS_SILENCIO_FIN = 15; // 1.5 s de silencio tras voz
+
+// Tono de turno: avisa al humano que el micrófono se abre (pedido del
+// Operador, 2026-11-13). Suena ANTES de abrir el micrófono, para no
+// contaminar la calibración del piso. Best-effort: sin tono o si falla,
+// listen sigue; sólo `stopped` se propaga. GLOSOMATA_TONO='' lo apaga
+// (tests); otra ruta lo cambia. Fuera de darwin no hay tono por defecto.
+export function rutaTono(plataforma = process.platform, env = process.env) {
+  if (env.GLOSOMATA_TONO !== undefined) return env.GLOSOMATA_TONO || null;
+  return plataforma === 'darwin' ? '/System/Library/Sounds/Tink.aiff' : null;
+}
+
+async function sonarTono() {
+  const ruta = rutaTono();
+  if (!ruta) return;
+  try {
+    await access(ruta, constants.R_OK);
+    await correr('/usr/bin/afplay', [ruta]);
+  } catch (e) {
+    if (e.code === 'stopped') throw e;
+  }
+}
 
 // Detector puro (testeable sin micrófono): alimentar(buf) → true cuando
 // hubo voz y luego TRAMOS_SILENCIO_FIN tramos bajo el umbral. Fail-safe:
@@ -335,6 +358,7 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
     handleClosed = true;
     let captura;
     try {
+      await sonarTono();
       captura = await capturar(ffmpeg, [
         '-y', '-loglevel', 'error',
         ...cap.input,
