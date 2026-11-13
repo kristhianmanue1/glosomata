@@ -378,3 +378,9 @@ cosa.
   resueltos; precisión §7.1 de la forma `diar: null`; `get_config`
   pineado limpio con matriz diar. Ensayo vivo D3 pendiente de
   autorización expresa.
+- v1.6 (2026-11-13): Silero VAD en `listen` (opcional,
+  `engines.stt.vad_bin`/`vad_model`). `doctor` gana la sección
+  opcional `stt.vad` con gate (§7.1) y causas cerradas `vad_parcial |
+  vad_bin_ausente | vad_model_ausente`. `config validate`/`set`
+  aplican la misma regla, con `stt.vad: null` si no se declara.
+  `listen` no cambia: con un VAD roto rige el detector por volumen.

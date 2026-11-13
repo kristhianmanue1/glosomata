@@ -111,7 +111,7 @@
         "vad_bin": {
           "type": "string",
           "minLength": 1,
-          "description": "Opcional: whisper.cpp whisper-vad-speech-segments. Con vad_model, listen decide el fin de turno por VOZ HUMANA (Silero) en vez de volumen; sin ambas claves o si el VAD falla rige el detector RMS."
+          "description": "Opcional: whisper.cpp whisper-vad-speech-segments. Con vad_model, listen decide el fin de turno por VOZ HUMANA (Silero) en vez de volumen. Declarar sólo una de las dos es config rota (vad_parcial en config validate/doctor); en listen rige el detector RMS si no se declara ninguna o si el VAD falla."
         },
         "vad_model": {
           "type": "string",

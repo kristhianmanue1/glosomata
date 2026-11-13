@@ -405,3 +405,12 @@ test('config validate: VAD con directorio en lugar de archivo → roto', (t) => 
   assert.equal(r.code, 1);
   assert.equal(r.data.stt.vad.causa, 'vad_bin_ausente');
 });
+
+test('config validate: causa vad_parcial en cualquier plataforma (CI linux)', () => {
+  const cfg = structuredClone(CONFIG_MOTOR_ROTO);
+  cfg.engines.stt = { ...(cfg.engines.stt ?? {}), vad_bin: '/bin/sh' };
+  const r = veredicto(['config', 'validate'], configAislada(cfg));
+  assert.equal(r.code, 1);
+  assert.deepEqual(r.data.stt.vad,
+    { declarado: true, available: false, causa: 'vad_parcial' });
+});

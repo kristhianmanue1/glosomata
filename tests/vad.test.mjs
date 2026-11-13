@@ -79,16 +79,20 @@ test('VAD lento en vuelo: listen vuelve sin .vad.wav ni proceso VAD vivo', async
 });
 
 test('VAD declarado y roto: listen cae al detector RMS sin fallar', async () => {
-  const roto = JSON.parse(readFileSync(cfg, 'utf8'));
+  // la ruta de la matriz se fija al importar: se reescribe el MISMO
+  // archivo (cambiar GLOSOMATA_CONFIG aquí no tendría efecto)
+  const sano = readFileSync(cfg, 'utf8');
+  const roto = JSON.parse(sano);
   roto.engines.stt.vad_model = join(dir, 'no-existe.bin');
-  const cfgRoto = join(dir, 'config-roto.json');
-  writeFileSync(cfgRoto, JSON.stringify(roto));
-  process.env.GLOSOMATA_CONFIG = cfgRoto;
+  writeFileSync(cfg, JSON.stringify(roto));
+  rmSync(pidVad, { force: true });
   try {
     const r = await listen(['--timeout', '10']);
     // pasó captura y puerta RMS: el fallo es del whisper inexistente
     assert.equal(r.data.error, 'stt_failed');
+    // el diagnóstico lo descartó: jamás se intentó lanzar el VAD
+    assert.equal(existsSync(pidVad), false, 'se lanzó un VAD roto');
   } finally {
-    process.env.GLOSOMATA_CONFIG = cfg;
+    writeFileSync(cfg, sano);
   }
 });
