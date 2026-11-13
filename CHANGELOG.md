@@ -6,6 +6,9 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat(stt): **fin de turno por voz humana con Silero VAD** (opcional,
+  `engines.stt.vad_bin`/`vad_model`): con música fuerte de fondo,
+  `listen` corta al callar el Operador (antes llegaba al tope).
 - feat(stt): **tono de turno y pausa de 1.5 s en `listen`** — un tono
   avisa que el micrófono se abre (`GLOSOMATA_TONO`), y la pausa para
   pensar sube de 1 s a 1.5 s, porque 1 s cortaba al Operador en vivo.

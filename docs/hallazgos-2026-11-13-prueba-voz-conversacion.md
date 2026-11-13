@@ -27,8 +27,13 @@ frases citadas son del Operador (texto transcrito); no se guardó audio.
    el máximo del contrato. Cinco minutos se descartaron: con ruido que
    impida detectar el silencio se esperaría el tope entero, y whisper
    tarda más con audio largo.
-5. **Música de fondo.** El ruido continuo impide el corte (turno de 53 s
-   con `[Música]`). Pendiente: detector de voz real.
+5. **Música de fondo.** El ruido continuo impedía el corte (turno de
+   53 s con `[Música]`). Resuelto con Silero VAD (whisper.cpp
+   `whisper-vad-speech-segments` y el modelo ggml v6.2.0, sha256
+   `2aa269b7…6987`, idéntico al oficial). En vivo, con violines y luego
+   música fuerte, cortó justo al «voy a pasar a silencio» del Operador
+   (turnos de 75 s y 53 s de habla continua, por debajo del tope de
+   120 s). Con música sola y sin voz no corta: rige el tope.
 
 ## Latencia y peso de los motores TTS (medido)
 

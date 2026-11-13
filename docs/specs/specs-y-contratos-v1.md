@@ -70,6 +70,12 @@ probes ni campos derivados; `config validate` juzga, la lectura no).
 escuchado, porque con el tono el humano habla de inmediato), 1.5 s de
 silencio cierra la captura (`q` a ffmpeg; SIGINT a los 2 s). Sin voz
 detectada no corta: rige el timeout y `mic_timeout` como antes.
+Con `engines.stt.vad_bin` + `vad_model` declarados (Silero VAD de
+whisper.cpp), el fin de turno lo decide la VOZ HUMANA: cada 500 ms se
+evalúa lo capturado y se corta 1.5 s después del último segmento de
+voz; música o ruido no cuentan. Si falta una clave o un archivo, o si el
+VAD falla, rige el detector por volumen (fail-safe: el VAD jamás corta
+por error).
 Tono de turno (2026-11-13): en darwin suena `Tink.aiff` con `afplay`
 ANTES de abrir el micrófono; best-effort (un fallo no impide
 escuchar). `GLOSOMATA_TONO=''` lo apaga y otra ruta lo reemplaza.
