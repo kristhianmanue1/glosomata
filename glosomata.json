@@ -67,7 +67,9 @@
     ],
     "stt": {
       "whisper_bin": ".local-models/whisper.cpp/build/bin/whisper-cli",
-      "whisper_model": ".local-models/whisper.cpp/models/ggml-small.bin"
+      "whisper_model": ".local-models/whisper.cpp/models/ggml-small.bin",
+      "vad_bin": ".local-models/whisper.cpp/build/bin/whisper-vad-speech-segments",
+      "vad_model": ".local-models/whisper.cpp/models/for-tests-silero-v6.2.0-ggml.bin"
     },
     "diar": {
       "python": ".venv-diar/bin/python",

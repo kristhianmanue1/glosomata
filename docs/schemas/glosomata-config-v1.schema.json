@@ -108,6 +108,16 @@
       "properties": {
         "whisper_bin": { "type": "string", "minLength": 1 },
         "whisper_model": { "type": "string", "minLength": 1 },
+        "vad_bin": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opcional: whisper.cpp whisper-vad-speech-segments. Con vad_model, listen decide el fin de turno por VOZ HUMANA (Silero) en vez de volumen; sin ambas claves o si el VAD falla rige el detector RMS."
+        },
+        "vad_model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opcional: modelo ggml de Silero VAD (p. ej. ggml-silero-v6.2.0.bin, sha256 2aa269b7…6987). Instalación del Operador; glosomata jamás descarga pesos."
+        },
         "input_device": {
           "type": "string",
           "minLength": 1,

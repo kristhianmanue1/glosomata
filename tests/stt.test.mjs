@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   argsCaptura, causaFormaNombre, crearDetectorFin, rutaTono,
+  parsearSegmentosVad, finPorVad,
 } from '../src/stt.mjs';
 
 test('argsCaptura: darwin usa avfoundation', () => {
@@ -162,4 +163,22 @@ test('detector: voz que llena la calibración aún se detecta y corta', () => {
     ...Array(30).fill(tramo(100)),
   ]);
   assert.ok(r.includes(true));
+});
+
+// VAD Silero: salida real de whisper-vad-speech-segments (2026-11-13)
+const SALIDA_VAD = 'Detected 1 speech segments:\n'
+  + 'Speech segment 0: start = 199.00, end = 480.00\n';
+
+test('parsearSegmentosVad: centésimas de segundo a segundos', () => {
+  assert.deepEqual(parsearSegmentosVad(SALIDA_VAD),
+    [{ inicio: 1.99, fin: 4.8 }]);
+  assert.deepEqual(parsearSegmentosVad('Detected 0 speech segments:\n'), []);
+  assert.deepEqual(parsearSegmentosVad('basura'), []);
+});
+
+test('finPorVad: corta sólo con voz previa y 1.5 s tras su fin', () => {
+  const segs = [{ inicio: 1.99, fin: 4.8 }];
+  assert.equal(finPorVad(segs, 5.5), false); // 0.7 s tras la voz
+  assert.equal(finPorVad(segs, 6.3), true); // 1.5 s
+  assert.equal(finPorVad([], 60), false); // música/ruido sin voz: no corta
 });

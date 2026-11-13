@@ -6,7 +6,9 @@ import {
   adquirirCanal, liberarCanal, resetStop, stopGeneration, stopPedido,
   spawnGrupo, matarGrupo, nuevoTemporal,
 } from './canal.mjs';
-import { rm, stat, readFile, access, constants } from 'node:fs/promises';
+import {
+  rm, stat, readFile, writeFile, access, constants,
+} from 'node:fs/promises';
 import { measureOperation } from './duration.mjs';
 
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
@@ -182,18 +184,116 @@ async function correr(cmd, args) {
   });
 }
 
+// VAD Silero (opcional: engines.stt.vad_bin = whisper.cpp
+// `whisper-vad-speech-segments`, engines.stt.vad_model = ggml-silero).
+// Detecta VOZ HUMANA, no volumen: música sin canto, un ventilador o ruido
+// no cuentan como voz (con el detector RMS impedían el corte; medido
+// 2026-11-13). Cada 500 ms se evalúa TODO lo capturado (16 ms por 7 s de
+// audio, ~340 ms con la carga). Fail-safe: un fallo del VAD lo apaga para
+// esta captura y rige el detector RMS; el VAD jamás corta por error.
+const INTERVALO_VAD_TRAMOS = 5;
+const SILENCIO_VAD_S = 1.5;
+const BYTES_POR_S = 32000; // 16 kHz s16le mono
+
+// Salida de whisper-vad-speech-segments: «Speech segment N: start = X,
+// end = Y» en centésimas de segundo (medido: 199.00 = 1.99 s).
+export function parsearSegmentosVad(stdout) {
+  const segs = [];
+  const re = /Speech segment \d+: start = ([\d.]+), end = ([\d.]+)/g;
+  for (const m of stdout.matchAll(re)) {
+    segs.push({ inicio: Number(m[1]) / 100, fin: Number(m[2]) / 100 });
+  }
+  return segs;
+}
+
+// Hubo voz y el último segmento terminó hace >= silencioS.
+export function finPorVad(segs, duracionS, silencioS = SILENCIO_VAD_S) {
+  return segs.length > 0 && duracionS - segs.at(-1).fin >= silencioS;
+}
+
+function wavDesdePcm(pcm) {
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4);
+  h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22);
+  h.writeUInt32LE(16000, 24); h.writeUInt32LE(BYTES_POR_S, 28);
+  h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+  h.write('data', 36); h.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([h, pcm]);
+}
+
+// VAD sólo si AMBAS claves están declaradas y los archivos existen; si
+// no, null (rige el detector RMS, conducta previa intacta).
+async function vadDeclarado(cfg, ruta) {
+  const bin = cfg.engines?.stt?.vad_bin;
+  const model = cfg.engines?.stt?.vad_model;
+  if (typeof bin !== 'string' || typeof model !== 'string') return null;
+  try {
+    await access(bin, constants.X_OK);
+    await access(model, constants.R_OK);
+  } catch {
+    return null;
+  }
+  return { bin, model, ruta };
+}
+
+function crearDetectorVad(vad, ruta) {
+  let partes = [];
+  let bytes = 0;
+  let evaluado = 0;
+  let ocupado = false;
+  let fin = false;
+  let fallo = false;
+  const evaluar = async (pcm) => {
+    try {
+      await writeFile(ruta, wavDesdePcm(pcm), { mode: 0o600 });
+      const r = await correr(vad.bin, ['-vm', vad.model, '-f', ruta]);
+      if (r.code !== 0) return null;
+      return parsearSegmentosVad(r.stdout);
+    } catch {
+      return null;
+    }
+  };
+  return {
+    get fallo() { return fallo; },
+    alimentar(buf) {
+      partes.push(buf);
+      bytes += buf.length;
+      const tramos = Math.floor(bytes / TRAMO_BYTES);
+      if (!fallo && !ocupado && !fin
+          && tramos - evaluado >= INTERVALO_VAD_TRAMOS) {
+        evaluado = tramos;
+        ocupado = true;
+        const pcm = Buffer.concat(partes);
+        partes = [pcm];
+        evaluar(pcm).then((segs) => {
+          if (segs === null) fallo = true;
+          else if (finPorVad(segs, pcm.length / BYTES_POR_S)) fin = true;
+        }).finally(() => { ocupado = false; });
+      }
+      return fin;
+    },
+  };
+}
+
 // Captura con fin por silencio: ffmpeg duplica el audio a stdout (PCM
 // crudo) y el detector decide; al cortar se pide `q` por stdin para que
 // ffmpeg cierre el WAV limpio (SIGINT si no responde en 2 s). El WAV
-// sigue siendo el último argumento y se valida igual que antes.
-async function capturar(cmd, args) {
+// sigue siendo el último argumento y se valida igual que antes. Con VAD
+// declarado y sano decide el VAD; si falla, el detector RMS.
+async function capturar(cmd, args, vad = null) {
   return new Promise((resolve, reject) => {
     const child = spawnGrupo(cmd, args);
     const detector = crearDetectorFin();
+    const detectorVad = vad ? crearDetectorVad(vad, vad.ruta) : null;
     let fin = false;
     let respaldo = null;
     child.stdout.on('data', (d) => {
-      if (fin || !detector.alimentar(d)) return;
+      if (fin) return;
+      const finRms = detector.alimentar(d);
+      const finVad = detectorVad ? detectorVad.alimentar(d) : false;
+      const corta = detectorVad && !detectorVad.fallo ? finVad : finRms;
+      if (!corta) return;
       fin = true;
       child.stdin.write('q');
       respaldo = setTimeout(() => {
@@ -368,6 +468,7 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
     let captura;
     try {
       await sonarTono();
+      const vad = await vadDeclarado(cfg, `${t.ruta}.vad.wav`);
       captura = await capturar(ffmpeg, [
         '-y', '-loglevel', 'error',
         ...cap.input,
@@ -376,7 +477,7 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
         '-t', String(timeout),
         '-ar', '16000', '-ac', '1', '-sample_fmt', 's16',
         t.ruta,
-      ]);
+      ], vad);
     } catch (e) {
       if (e.code === 'stopped') return { code: 1, data: { error: 'stopped' } };
       return { code: 1, data: { error: 'audio_device_error',
@@ -426,6 +527,7 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
     if (t) {
       if (!handleClosed) await t.handle.close().catch(() => {});
       await rm(t.ruta, { force: true }).catch(() => {});
+      await rm(`${t.ruta}.vad.wav`, { force: true }).catch(() => {});
     }
     await liberarCanal();
   }

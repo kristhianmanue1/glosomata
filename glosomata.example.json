@@ -51,7 +51,9 @@
     ],
     "stt": {
       "whisper_bin": "/ruta/a/whisper-cli",
-      "whisper_model": "/ruta/a/ggml-small.bin"
+      "whisper_model": "/ruta/a/ggml-small.bin",
+      "vad_bin": "/ruta/a/whisper-vad-speech-segments",
+      "vad_model": "/ruta/a/ggml-silero-v6.2.0.bin"
     },
     "diar": {
       "python": "/ruta/a/.venv-diar/bin/python",
