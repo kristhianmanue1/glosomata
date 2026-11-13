@@ -1,7 +1,13 @@
 # Contrato de diarización — v1 (turnos de hablante efímeros)
 
-> **Estado:** PROPUESTA. Pasa a normativo con su aceptación explícita y
-> ronda adversarial (fase D3 del plan de esta capacidad). Modelo y
+> **Estado:** NORMATIVO desde 2026-11-13 — aceptación explícita del
+> Operador («adelante con trodas las recomendaciones», 2026-11-13
+> ~04:40 CDMX; recomendación O-7 del informe del revisor Fable) tras
+> el ensayo vivo §9.4 (historia v1.3) y la ronda adversarial con
+> veredicto `proceed` anclado a `afc37f5` (PR #47, integrado en
+> `main`). El hallazgo MED de frontera (WAV truncado con cabecera
+> válida → `inferencia_fallida`) queda ABIERTO, declarado sin
+> minimizar, con seguimiento en el issue #43. Modelo y
 > vocabulario: `docs/specs/contrato-consumo-agentes-v1.md`; la taxonomía
 > de errores sigue mandando en `docs/specs/specs-y-contratos-v1.md`.
 > Decisión: ADR-012 (aceptada 2026-11-12; este contrato es su forma
@@ -312,3 +318,14 @@ propios.
   `inferencia_fallida` (no `audio_ilegible`); propuesta de enmienda
   de §3.1/§9.4 en el informe, pendiente de decisión. El estado
   PROPUESTA no cambia: normativo exige decisión del Operador.
+- v1.4 (2026-11-13): **NORMATIVO** — aceptación explícita del
+  Operador («adelante con trodas las recomendaciones», 2026-11-13
+  ~04:40 CDMX; recomendación O-7 del informe del revisor Fable) tras
+  el ensayo §9.4 (v1.3) y la ronda adversarial `proceed` anclada a
+  `afc37f5` (PR #47, integrado en `main`). El estado pasa de
+  PROPUESTA a normativo sin cambios de conducta: D0–D3 cerrados. El
+  hallazgo MED de frontera (WAV truncado con cabecera válida →
+  `inferencia_fallida`) SIGUE ABIERTO con seguimiento en el issue
+  #43. Conforme al canon de §6 (rutas convencionales en la matriz
+  versionada; precedente whisper/piper), `engines.diar` queda
+  declarado en `glosomata.json` del repo — mismo commit.

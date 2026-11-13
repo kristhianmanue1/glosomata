@@ -6,6 +6,25 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **contrato de diarización v1 NORMATIVO** (O-7) — aceptación
+  explícita del Operador («adelante con trodas las recomendaciones»,
+  2026-11-13 ~04:40 CDMX; recomendación O-7 del informe del revisor
+  Fable) tras el ensayo vivo §9.4 (historia v1.3) y la ronda
+  adversarial `proceed` anclada a `afc37f5` (PR #47, ya en `main`).
+  El estado pasa de PROPUESTA a normativo SIN cambios de conducta:
+  historia v1.4 y este CHANGELOG; el hallazgo MED de frontera (WAV
+  truncado con cabecera válida → `inferencia_fallida`) queda
+  ABIERTO con seguimiento en el issue #43. Además, conforme al canon
+  del contrato §6 (rutas convencionales viven en la matriz versionada;
+  las personales en matriz externa — precedente whisper/piper),
+  `engines.diar` queda DECLARADO en `glosomata.json` del repo con las
+  rutas convencionales (.venv-diar, script del repo, espejo bajo
+  .local-models): cierra I-4 del informe Fable — sin matriz
+  persistente, tequio no podía consumir la capacidad. `doctor`/
+  `config validate` contra esta matriz quedan en verde en este host
+  (espejo del Operador presente); en hosts sin espejo el gate de D1
+  reporta `pesos_ausentes` (fail-closed declarado).
+
 - docs: **ensayo vivo D3 ejecutado (ADR-012, contrato de diarización
   v1.3)** — guion §9.4 completo con autorización expresa del
   Operador y espejo descargado por él: turnos plausibles sobre audio

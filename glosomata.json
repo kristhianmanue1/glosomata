@@ -68,6 +68,11 @@
     "stt": {
       "whisper_bin": ".local-models/whisper.cpp/build/bin/whisper-cli",
       "whisper_model": ".local-models/whisper.cpp/models/ggml-small.bin"
+    },
+    "diar": {
+      "python": ".venv-diar/bin/python",
+      "script": "src/diar/diarize_pyannote.py",
+      "pipeline": ".local-models/pyannote/speaker-diarization-community-1"
     }
   },
   "constraints": {
