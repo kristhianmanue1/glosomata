@@ -6,6 +6,30 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **ensayo vivo D3 ejecutado (ADR-012, contrato de diarización
+  v1.3)** — guion §9.4 completo con autorización expresa del
+  Operador y espejo descargado por él: turnos plausibles sobre audio
+  sintético de dos voces locales alternadas (2 pseudónimos,
+  alternancia exacta, sin solapes; 12.8 s), `audio_ilegible`
+  (corrupto sin header), truncado por `stop` cross-process en vuelo
+  (`{"turns":null,"truncated":true}` con stderr vacío),
+  `audio_demasiado_largo` (rechazo temprano sin cargar pipeline),
+  **H-3 del issue #43 confirmado** (silencio → `turns: []`,
+  `num_speakers: 0`) y la nota de spawn-error evidenciada (EACCES
+  tras probe → `inferencia_fallida`). `doctor` y `config validate`
+  en verde contra el espejo real con matriz externa (sha256 de los
+  10 archivos en el informe). **Hallazgo de frontera abierto**: WAV
+  truncado con header RIFF válido pasa la sonda de duración y
+  clasifica `inferencia_fallida`, no `audio_ilegible` — propuesta de
+  enmienda §3.1/§9.4 en el informe, sin integrar. Historia del
+  contrato v1.3 en este commit; el estado del contrato SIGUE en
+  PROPUESTA (normativo exige decisión del Operador); ADR-012 sin
+  enmendar. Latencias observadas (carga ~12.7 s; ≈0.76× tiempo real
+  en M2 CPU): observaciones, no cotas. Grabaciones reales de tequio
+  no usadas (pendiente decisión O-4). Informe:
+  `~/www/aria/informe-diarize-d3-tramo2-2026-11-12.md`; registro en
+  el issue #43.
+
 - feat: **D2 de diarización (ADR-012): comando `diarize`, script
   Python y alta de `diar_failed`** — `diarize --file <ruta-audio>`
   (superficie ESTRICTA: sólo `--file`; cualquier extra → `usage`),

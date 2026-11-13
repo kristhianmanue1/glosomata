@@ -297,3 +297,18 @@ propios.
   (registro en `espera/` para el stop cross-process); tope de stdout
   16 MiB. Verificación física del motor sigue `inconclusive` hasta el
   ensayo vivo D3 (pendiente de autorización expresa).
+- v1.3 (2026-11-12): **ensayo vivo D3 ejecutado** (autorización
+  expresa; espejo descargado por el Operador; informe:
+  `~/www/aria/informe-diarize-d3-tramo2-2026-11-12.md`, registro en
+  el issue #43) — guion §9.4 completo sobre audio sintético de dos
+  voces locales alternadas: turnos plausibles (2 pseudónimos,
+  alternancia exacta, sin solapes, 12.8 s), `audio_ilegible`
+  (corrupto sin header), truncado por `stop` cross-process en vuelo,
+  `audio_demasiado_largo` (rechazo temprano), H-3 confirmado
+  (silencio → `turns: []`, `num_speakers: 0`) y nota de spawn-error
+  evidenciada. `doctor`/`config validate` en verde contra el espejo
+  real. **Hallazgo de frontera (abierto)**: un WAV truncado con
+  header RIFF válido pasa la sonda de duración y clasifica
+  `inferencia_fallida` (no `audio_ilegible`); propuesta de enmienda
+  de §3.1/§9.4 en el informe, pendiente de decisión. El estado
+  PROPUESTA no cambia: normativo exige decisión del Operador.
