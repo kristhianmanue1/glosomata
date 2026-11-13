@@ -22,8 +22,10 @@ generadas desde commits/PRs reales.
   .local-models): cierra I-4 del informe Fable — sin matriz
   persistente, tequio no podía consumir la capacidad. `doctor`/
   `config validate` contra esta matriz quedan en verde en este host
-  (espejo del Operador presente); en hosts sin espejo el gate de D1
-  reporta `pesos_ausentes` (fail-closed declarado).
+  (espejo del Operador presente); en hosts sin artefactos el gate de
+  D1 tumba el exit con la causa cerrada del primero que falte
+  (`python_ausente`/`script_ausente`/`pesos_ausentes` — fail-closed
+  declarado).
 
 - docs: **ensayo vivo D3 ejecutado (ADR-012, contrato de diarización
   v1.3)** — guion §9.4 completo con autorización expresa del
