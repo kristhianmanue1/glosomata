@@ -6,6 +6,24 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **ADR-012, nota de delegación (O-6)** — registra la decisión
+  del Operador (chat, 2026-11-13 ~04:55 CDMX: «ok se queda asi para
+  descarga de modelos : Delegación acotada a esa descarga
+  (recomendada). El repo sigue diciendo claramente que instalar y
+  descargar es decisión tuya. Si mañana hace falta otro modelo, te
+  pido permiso.») sobre la frase previa «listo ejedutado para estos
+  comando realizalos tu en adelante» (2026-11-12 ~21:58): la
+  delegación queda ACOTADA al espejado de los pesos de
+  speaker-diarization-community-1 en `.local-models/` (ejecutado por
+  el coordinador); `.venv-diar` y `git-lfs` quedan registrados como
+  hechos bajo la autorización D3; `AGENTS.md` §Prohibido SIGUE
+  VIGENTE (toda otra descarga/instalación exige permiso del
+  Operador, una por una); el token HF fue retirado del disco
+  (2026-11-13). La decisión del ADR no se enmienda. Se actualiza
+  además la REFERENCIA de estado del encabezado (el contrato asociado
+  es NORMATIVO desde 2026-11-13, historia v1.4) — referencia, no
+  decisión. `AGENTS.md` intacto.
+
 - docs: **contrato de diarización v1 NORMATIVO** (O-7) — aceptación
   explícita del Operador («adelante con trodas las recomendaciones»,
   2026-11-13 ~04:40 CDMX; recomendación O-7 del informe del revisor
