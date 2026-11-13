@@ -75,11 +75,12 @@ whisper.cpp), el fin de turno lo decide la VOZ HUMANA: cada 500 ms se
 evalúa una ventana con los últimos 6 s (coste constante) y se corta
 1.5 s después del último segmento de voz (mínimo 100 ms de voz, `-vspd
 100`, para que un «sí» cuente); música o ruido no cuentan. Si cortó el
-VAD, la puerta RMS de silencio no emite `mic_timeout`. `config validate` y `doctor`
-diagnostican el VAD declarado (`vad_parcial`, `vad_bin_ausente`,
-`vad_model_ausente`): si está declarado y roto, tumba el veredicto,
-igual que diar. Si falta una clave o un archivo, o si el
-VAD falla, rige el detector por volumen (fail-safe: el VAD jamás corta
+VAD, la puerta RMS de silencio no emite `mic_timeout`.
+`config validate` y `doctor` diagnostican el VAD declarado
+(`vad_parcial`, `vad_bin_ausente`, `vad_model_ausente`): si está
+declarado y roto, tumba el VEREDICTO, igual que diar (forma en
+`contrato-consumo-agentes-v1.md` §7.1). En `listen`, si falta una clave o un archivo, o si
+el VAD falla, rige el detector por volumen (fail-safe: el VAD jamás corta
 por error).
 Tono de turno (2026-11-13): en darwin suena `Tink.aiff` con `afplay`
 ANTES de abrir el micrófono; best-effort (un fallo no impide

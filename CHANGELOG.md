@@ -7,8 +7,8 @@ generadas desde commits/PRs reales.
 ## [Unreleased]
 
 - feat(config): **`config validate` y `doctor` diagnostican el VAD** — un
-  VAD declarado y roto (parcial o con archivos ausentes) tumba el
-  veredicto en lugar de caer al detector RMS en silencio.
+  VAD declarado y roto (parcial, ausente o un directorio) tumba el
+  veredicto; `listen` sigue cayendo al detector RMS.
 - feat(stt): **fin de turno por voz humana con Silero VAD** (opcional,
   `engines.stt.vad_bin`/`vad_model`): con música fuerte de fondo,
   `listen` corta al callar el Operador (antes llegaba al tope).

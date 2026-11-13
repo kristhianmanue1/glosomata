@@ -243,14 +243,19 @@ export async function diagnosticoVad(cfg) {
   if (typeof bin !== 'string' || typeof model !== 'string') {
     return { ok: false, causa: 'vad_parcial' };
   }
-  try {
-    await access(bin, constants.X_OK);
-  } catch {
+  // archivo regular, no directorio: access() aceptaba '/tmp' (r, LOW)
+  const esArchivo = async (ruta, modo) => {
+    try {
+      await access(ruta, modo);
+      return (await stat(ruta)).isFile();
+    } catch {
+      return false;
+    }
+  };
+  if (!await esArchivo(bin, constants.X_OK)) {
     return { ok: false, causa: 'vad_bin_ausente' };
   }
-  try {
-    await access(model, constants.R_OK);
-  } catch {
+  if (!await esArchivo(model, constants.R_OK)) {
     return { ok: false, causa: 'vad_model_ausente' };
   }
   return { ok: true };

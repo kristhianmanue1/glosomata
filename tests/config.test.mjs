@@ -379,3 +379,29 @@ test('config set: destino inexistente → lo crea sin backup', async (t) => {
   assert.equal(out.backup, undefined);
   assert.deepEqual(JSON.parse(readFileSync(destino, 'utf8')), CONFIG_VALIDA);
 });
+
+// VAD (2026-11-13): declarado-but-roto tumba el veredicto; sin declarar,
+// stt.vad viaja como null (criterio diar).
+test('config validate: VAD sin declarar → stt.vad null', () => {
+  const r = veredicto(['config', 'validate'], configAislada(CONFIG_MOTOR_ROTO));
+  assert.equal(r.data.stt.vad, null);
+});
+
+test('config validate: VAD parcial → exit 1 con vad_parcial', (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (say)');
+  const cfg = structuredClone(CONFIG_VALIDA);
+  cfg.engines.stt.vad_bin = '/bin/sh';
+  const r = veredicto(['config', 'validate'], configAislada(cfg));
+  assert.equal(r.code, 1);
+  assert.deepEqual(r.data.stt.vad,
+    { declarado: true, available: false, causa: 'vad_parcial' });
+});
+
+test('config validate: VAD con directorio en lugar de archivo → roto', (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (say)');
+  const cfg = structuredClone(CONFIG_VALIDA);
+  Object.assign(cfg.engines.stt, { vad_bin: '/tmp', vad_model: '/tmp' });
+  const r = veredicto(['config', 'validate'], configAislada(cfg));
+  assert.equal(r.code, 1);
+  assert.equal(r.data.stt.vad.causa, 'vad_bin_ausente');
+});

@@ -295,3 +295,37 @@ test('doctor: preferencia en host sin darwin → plataforma_no_soportada', (t) =
 });
 
 after(() => rmSync(dirPref, { recursive: true, force: true }));
+
+// VAD (2026-11-13): sección sólo si se declara; declarado-but-roto
+// tumba el exit (criterio diar).
+const CFG_VERDE = (stt) => ({
+  engines: {
+    tts: [{ id: 'say-ok', adapter: 'say', selected: true,
+      kill_switch: { type: 'subprocess_kill', target: 'process_group',
+        max_latency_ms: 200 } }],
+    stt: { whisper_bin: '/usr/bin/say', whisper_model: '/usr/bin/say', ...stt },
+  },
+  constraints: {},
+});
+
+test('doctor: VAD sano → sección ok y exit 0; sin declarar → sin sección', (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (say/afplay)');
+  const env = { GLOSOMATA_FFMPEG: '/usr/bin/say' };
+  const sano = doctor({ ...env, GLOSOMATA_CONFIG: configTemporal(CFG_VERDE({
+    vad_bin: '/usr/bin/say', vad_model: '/usr/bin/say' })) });
+  assert.equal(sano.code, 0);
+  assert.deepEqual(JSON.parse(sano.out).stt.vad, { ok: true });
+  const sin = doctor({ ...env, GLOSOMATA_CONFIG: configTemporal(CFG_VERDE({})) });
+  assert.equal(sin.code, 0);
+  assert.equal('vad' in JSON.parse(sin.out).stt, false);
+});
+
+test('doctor: VAD declarado y roto → exit 1 con causa cerrada', (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (say/afplay)');
+  const r = doctor({ GLOSOMATA_FFMPEG: '/usr/bin/say',
+    GLOSOMATA_CONFIG: configTemporal(CFG_VERDE({
+      vad_bin: '/usr/bin/say', vad_model: '/no/existe' })) });
+  assert.equal(r.code, 1);
+  assert.deepEqual(JSON.parse(r.out).stt.vad,
+    { ok: false, causa: 'vad_model_ausente' });
+});

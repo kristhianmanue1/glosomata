@@ -148,8 +148,9 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
   veredicto.stt = {
     declarado: sttDeclarado, available: whisper.ok,
     ...(whisper.ok ? {} : { causa: whisper.causa }),
-    ...(vad ? { vad: { declarado: true, available: vad.ok,
-      ...(vad.ok ? {} : { causa: vad.causa }) } } : {}),
+    // sin declarar viaja como null, igual que diar (presencia explícita)
+    vad: vad === null ? null : { declarado: true, available: vad.ok,
+      ...(vad.ok ? {} : { causa: vad.causa }) },
   };
   // D1 (ADR-012): diar declarado debe pasar el probe estructural
   // (misma regla que los motores tts: declarado-but-roto bloquea el

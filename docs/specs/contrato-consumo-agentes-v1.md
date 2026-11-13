@@ -221,7 +221,7 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   `plataforma_no_soportada`, `afplay_ausente`, `binario_ausente`,
   `modelo_ausente`, `python_ausente`, `script_ausente`,
   `sin_kill_switch`, `adapter_desconocido`, `probe_fallido`.
-- `stt: {whisper: {ok, causa?}, ffmpeg: {ok, causa?}, input_device?}` —
+- `stt: {whisper: {ok, causa?}, ffmpeg: {ok, causa?}, vad?, input_device?}` —
   causas de whisper/ffmpeg: `whisper_bin_ausente`,
   `whisper_model_ausente`, `config_unreadable`; y para ffmpeg:
   `ffmpeg_ausente`, `plataforma_no_soportada`. La sección opcional
@@ -231,7 +231,15 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
   cerradas `forma_invalida | plataforma_no_soportada |
   device_missing | device_list_unavailable` (con `resuelve:null`
   cuando el listado no pudo verificarse). El advisory JAMÁS afecta el
-  exit del veredicto.
+  exit del veredicto. La sección opcional `vad: {ok, causa?}`
+  (2026-11-13, Silero VAD) aparece sólo si la matriz declara
+  `engines.stt.vad_bin` o `vad_model`. Causas del conjunto cerrado
+  `vad_parcial | vad_bin_ausente | vad_model_ausente`. Si está
+  DECLARADA y rota, tumba el exit (criterio diar); si no se declara, no
+  tiene efecto. `config validate`/`config set` aplican la misma regla
+  con `stt.vad: {declarado, available, causa?}`; sin declarar, `stt.vad`
+  viaja como `null`, como `diar`. `listen` no cambia: con un VAD roto
+  rige el detector por volumen.
 - `diar: {ok, causa?}` (D1, 2026-11-12, ADR-012) — sección OPCIONAL:
   aparece sólo si la matriz declara `engines.diar` {python, script,
   pipeline} (semántica en `contrato-diarizacion-v1.md` §6-§7).
