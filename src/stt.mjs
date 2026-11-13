@@ -277,7 +277,9 @@ function crearDetectorVad(vad, ruta) {
     if (cerrado) return null;
     await writeFile(ruta, wavDesdePcm(pcm), { mode: 0o600 });
     if (cerrado) return null;
-    return segmentos(['-vm', vad.model, '-f', ruta]);
+    // -vspd 100: un «sí» o «no» dura < 250 ms (mínimo por defecto) y
+    // desaparecía; sin segmento no había corte (r2, MEDIUM).
+    return segmentos(['-vm', vad.model, '-vspd', '100', '-f', ruta]);
   };
   return {
     get fallo() { return fallo; },
@@ -321,26 +323,36 @@ async function capturar(cmd, args, vad = null) {
     const detector = crearDetectorFin();
     const detectorVad = vad ? crearDetectorVad(vad, vad.ruta) : null;
     let fin = false;
+    let porVad = false;
     let respaldo = null;
     child.stdout.on('data', (d) => {
       if (fin) return;
       const finRms = detector.alimentar(d);
       const finVad = detectorVad ? detectorVad.alimentar(d) : false;
-      const corta = detectorVad && !detectorVad.fallo ? finVad : finRms;
+      const vadSano = detectorVad && !detectorVad.fallo;
+      const corta = vadSano ? finVad : finRms;
       if (!corta) return;
       fin = true;
+      porVad = !!vadSano;
       child.stdin.write('q');
       respaldo = setTimeout(() => {
         try { process.kill(child.pid, 'SIGINT'); } catch {}
       }, 2000);
     });
-    // Toda salida pasa por aquí: cierra el VAD (mata y espera) ANTES de
-    // resolver o rechazar, para que el temporal no sobreviva al finally.
+    // Toda salida pasa por aquí, UNA vez (r2, LOW): cierra el VAD (mata y
+    // espera) antes de resolver o rechazar, para que el temporal no
+    // sobreviva al finally. Espera acotada a 250 ms (r2, LOW: stop no debe
+    // depender del job): cerrar() ya marcó `cerrado` y mató al hijo de
+    // forma síncrona, así que ningún job nuevo escribe audio.
+    let salido = false;
     const salir = (fn, v) => {
+      if (salido) return;
+      salido = true;
       clearInterval(poll);
       clearTimeout(respaldo);
       const espera = detectorVad ? detectorVad.cerrar() : Promise.resolve();
-      espera.catch(() => {}).then(() => fn(v));
+      const tope = new Promise((r) => { setTimeout(r, 250).unref?.(); });
+      Promise.race([espera.catch(() => {}), tope]).then(() => fn(v));
     };
     const stopped = () => Object.assign(new Error('stopped'),
       { code: 'stopped' });
@@ -361,7 +373,7 @@ async function capturar(cmd, args, vad = null) {
       }
       // corte propio: el código de salida de q/SIGINT no es fallo; el WAV
       // se juzga después (pcmDesdeWav, fail-closed)
-      salir(resolve, { code: fin ? 0 : code });
+      salir(resolve, { code: fin ? 0 : code, porVad });
     });
   });
 }
@@ -538,7 +550,9 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
       return { code: 1, data: { error: 'audio_device_error',
         causa: 'capture_failed' } };
     }
-    if (rmsS16(pcm) < UMBRAL_RMS) {
+    // Si cortó el VAD, ya oyó voz humana: la puerta RMS fija no lo
+    // desmiente con mic_timeout (r2, MEDIUM: voz baja + silencio).
+    if (!captura.porVad && rmsS16(pcm) < UMBRAL_RMS) {
       return { code: 1, data: { error: 'mic_timeout' } };
     }
     let trans;
