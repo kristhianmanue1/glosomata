@@ -140,11 +140,16 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
   }));
   const sttDeclarado = !!(sondeada.engines.stt?.whisper_bin
     || sondeada.engines.stt?.whisper_model);
-  const { diagnosticoWhisper } = await import('./stt.mjs');
+  const { diagnosticoWhisper, diagnosticoVad } = await import('./stt.mjs');
   const whisper = await diagnosticoWhisper(sondeada);
+  // VAD declarado-but-roto bloquea el set (criterio diar/phonon/lfm3);
+  // no declarado: sin sección.
+  const vad = await diagnosticoVad(sondeada);
   veredicto.stt = {
     declarado: sttDeclarado, available: whisper.ok,
     ...(whisper.ok ? {} : { causa: whisper.causa }),
+    ...(vad ? { vad: { declarado: true, available: vad.ok,
+      ...(vad.ok ? {} : { causa: vad.causa }) } } : {}),
   };
   // D1 (ADR-012): diar declarado debe pasar el probe estructural
   // (misma regla que los motores tts: declarado-but-roto bloquea el
@@ -158,6 +163,7 @@ export async function validarConfig(ruta = RUTA_CONFIG) {
   };
   const ok = veredicto.motores.every((m) => m.available)
     && (!sttDeclarado || whisper.ok)
+    && (vad === null || vad.ok)
     && (veredicto.diar === null || veredicto.diar.available);
   return { code: ok ? 0 : 1, data: veredicto };
 }

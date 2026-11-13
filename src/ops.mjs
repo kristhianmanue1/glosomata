@@ -5,7 +5,7 @@
 import { cargarMatriz } from './matriz.mjs';
 import { canonizar } from './plantillas.mjs';
 import { rutaFfmpeg, diagnosticoCaptura, diagnosticoWhisper,
-  causaFormaNombre } from './stt.mjs';
+  diagnosticoVad, causaFormaNombre } from './stt.mjs';
 import {
   adquirirCanal, liberarCanal, resetStop, stopGeneration, stopPedido,
   detenerCanalRemoto, nuevoTemporal, registrarEspera, liberarEspera,
@@ -379,14 +379,19 @@ export async function doctorOp() {
     }
   }
 
+  // VAD: sección sólo si se declara; declarado-but-roto tumba el exit.
+  const vad = cfg ? await diagnosticoVad(cfg) : null;
+
   const data = { node, config, tts,
     stt: { whisper, ffmpeg,
+      ...(vad ? { vad } : {}),
       ...(entrada ? { input_device: entrada } : {}) },
     ...(diar ? { diar: { ok: diar.ok,
       ...(diar.ok ? {} : { causa: diar.causa ?? 'probe_fallido' }) } }
       : {}) };
   const operativo = node.ok && config.ok && tts.length > 0
     && tts.every((t) => t.available) && whisper.ok && ffmpeg.ok
+    && (vad === null || vad.ok)
     && (diar === null || diar.ok);
   return { code: operativo ? 0 : 1, data };
 }

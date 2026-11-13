@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   argsCaptura, causaFormaNombre, crearDetectorFin, rutaTono,
-  parsearSegmentosVad, finPorVad,
+  parsearSegmentosVad, finPorVad, diagnosticoVad,
 } from '../src/stt.mjs';
 
 test('argsCaptura: darwin usa avfoundation', () => {
@@ -191,4 +191,17 @@ test('finPorVad: ventana sin voz tras voz previa es silencio y corta', () => {
 test('finPorVad: sin error de coma flotante en el borde de 1.5 s', () => {
   // 6.3 - 4.8 = 1.4999999999999996 en coma flotante
   assert.equal(finPorVad([{ inicio: 1, fin: 4.8 }], 6.3), true);
+});
+
+test('diagnosticoVad: no declarado, parcial, ausentes y ok', async () => {
+  const stt = (x) => ({ engines: { stt: x } });
+  assert.equal(await diagnosticoVad(stt({})), null);
+  assert.deepEqual(await diagnosticoVad(stt({ vad_bin: '/bin/sh' })),
+    { ok: false, causa: 'vad_parcial' });
+  assert.deepEqual(await diagnosticoVad(stt({ vad_bin: '/no/existe',
+    vad_model: '/bin/sh' })), { ok: false, causa: 'vad_bin_ausente' });
+  assert.deepEqual(await diagnosticoVad(stt({ vad_bin: '/bin/sh',
+    vad_model: '/no/existe' })), { ok: false, causa: 'vad_model_ausente' });
+  assert.deepEqual(await diagnosticoVad(stt({ vad_bin: '/bin/sh',
+    vad_model: '/bin/sh' })), { ok: true });
 });

@@ -232,19 +232,37 @@ function wavDesdePcm(pcm) {
   return Buffer.concat([h, pcm]);
 }
 
-// VAD sólo si AMBAS claves están declaradas y los archivos existen; si
-// no, null (rige el detector RMS, conducta previa intacta).
-async function vadDeclarado(cfg, ruta) {
-  const bin = cfg.engines?.stt?.vad_bin;
-  const model = cfg.engines?.stt?.vad_model;
-  if (typeof bin !== 'string' || typeof model !== 'string') return null;
+// Diagnóstico del VAD compartido por listen, config validate y doctor (una
+// sola definición, sin copias que deriven; r1/r2 LOW). null = no declarado
+// (ninguna clave). Declarar sólo una clave es config rota (vad_parcial):
+// quien copió el ejemplo a medias creería tener VAD.
+export async function diagnosticoVad(cfg) {
+  const bin = cfg?.engines?.stt?.vad_bin;
+  const model = cfg?.engines?.stt?.vad_model;
+  if (bin === undefined && model === undefined) return null;
+  if (typeof bin !== 'string' || typeof model !== 'string') {
+    return { ok: false, causa: 'vad_parcial' };
+  }
   try {
     await access(bin, constants.X_OK);
+  } catch {
+    return { ok: false, causa: 'vad_bin_ausente' };
+  }
+  try {
     await access(model, constants.R_OK);
   } catch {
-    return null;
+    return { ok: false, causa: 'vad_model_ausente' };
   }
-  return { bin, model, ruta };
+  return { ok: true };
+}
+
+// VAD sólo si el diagnóstico da ok; si no, null (rige el detector RMS,
+// conducta previa intacta; validate y doctor ya avisan del fallo).
+async function vadDeclarado(cfg, ruta) {
+  const d = await diagnosticoVad(cfg);
+  if (!d?.ok) return null;
+  return { bin: cfg.engines.stt.vad_bin, model: cfg.engines.stt.vad_model,
+    ruta };
 }
 
 // Un job VAD a la vez. `cerrar()` (r1, HIGH ×2) mata el proceso VAD en
