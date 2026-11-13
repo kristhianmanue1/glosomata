@@ -232,7 +232,7 @@ Leyenda de tamaño: S ≤ media sesión; M ≤ una sesión; L requiere partirse.
 | Candidato | Gatillo | Nota |
 |---|---|---|
 | Daemon TTS (kokoro en caliente) | medición de arranque en frío reproducible (hallazgo #2) | kill-switch y ciclo de vida en el ADR |
-| VAD/barge-in v1.1 | dolor real de UX en turnos largos | ADR propio ya anunciado en no-objetivos |
+| Barge-in (interrumpir `speak` con la voz) | dolor real de UX en turnos largos | ADR propio; el VAD de fin de turno ya está en v1 (ADR-013) |
 | Cola/prioridad de turnos (REQ-12) | ≥3 agentes concurrentes reales | reemplaza la política de backoff del consumidor |
 | Idioma STT seleccionable | primer consumidor no-español | `-l es` hoy fijo en `stt.mjs` |
 | RMS de silencio configurable | falsos `mic_timeout` en entorno ruidoso | umbral 120 hoy fijo |

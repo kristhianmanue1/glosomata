@@ -186,8 +186,9 @@ session_abandoned, channel_busy, not_supported, config_unreadable,
 config_write_failed, usage, internal_error, devices_unavailable
 (inventario de audio, alta 2026-11-11, `contrato-hardware-v1.md`),
 diar_failed (diarización, alta 2026-11-12, `contrato-diarizacion-v1.md`
-§3.1). Las causas cerradas de cada código viven en
-`contrato-consumo-agentes-v1.md` §2.1. `stopped` no es de la
+§3.1). Cuando un código define causas cerradas, viven en
+`contrato-consumo-agentes-v1.md` §5 (audio) y §7.1 (`doctor`) y en
+`contrato-diarizacion-v1.md` §3.1. `stopped` no es de la
 taxonomía: señala exclusivamente la interrupción de un `listen` por
 `stop`. `config_write_failed`: fallo de la escritura gobernada de
 config (comandos `config`, plan de configuración P1).

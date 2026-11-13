@@ -201,6 +201,7 @@ del dominio de runtime.
 | `GLOSOMATA_RUNTIME` | lock, temporales y stop (§5.1) | tests, aislados |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura (STT) | rutas no estándar |
 | `GLOSOMATA_SYSTEM_PROFILER` | binario system_profiler del inventario `devices` | tests herméticos |
+| `GLOSOMATA_TONO` | tono de turno de `listen` (ADR-013); `''` lo apaga | tests, sin sonido |
 
 Toda variable futura se documentará aquí antes de existir en código.
 
@@ -391,4 +392,5 @@ cosa.
   `listen` no cambia: con un VAD roto rige el detector por volumen.
 - v1.7 (2026-11-13, issue #54): §4 alineado con ADR-013 (`listen` ya
   no es ventana fija, también por MCP); los specs base añaden
-  `devices`, `devices_unavailable` y `diar_failed`.
+  `devices`, `devices_unavailable` y `diar_failed`. §6 registra
+  `GLOSOMATA_TONO`, que llegó al código en el PR #51 sin documentarse.

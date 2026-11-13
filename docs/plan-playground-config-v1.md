@@ -245,9 +245,9 @@ Leyenda: S ≤ media sesión; M ≤ una sesión.
   shell crece se parte por pestañas en archivos propios (gate 800
   líneas). Login por token en sessionStorage.
 - Pestaña **Voz**: textarea → `/speak` (motor/voz elegible), paro →
-  `/stop`, micrófono → `/listen` con cuenta regresiva visible (la UX
-  comunica que la voz NO corta la captura — ventana fija; superado por
-  ADR-013, 2026-11-13: `listen` termina con el silencio del humano).
+  `/stop`, micrófono → `/listen` con indicador «escuchando» (la UX
+  comunica que el turno termina con el silencio del humano y que el
+  tope es `timeout_s`, ADR-013).
 - **Criterio**: probar voz desde el navegador sin tocar la terminal.
 
 ### P4.2 Motores, Config, Doctor, Ejemplos — M — **ADV (config)**

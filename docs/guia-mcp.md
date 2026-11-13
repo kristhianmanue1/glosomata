@@ -34,6 +34,7 @@ Contrato documental (plan de consumo C0.3): toda variable leída por
 | `GLOSOMATA_RUNTIME` | directorio base del lock y temporales (tests, sandboxes) |
 | `GLOSOMATA_FFMPEG` | binario ffmpeg de captura STT (rutas no estándar) |
 | `GLOSOMATA_SYSTEM_PROFILER` | binario system_profiler del inventario `devices` (tests herméticos) |
+| `GLOSOMATA_TONO` | tono de turno de `listen` (ADR-013): `''` lo apaga; otra ruta lo reemplaza. Por defecto `Tink.aiff` en darwin |
 
 Protocolo: JSON-RPC 2.0 por líneas. `initialize` (protocolVersion
 `2024-11-05`), `tools/list`, `tools/call`, `ping`. Requests desconocidos
@@ -45,7 +46,7 @@ inválidos → `-32600`.
 | Tool | Args | Qué hace |
 |---|---|---|
 | `speak` | `text` (requerido), `engine?` | reproduce por voz localmente; `{played, engine, echo, truncated}` |
-| `listen` | `timeout_s?` (0<v≤120), `device?` (nombre exacto) | captura hasta `timeout_s` como **tope** y termina con el silencio del humano: 1.5 s tras la voz (Silero VAD si está declarado, si no por volumen; ADR-013); sin voz, rige el tope y `mic_timeout`. Con `device`, selecciona la ENTRADA por nombre exacto (validación 0/1/N previa; homónimos y ausencia → `device_missing`; JAMÁS fallback a `:0`; fuera de darwin → `not_supported`) |
+| `listen` | `timeout_s?` (0<v≤120), `device?` (nombre exacto) | captura hasta `timeout_s` como **tope** y termina con el silencio del humano: 1.5 s tras la voz (Silero VAD si está declarado, si no por volumen; ADR-013); sin voz detectada rige el tope, y un silencio de RMS bajo da `mic_timeout`. Con `device`, selecciona la ENTRADA por nombre exacto (validación 0/1/N previa; homónimos y ausencia → `device_missing`; JAMÁS fallback a `:0`; fuera de darwin → `not_supported`) |
 | `stop` | — | interrumpe la operación de canal activa (kill-switch) |
 | `session_new` | `template_id?` | acuña sesión efímera v1 (la posee el agente); sin template → `template:null`; id desconocido → `not_found` |
 | `list_engines` | — | matriz de disponibilidad TTS/STT |
@@ -80,8 +81,9 @@ efectiva — cada apertura revalida con no-fallback
 - **`echo`** está siempre presente: texto canonicalizado (NFC,
   inaudibles fuera) si la reproducción fue completa, `null` en caso
   contrario. Si hay texto en `echo`, sonó entero.
-- **`listen`** captura la ventana completa y clasifica post-hoc: silencio
-  (RMS bajo de PCM válido) → `mic_timeout`; WAV ausente o ilegible →
+- **`listen`** captura hasta el tope y termina con el silencio del humano
+  (ADR-013); luego clasifica post-hoc: silencio (RMS bajo de PCM válido,
+  salvo que haya cortado el VAD) → `mic_timeout`; WAV ausente o ilegible →
   `audio_device_error` con `capture_failed`; luego transcribe con whisper.
 - **`duration_ms`** en `speak` y `listen` mide la operación completa,
   incluso si falla o se interrumpe. `busy_pid` en `channel_busy` es sólo
