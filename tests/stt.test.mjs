@@ -182,3 +182,13 @@ test('finPorVad: corta sólo con voz previa y 1.5 s tras su fin', () => {
   assert.equal(finPorVad(segs, 6.3), true); // 1.5 s
   assert.equal(finPorVad([], 60), false); // música/ruido sin voz: no corta
 });
+
+test('finPorVad: ventana sin voz tras voz previa es silencio y corta', () => {
+  assert.equal(finPorVad([], 6, true), true);
+  assert.equal(finPorVad([], 1, true), false); // ventana < 1.5 s
+});
+
+test('finPorVad: sin error de coma flotante en el borde de 1.5 s', () => {
+  // 6.3 - 4.8 = 1.4999999999999996 en coma flotante
+  assert.equal(finPorVad([{ inicio: 1, fin: 4.8 }], 6.3), true);
+});

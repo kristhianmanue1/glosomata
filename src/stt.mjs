@@ -188,12 +188,15 @@ async function correr(cmd, args) {
 // `whisper-vad-speech-segments`, engines.stt.vad_model = ggml-silero).
 // Detecta VOZ HUMANA, no volumen: música sin canto, un ventilador o ruido
 // no cuentan como voz (con el detector RMS impedían el corte; medido
-// 2026-11-13). Cada 500 ms se evalúa TODO lo capturado (16 ms por 7 s de
-// audio, ~340 ms con la carga). Fail-safe: un fallo del VAD lo apaga para
-// esta captura y rige el detector RMS; el VAD jamás corta por error.
+// 2026-11-13). Cada 500 ms se evalúa una VENTANA de los últimos 6 s
+// (16 ms por 7 s de audio, ~340 ms con la carga): coste constante aunque
+// el turno dure 120 s (revisión r1, MEDIUM). Fail-safe: un fallo del VAD
+// lo apaga para esta captura y rige el detector RMS; el VAD jamás corta
+// por error.
 const INTERVALO_VAD_TRAMOS = 5;
 const SILENCIO_VAD_S = 1.5;
 const BYTES_POR_S = 32000; // 16 kHz s16le mono
+const VENTANA_VAD_BYTES = 6 * BYTES_POR_S;
 
 // Salida de whisper-vad-speech-segments: «Speech segment N: start = X,
 // end = Y» en centésimas de segundo (medido: 199.00 = 1.99 s).
@@ -206,9 +209,16 @@ export function parsearSegmentosVad(stdout) {
   return segs;
 }
 
-// Hubo voz y el último segmento terminó hace >= silencioS.
-export function finPorVad(segs, duracionS, silencioS = SILENCIO_VAD_S) {
-  return segs.length > 0 && duracionS - segs.at(-1).fin >= silencioS;
+// ¿Terminó el turno? `segs` y `duracionS` son de la VENTANA evaluada;
+// `hablo` dice si hubo voz en alguna ventana anterior. Con voz en la
+// ventana: el último segmento terminó hace >= silencioS. Sin voz en la
+// ventana pero con voz antes: la ventana entera (> silencioS) es silencio.
+// Comparación en centésimas enteras: sin error de coma flotante (r1, LOW).
+export function finPorVad(segs, duracionS, hablo = false,
+  silencioS = SILENCIO_VAD_S) {
+  if (segs.length === 0) return hablo && duracionS >= silencioS;
+  const cs = (x) => Math.round(x * 100);
+  return cs(duracionS) - cs(segs.at(-1).fin) >= cs(silencioS);
 }
 
 function wavDesdePcm(pcm) {
@@ -237,41 +247,65 @@ async function vadDeclarado(cfg, ruta) {
   return { bin, model, ruta };
 }
 
+// Un job VAD a la vez. `cerrar()` (r1, HIGH ×2) mata el proceso VAD en
+// vuelo y ESPERA al job: así capturar() no resuelve, ni listen borra el
+// temporal, mientras un writeFile o un whisper-vad-speech-segments sigan
+// vivos. Tras cerrar, ningún job nuevo escribe audio.
 function crearDetectorVad(vad, ruta) {
-  let partes = [];
+  let ventana = Buffer.alloc(0);
   let bytes = 0;
   let evaluado = 0;
-  let ocupado = false;
+  let pendiente = null;
+  let hijo = null;
+  let cerrado = false;
+  let hablo = false;
   let fin = false;
   let fallo = false;
+  const segmentos = (args) => new Promise((resolve) => {
+    hijo = spawnGrupo(vad.bin, args);
+    let stdout = '';
+    hijo.stdout.on('data', (d) => {
+      if (stdout.length < 200_000) stdout += d.toString();
+    });
+    hijo.on('error', () => { hijo = null; resolve(null); });
+    hijo.on('close', (code) => {
+      hijo = null;
+      resolve(code === 0 && !cerrado ? parsearSegmentosVad(stdout) : null);
+    });
+  });
   const evaluar = async (pcm) => {
-    try {
-      await writeFile(ruta, wavDesdePcm(pcm), { mode: 0o600 });
-      const r = await correr(vad.bin, ['-vm', vad.model, '-f', ruta]);
-      if (r.code !== 0) return null;
-      return parsearSegmentosVad(r.stdout);
-    } catch {
-      return null;
-    }
+    if (cerrado) return null;
+    await writeFile(ruta, wavDesdePcm(pcm), { mode: 0o600 });
+    if (cerrado) return null;
+    return segmentos(['-vm', vad.model, '-f', ruta]);
   };
   return {
     get fallo() { return fallo; },
     alimentar(buf) {
-      partes.push(buf);
+      ventana = Buffer.concat([ventana, buf]);
+      if (ventana.length > VENTANA_VAD_BYTES) {
+        ventana = ventana.subarray(ventana.length - VENTANA_VAD_BYTES);
+      }
       bytes += buf.length;
       const tramos = Math.floor(bytes / TRAMO_BYTES);
-      if (!fallo && !ocupado && !fin
+      if (!cerrado && !fallo && !pendiente && !fin
           && tramos - evaluado >= INTERVALO_VAD_TRAMOS) {
         evaluado = tramos;
-        ocupado = true;
-        const pcm = Buffer.concat(partes);
-        partes = [pcm];
-        evaluar(pcm).then((segs) => {
-          if (segs === null) fallo = true;
-          else if (finPorVad(segs, pcm.length / BYTES_POR_S)) fin = true;
-        }).finally(() => { ocupado = false; });
+        const pcm = Buffer.from(ventana);
+        pendiente = evaluar(pcm).then((segs) => {
+          if (cerrado) return;
+          if (segs === null) { fallo = true; return; }
+          if (finPorVad(segs, pcm.length / BYTES_POR_S, hablo)) fin = true;
+          if (segs.length > 0) hablo = true;
+        }).catch(() => { fallo = true; })
+          .finally(() => { pendiente = null; });
       }
       return fin;
+    },
+    async cerrar() {
+      cerrado = true;
+      if (hijo) matarGrupo(hijo);
+      if (pendiente) await pendiente;
     },
   };
 }
@@ -300,30 +334,34 @@ async function capturar(cmd, args, vad = null) {
         try { process.kill(child.pid, 'SIGINT'); } catch {}
       }, 2000);
     });
+    // Toda salida pasa por aquí: cierra el VAD (mata y espera) ANTES de
+    // resolver o rechazar, para que el temporal no sobreviva al finally.
+    const salir = (fn, v) => {
+      clearInterval(poll);
+      clearTimeout(respaldo);
+      const espera = detectorVad ? detectorVad.cerrar() : Promise.resolve();
+      espera.catch(() => {}).then(() => fn(v));
+    };
+    const stopped = () => Object.assign(new Error('stopped'),
+      { code: 'stopped' });
     const poll = setInterval(() => {
       if (stopPedido()) {
-        clearInterval(poll);
-        clearTimeout(respaldo);
         matarGrupo(child);
-        reject(Object.assign(new Error('stopped'), { code: 'stopped' }));
+        salir(reject, stopped());
       }
     }, 50);
     child.on('error', () => {
-      clearInterval(poll);
-      clearTimeout(respaldo);
-      reject(Object.assign(new Error('spawn'), { code: 'spawn' }));
+      salir(reject, Object.assign(new Error('spawn'), { code: 'spawn' }));
     });
     child.on('close', (code) => {
-      clearInterval(poll);
-      clearTimeout(respaldo);
       // mismo guard que correr(): stop gana a close (ronda 5, M-1)
       if (stopPedido()) {
-        reject(Object.assign(new Error('stopped'), { code: 'stopped' }));
+        salir(reject, stopped());
         return;
       }
       // corte propio: el código de salida de q/SIGINT no es fallo; el WAV
       // se juzga después (pcmDesdeWav, fail-closed)
-      resolve({ code: fin ? 0 : code });
+      salir(resolve, { code: fin ? 0 : code });
     });
   });
 }
