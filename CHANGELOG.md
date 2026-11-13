@@ -12,14 +12,15 @@ generadas desde commits/PRs reales.
   (recomendada). El repo sigue diciendo claramente que instalar y
   descargar es decisión tuya. Si mañana hace falta otro modelo, te
   pido permiso.») sobre la frase previa «listo ejedutado para estos
-  comando realizalos tu en adelante» (2026-11-12 ~21:58): la
-  delegación queda ACOTADA al espejado de los pesos de
-  speaker-diarization-community-1 en `.local-models/` (ejecutado por
-  el coordinador); `.venv-diar` y `git-lfs` quedan registrados como
-  hechos bajo la autorización D3; `AGENTS.md` §Prohibido SIGUE
-  VIGENTE (toda otra descarga/instalación exige permiso del
-  Operador, una por una); el token HF fue retirado del disco
-  (2026-11-13). La decisión del ADR no se enmienda. Se actualiza
+  comando realizalos tu en adelante […]» (2026-11-12 ~21:58): el
+  espejado de los pesos de speaker-diarization-community-1 fue
+  ejecutado por el PROPIO OPERADOR (2026-11-12 ~22:05) y los pasos
+  reservados de este tipo quedan delegados al coordinador con
+  alcance ACOTADO a ese espejado; `.venv-diar` y `git-lfs` quedan
+  registrados como hechos bajo la autorización de D3; `AGENTS.md`
+  §Prohibido SIGUE VIGENTE (toda otra descarga/instalación exige
+  permiso del Operador, una por una); el token HF fue retirado del
+  disco (2026-11-13). La decisión del ADR no se enmienda. Se actualiza
   además la REFERENCIA de estado del encabezado (el contrato asociado
   es NORMATIVO desde 2026-11-13, historia v1.4) — referencia, no
   decisión. `AGENTS.md` intacto.

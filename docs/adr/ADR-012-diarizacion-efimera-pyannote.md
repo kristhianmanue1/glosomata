@@ -119,9 +119,10 @@ la decisión de este ADR)
 
 Origen: hallazgo I-3/m-2 y decisión O-6 del informe del revisor
 Fable. La frase del Operador «listo ejedutado para estos comando
-realizalos tu en adelante» (chat, 2026-11-12 ~21:58) delegaba sin
-registro una acción que `AGENTS.md` §Prohibido reserva al Operador.
-El Operador resolvió (chat, 2026-11-13 ~04:55 CDMX):
+realizalos tu en adelante […]» (chat, 2026-11-12 ~21:58; continúa con
+la autorización de operaciones GitHub, fuera de esta nota) delegaba
+sin registro una acción que `AGENTS.md` §Prohibido reserva al
+Operador. El Operador resolvió (chat, 2026-11-13 ~04:55 CDMX):
 
 «ok se queda asi para descarga de modelos : Delegación acotada a esa
 descarga (recomendada). El repo sigue diciendo claramente que
@@ -130,18 +131,19 @@ modelo, te pido permiso.»
 
 Registro:
 
-1. La delegación queda **acotada** al espejado de los pesos de
-   `pyannote/speaker-diarization-community-1` en `.local-models/`,
-   ejecutado por el coordinador (2026-11-12 ~22:05). La decisión de
-   este ADR NO cambia: glosomata (el software) jamás descarga pesos
-   ni abre red; el espejo manual sigue siendo responsabilidad del
-   Operador, delegable sólo por una delegación expresa y acotada
-   como ésta.
-2. Quedan registrados como hechos ejecutados bajo la autorización
-   expresa del ensayo D3 (2026-11-12): la creación de `.venv-diar`
-   (pyannote.audio 4.0.7, aislado del venv principal) y la
-   instalación de `git-lfs` (brew) — constancia de versiones en los
-   informes de coordinación.
+1. El espejado de los pesos de
+   `pyannote/speaker-diarization-community-1` en `.local-models/` fue
+   ejecutado por el **propio Operador** (2026-11-12 ~22:05), que
+   ordenó enseguida «realizalos tu en adelante»: los pasos reservados
+   de este tipo quedan **delegados al coordinador, con alcance
+   acotado a ese espejado**. La decisión de este ADR NO cambia:
+   glosomata (el software) jamás descarga pesos ni abre red; el
+   espejo manual sigue siendo responsabilidad del Operador,
+   delegable sólo por una delegación expresa y acotada como ésta.
+2. Quedan registrados como hechos ejecutados bajo la autorización de
+   D3 (2026-11-12): la creación de `.venv-diar` (pyannote.audio 4.0.7,
+   aislado del venv principal) y la instalación de `git-lfs` (brew)
+   — constancia de versiones en los informes de coordinación.
 3. `AGENTS.md` §Prohibido **sigue vigente sin cambios**: cualquier
    otra descarga de modelo o instalación requiere permiso del
    Operador, una por una.
