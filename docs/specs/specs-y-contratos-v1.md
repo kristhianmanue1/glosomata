@@ -64,6 +64,12 @@ version; doctor; templates [--list|--show id]; session new
 config get engines|constraints — lectura CRUDA de la matriz (sin
 probes ni campos derivados; `config validate` juzga, la lectura no).
 
+`listen` fin de turno por silencio (adición compatible, 2026-11-13):
+`--timeout` es el TOPE de captura, no su duración. Tras detectar voz
+(umbral = 3× el piso de ruido de los primeros 300 ms + 250), 1 s de
+silencio cierra la captura (`q` a ffmpeg; SIGINT a los 2 s). Sin voz
+detectada no corta: rige el timeout y `mic_timeout` como antes.
+
 `listen --device <nombre-exacto>` (adición compatible, 2026-11-11,
 G2a): selección de ENTRADA por nombre exacto — el selector que viaja a
 ffmpeg es `:<nombre>` y lo resuelve AVFoundation AL ABRIR, dentro del

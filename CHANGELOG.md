@@ -6,6 +6,9 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat(stt): **`listen` cierra el micrófono al terminar de hablar** —
+  1 s de silencio tras voz corta la captura; `--timeout` queda como
+  tope. Turno medido en vivo: 32 s → 7 s con `--timeout 30`.
 - docs: **ADR-012, nota de delegación (O-6)** — registra la decisión
   del Operador (chat, 2026-11-13 ~04:55 CDMX: «ok se queda asi para
   descarga de modelos : Delegación acotada a esa descarga

@@ -11,6 +11,42 @@ import { measureOperation } from './duration.mjs';
 
 const UMBRAL_RMS = 120; // amplitud media mínima (s16le) para considerar voz
 
+// Fin de turno por silencio: `--timeout` es el TOPE, no la duración. Tras
+// detectar voz, ~1 s de silencio cierra la captura (antes el micrófono
+// quedaba abierto el timeout completo). Tramos de 100 ms a 16 kHz s16le.
+const TRAMO_BYTES = 3200;
+const TRAMOS_CALIBRACION = 3; // piso de ruido: primeros 300 ms
+const TRAMOS_SILENCIO_FIN = 10; // 1 s de silencio tras voz
+
+// Detector puro (testeable sin micrófono): alimentar(buf) → true cuando
+// hubo voz y luego TRAMOS_SILENCIO_FIN tramos bajo el umbral. Fail-safe:
+// sin voz detectada jamás corta — decide el timeout, como antes.
+export function crearDetectorFin(silencioTramos = TRAMOS_SILENCIO_FIN) {
+  let pendiente = Buffer.alloc(0);
+  let n = 0;
+  let piso = 0;
+  let habla = false;
+  let silencio = 0;
+  return {
+    alimentar(buf) {
+      pendiente = Buffer.concat([pendiente, buf]);
+      while (pendiente.length >= TRAMO_BYTES) {
+        const r = rmsS16(pendiente.subarray(0, TRAMO_BYTES));
+        pendiente = pendiente.subarray(TRAMO_BYTES);
+        if (n++ < TRAMOS_CALIBRACION) {
+          piso = Math.max(piso, r);
+        } else if (r > piso * 3 + 250) {
+          habla = true;
+          silencio = 0;
+        } else if (habla && ++silencio >= silencioTramos) {
+          return true;
+        }
+      }
+      return false;
+    },
+  };
+}
+
 // Captura por plataforma (LOW ronda 3): backend de entrada de ffmpeg.
 // darwin→avfoundation: sin nombre → :0 (conducta original intacta);
 // con nombre exacto → binding por NOMBRE (G2a): `:<nombre>` — el nombre
@@ -110,6 +146,52 @@ async function correr(cmd, args) {
         return;
       }
       resolve({ code, stdout });
+    });
+  });
+}
+
+// Captura con fin por silencio: ffmpeg duplica el audio a stdout (PCM
+// crudo) y el detector decide; al cortar se pide `q` por stdin para que
+// ffmpeg cierre el WAV limpio (SIGINT si no responde en 2 s). El WAV
+// sigue siendo el último argumento y se valida igual que antes.
+async function capturar(cmd, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawnGrupo(cmd, args);
+    const detector = crearDetectorFin();
+    let fin = false;
+    let respaldo = null;
+    child.stdout.on('data', (d) => {
+      if (fin || !detector.alimentar(d)) return;
+      fin = true;
+      child.stdin.write('q');
+      respaldo = setTimeout(() => {
+        try { process.kill(child.pid, 'SIGINT'); } catch {}
+      }, 2000);
+    });
+    const poll = setInterval(() => {
+      if (stopPedido()) {
+        clearInterval(poll);
+        clearTimeout(respaldo);
+        matarGrupo(child);
+        reject(Object.assign(new Error('stopped'), { code: 'stopped' }));
+      }
+    }, 50);
+    child.on('error', () => {
+      clearInterval(poll);
+      clearTimeout(respaldo);
+      reject(Object.assign(new Error('spawn'), { code: 'spawn' }));
+    });
+    child.on('close', (code) => {
+      clearInterval(poll);
+      clearTimeout(respaldo);
+      // mismo guard que correr(): stop gana a close (ronda 5, M-1)
+      if (stopPedido()) {
+        reject(Object.assign(new Error('stopped'), { code: 'stopped' }));
+        return;
+      }
+      // corte propio: el código de salida de q/SIGINT no es fallo; el WAV
+      // se juzga después (pcmDesdeWav, fail-closed)
+      resolve({ code: fin ? 0 : code });
     });
   });
 }
@@ -253,9 +335,11 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
     handleClosed = true;
     let captura;
     try {
-      captura = await correr(ffmpeg, [
+      captura = await capturar(ffmpeg, [
         '-y', '-loglevel', 'error',
         ...cap.input,
+        '-t', String(timeout),
+        '-f', 's16le', '-ar', '16000', '-ac', '1', 'pipe:1',
         '-t', String(timeout),
         '-ar', '16000', '-ac', '1', '-sample_fmt', 's16',
         t.ruta,

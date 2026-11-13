@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { argsCaptura, causaFormaNombre } from '../src/stt.mjs';
+import { argsCaptura, causaFormaNombre, crearDetectorFin } from '../src/stt.mjs';
 
 test('argsCaptura: darwin usa avfoundation', () => {
   const c = argsCaptura('darwin');
@@ -67,4 +67,51 @@ test('forma: alias reservados del backend → alias, exactos', () => {
   // no exactos: un dispositivo legítimo puede CONTENER la palabra
   assert.equal(causaFormaNombre('Default Output'), null);
   assert.equal(causaFormaNombre('nonexistent'), null);
+});
+
+// Fin de turno por silencio: tramos de 100 ms (3200 bytes s16le)
+const tramo = (amp) => {
+  const b = Buffer.alloc(3200);
+  for (let i = 0; i < b.length; i += 2) b.writeInt16LE(amp, i);
+  return b;
+};
+const alimentar = (d, tramos) => tramos.map((t) => d.alimentar(t));
+
+test('detector: voz y luego 1 s de silencio corta en el décimo tramo', () => {
+  const d = crearDetectorFin();
+  const r = alimentar(d, [
+    ...Array(3).fill(tramo(50)), // calibración
+    ...Array(5).fill(tramo(3000)), // voz
+    ...Array(10).fill(tramo(50)), // silencio
+  ]);
+  assert.equal(r.indexOf(true), r.length - 1);
+});
+
+test('detector: sólo silencio jamás corta (decide el timeout)', () => {
+  const d = crearDetectorFin();
+  assert.ok(alimentar(d, Array(100).fill(tramo(50))).every((x) => !x));
+});
+
+test('detector: pausa corta dentro del habla no corta', () => {
+  const d = crearDetectorFin();
+  const r = alimentar(d, [
+    ...Array(3).fill(tramo(50)),
+    ...Array(5).fill(tramo(3000)),
+    ...Array(6).fill(tramo(50)), // pausa de 600 ms
+    ...Array(5).fill(tramo(3000)),
+  ]);
+  assert.ok(r.every((x) => !x));
+});
+
+test('detector: tramos partidos en trozos arbitrarios equivalen', () => {
+  const d = crearDetectorFin();
+  const todo = Buffer.concat([
+    ...Array(3).fill(tramo(50)), ...Array(5).fill(tramo(3000)),
+    ...Array(10).fill(tramo(50)),
+  ]);
+  let corto = false;
+  for (let i = 0; i < todo.length; i += 1000) {
+    corto = d.alimentar(todo.subarray(i, i + 1000)) || corto;
+  }
+  assert.ok(corto);
 });
