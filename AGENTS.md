@@ -31,9 +31,13 @@ del proyecto; no se editan).
 ## Comunicación por voz (si el humano lo pide)
 
 Cuando el humano pida que las respuestas se hablen, usa glosomata como su
-propio canal: `node src/cli.mjs speak --engine kokoro --text "<resumen>"`
-al final del turno (voz masculina, motor `kokoro`, voz `em_alex`). No
-leas código ni salidas largas de terminal literal — habla un resumen.
+propio canal: `node src/cli.mjs speak --engine phonon-rebeca --text "<resumen>"`
+al final del turno (voz femenina `Rebeca`, elegida por el Operador el
+2026-11-13; requiere Ollama local activo). Si `phonon-rebeca` no está
+disponible en `engines`, usa `--engine kokoro` (voz `em_alex`) y avísale.
+Para escucharlo: `node src/cli.mjs listen --timeout 120` (el tope es
+red de seguridad; el turno termina con su silencio). No leas código ni
+salidas largas de terminal literal — habla un resumen.
 
 **Registro: Jarvis ligero.** Mayordomo/asistente británico formal —
 trata al humano de "señor", económico en palabras, sin relleno
