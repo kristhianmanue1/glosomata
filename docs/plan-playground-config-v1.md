@@ -246,7 +246,8 @@ Leyenda: S ≤ media sesión; M ≤ una sesión.
   líneas). Login por token en sessionStorage.
 - Pestaña **Voz**: textarea → `/speak` (motor/voz elegible), paro →
   `/stop`, micrófono → `/listen` con cuenta regresiva visible (la UX
-  comunica que la voz NO corta la captura — ventana fija).
+  comunica que la voz NO corta la captura — ventana fija; superado por
+  ADR-013, 2026-11-13: `listen` termina con el silencio del humano).
 - **Criterio**: probar voz desde el navegador sin tocar la terminal.
 
 ### P4.2 Motores, Config, Doctor, Ejemplos — M — **ADV (config)**

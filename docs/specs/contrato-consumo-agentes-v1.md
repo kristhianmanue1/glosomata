@@ -106,8 +106,13 @@ Semántica que el consumidor DEBE conocer:
   curso; el `speak` interrumpido se resuelve después con `isError:true`,
   `played:false`, `truncated:true`. Un `listen` interrumpido responde
   `stopped`.
-- **`listen` es ventana fija**: la voz NO corta la captura; el turno
-  dura al menos `timeout_s`. El consumidor debe comunicarlo en su UX.
+- **`listen` termina con el silencio del humano** (ADR-013,
+  2026-11-13): `timeout_s` es el TOPE, no la duración. La captura se
+  cierra 1.5 s después de la voz (Silero VAD si la matriz lo declara;
+  si no, por volumen). Sin voz detectada rige el tope y `mic_timeout`.
+  En darwin suena un tono antes de abrir el micrófono. El consumidor
+  NO debe prometer «habla al menos N segundos»; sí puede avisar que una
+  pausa larga cierra el turno.
 - **`listen` acepta `device`** (string opcional, 2026-11-11): nombre
   EXACTO de la entrada (semántica en `contrato-hardware-v1.md` §10).
   En los fallos de validación, la respuesta MCP JAMÁS lleva el detalle
@@ -384,3 +389,6 @@ cosa.
   vad_bin_ausente | vad_model_ausente`. `config validate`/`set`
   aplican la misma regla, con `stt.vad: null` si no se declara.
   `listen` no cambia: con un VAD roto rige el detector por volumen.
+- v1.7 (2026-11-13, issue #54): §4 alineado con ADR-013 (`listen` ya
+  no es ventana fija, también por MCP); los specs base añaden
+  `devices`, `devices_unavailable` y `diar_failed`.

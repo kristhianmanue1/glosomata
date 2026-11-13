@@ -6,8 +6,10 @@ Comportamiento: `speak` reproduce texto por el motor seleccionado y
 devuelve `{played, engine, echo, truncated}` — `echo` = texto
 canonicalizado, sólo con reproducción completa (`null` en caso
 contrario); `played:false` ante cualquier interrupción. `listen`
-captura una ventana fija de hasta timeout (la voz no corta la captura),
-clasifica silencio post-hoc por RMS (`mic_timeout`) y transcribe.
+captura hasta `timeout` como TOPE y termina con el silencio del
+humano: 1.5 s tras la voz, decidido por Silero VAD si está declarado o
+por volumen si no (ADR-013); sin voz detectada rige el tope y el
+silencio se clasifica por RMS (`mic_timeout`); luego transcribe.
 
 Casos:
 - DADO motor disponible CUANDO speak ENTONCES audio en ≤5s de cola, exit 0.
@@ -18,6 +20,8 @@ Casos:
   playback; `played:false`; temporales borrados.
 - DADO silencio > timeout CUANDO listen ENTONCES `mic_timeout`, estado
   limpio.
+- DADO voz seguida de 1.5 s de silencio CUANDO listen ENTONCES la
+  captura termina antes del tope y se transcribe (ADR-013).
 - DADO dos operaciones de canal concurrentes (intra o cross-process)
   CUANDO la segunda arriva ENTONCES `channel_busy` (flock global).
 
@@ -58,9 +62,10 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 Operaciones: speak --text [--engine] | speak --text-stdin [--engine];
 listen [--timeout] [--device nombre-exacto]; diarize --file
 ruta-audio (ADR-012: turnos de hablante efímeros, fuera del canal;
-contrato: contrato-diarizacion-v1.md); stop; engines;
-version; doctor; templates [--list|--show id]; session new
-[--template id]; validate --session archivo --text str; config list;
+contrato: contrato-diarizacion-v1.md); stop; engines; devices
+(inventario de audio, `contrato-hardware-v1.md`); version; doctor;
+templates [--list|--show id]; session new [--template id]; validate
+--session archivo --text str; config list;
 config get engines|constraints — lectura CRUDA de la matriz (sin
 probes ni campos derivados; `config validate` juzga, la lectura no).
 
@@ -178,7 +183,11 @@ Errores (taxonomía cerrada): engine_unavailable, tts_failed, stt_failed,
 mic_denied, mic_timeout, audio_device_error, template_invalid,
 not_found, text_too_long, session_invalid, session_expired,
 session_abandoned, channel_busy, not_supported, config_unreadable,
-config_write_failed, usage, internal_error. `stopped` no es de la
+config_write_failed, usage, internal_error, devices_unavailable
+(inventario de audio, alta 2026-11-11, `contrato-hardware-v1.md`),
+diar_failed (diarización, alta 2026-11-12, `contrato-diarizacion-v1.md`
+§3.1). Las causas cerradas de cada código viven en
+`contrato-consumo-agentes-v1.md` §2.1. `stopped` no es de la
 taxonomía: señala exclusivamente la interrupción de un `listen` por
 `stop`. `config_write_failed`: fallo de la escritura gobernada de
 config (comandos `config`, plan de configuración P1).
@@ -195,9 +204,11 @@ para asentar el truncado en curso — la salida es la NATURAL del
 proceso si ésta se adelanta (p. ej. EOF de stdin del orquestador), o
 `exit 143` si decide la gracia.
 
-Tools: speak(text, engine?), listen(timeout_s?, device?), stop(), session_new(template_id?),
-list_engines(), get_config() — matriz SANEADA: disponibilidad, selección
-y constraints, sin rutas del filesystem —, list_templates() — incluye
+Tools (9): speak(text, engine?), listen(timeout_s?, device?), stop(),
+session_new(template_id?), list_engines(), devices() — inventario de
+audio del host local, `contrato-hardware-v1.md` —, get_config() —
+matriz SANEADA: disponibilidad, selección y constraints, sin rutas del
+filesystem —, list_templates() — incluye
 turns —, validate(session, text). Mismos códigos de error que CLI; un
 `listen` interrumpido por `stop` se resuelve con `stopped`. `validate`
 recibe la sesión inline como objeto. `device` (2026-11-11, G2a) es el
@@ -304,5 +315,6 @@ Streaming de audio; cola/prioridad de turnos (REQ-12 pospuesto a v2);
 expectation intent-free; servidor HTTP/socket; WAV externo como entrada
 en `listen` (listen captura del micrófono, 16 kHz mono PCM interno —
 el consumo de audio externo es superficie propia de `diarize` desde
-ADR-012: `contrato-diarizacion-v1.md`); multiusuario; VAD/barge-in
-(candidato v1.1 con ADR propio).
+ADR-012: `contrato-diarizacion-v1.md`); multiusuario; barge-in
+(interrumpir `speak` con la voz). El VAD de fin de turno salió de esta
+lista con ADR-013 (2026-11-13).

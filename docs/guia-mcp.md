@@ -45,7 +45,7 @@ inválidos → `-32600`.
 | Tool | Args | Qué hace |
 |---|---|---|
 | `speak` | `text` (requerido), `engine?` | reproduce por voz localmente; `{played, engine, echo, truncated}` |
-| `listen` | `timeout_s?` (0<v≤120), `device?` (nombre exacto) | captura una **ventana fija** de hasta `timeout_s` y transcribe; la voz NO corta la captura — espera el timeout completo. Con `device`, selecciona la ENTRADA por nombre exacto (validación 0/1/N previa; homónimos y ausencia → `device_missing`; JAMÁS fallback a `:0`; fuera de darwin → `not_supported`) |
+| `listen` | `timeout_s?` (0<v≤120), `device?` (nombre exacto) | captura hasta `timeout_s` como **tope** y termina con el silencio del humano: 1.5 s tras la voz (Silero VAD si está declarado, si no por volumen; ADR-013); sin voz, rige el tope y `mic_timeout`. Con `device`, selecciona la ENTRADA por nombre exacto (validación 0/1/N previa; homónimos y ausencia → `device_missing`; JAMÁS fallback a `:0`; fuera de darwin → `not_supported`) |
 | `stop` | — | interrumpe la operación de canal activa (kill-switch) |
 | `session_new` | `template_id?` | acuña sesión efímera v1 (la posee el agente); sin template → `template:null`; id desconocido → `not_found` |
 | `list_engines` | — | matriz de disponibilidad TTS/STT |
