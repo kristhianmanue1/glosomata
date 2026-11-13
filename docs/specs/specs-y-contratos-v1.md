@@ -79,9 +79,9 @@ VAD, la puerta RMS de silencio no emite `mic_timeout`.
 `config validate` y `doctor` diagnostican el VAD declarado
 (`vad_parcial`, `vad_bin_ausente`, `vad_model_ausente`): si está
 declarado y roto, tumba el VEREDICTO, igual que diar (forma en
-`contrato-consumo-agentes-v1.md` §7.1). En `listen`, si falta una clave o un archivo, o si
-el VAD falla, rige el detector por volumen (fail-safe: el VAD jamás corta
-por error).
+`contrato-consumo-agentes-v1.md` §7.1). En `listen`, si falta una
+clave o un archivo, o si el VAD falla, rige el detector por volumen
+(fail-safe: el VAD jamás corta por error).
 Tono de turno (2026-11-13): en darwin suena `Tink.aiff` con `afplay`
 ANTES de abrir el micrófono; best-effort (un fallo no impide
 escuchar). `GLOSOMATA_TONO=''` lo apaga y otra ruta lo reemplaza.
