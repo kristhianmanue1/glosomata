@@ -3,6 +3,7 @@
   "skip_dirs": [
     "node_modules",
     ".venv",
+    ".venv-diar",
     "docs/proposal",
     ".local-models",
     ".skevi",
