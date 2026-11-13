@@ -1,7 +1,10 @@
 # Contrato de consumo para agentes — v1
 
-> **Estado:** PROPUESTA. Pasa a normativo con su aceptación explícita y ronda
-> adversarial. Los contratos base (CLI, MCP, plantilla, sesión, matriz)
+> **Estado:** NORMATIVO desde 2026-11-13 — aceptación explícita del
+> Operador («adelante con recomendaciones», 2026-11-13; recomendación del
+> punto 4 del issue #54) tras la ronda adversarial de DeepSeek V4.1 Flash
+> (r1 `fix-and-retry` con 2 HIGH, corregidos; r2 `proceed`; historia
+> v1.8). Los contratos base (CLI, MCP, plantilla, sesión, matriz)
 > siguen mandando en `docs/specs/specs-y-contratos-v1.md`; este documento
 > añade la capa de estabilidad y obligaciones para quien CONSUME glosomata
 > sin leer su código.
@@ -31,10 +34,13 @@ Dentro de la misma versión mayor (`v1.x`):
    — operación de diarización, contrato de diarización v1 §3.1)
    nunca se renombran ni se eliminan; sólo se añaden códigos nuevos.
    Un consumidor que conozca la lista de 2026-08-18 sigue siendo
-   compatible.
+   compatible. `stopped` NO es de la taxonomía: sólo señala un `listen`
+   interrumpido por `stop` (§3, §4) y no es una violación de §11.2.
 2. **Formas de respuesta**: `speak → {played, engine, echo, truncated}`,
    `listen → {transcript}`, `validate → {result, next_turn[, expected]}`,
-   `engines → {tts[], stt{available}}`. Añadir campos es compatible;
+   `engines → {tts[], stt{available}}`. Excepción declarada: un `speak
+   --text-stdin` detenido antes de elegir motor omite `engine`
+   (`{played:false, echo:null, truncated:true}`). Añadir campos es compatible;
    eliminar, renombrar o cambiar el tipo de un campo existente requiere
    versión mayor y guía de migración.
 3. **Schemas MCP cerrados** (`additionalProperties:false`): un cliente que
@@ -43,17 +49,23 @@ Dentro de la misma versión mayor (`v1.x`):
 4. **Sesión**: `glosomata/sesion-v1` es la única versión; glosomata jamás
    muta una sesión ni depende de ella para seguridad (ADR-001).
 5. **Exit codes CLI**: 0 ok, 1 error de operación, 2 usage. Estables.
+   Además 143: terminación por SIGTERM (tras una gracia de 250 ms), fuera
+   de la taxonomía; no es un resultado de la operación
+   (`specs-y-contratos-v1.md` §CLI v1).
 6. **No-objetivos v1** (pacto de no sorpresa): sin servidor HTTP/socket,
    sin streaming de audio, sin cola de turnos, sin retención de audio o
-   texto en glosomata, sin APIs externas. ADR-010 admite un cliente de
-   loopback al Ollama local sólo para TTS experimental. Cualquier otra
-   apertura requiere decisión y ADR propios.
+   texto en glosomata, sin APIs externas. Dos clientes de loopback,
+   sólo para TTS experimental: al Ollama local (Phonon, ADR-010) y al
+   gateway local de LFM3-Omni en `127.0.0.1:8092` (ADR-011). Cualquier
+   otra apertura requiere decisión y ADR propios.
 
 ## 3. Superficie CLI (S1)
 
 Entrada `node src/cli.mjs <comando>` (o `glosomata` vía `bin` de
 `package.json` tras `npm link`). Salida: JSON en stdout para resultados;
-errores como `glosomata: <código> ([detalle JSON])` en stderr.
+errores como `glosomata: <código> ([detalle JSON])` en stderr. Esa línea
+de error es contrato (código y detalle JSON); el resto de stderr es
+log humano (§9.4).
 
 Casos especiales declarados (difieren entre sí):
 
@@ -66,10 +78,19 @@ Casos especiales declarados (difieren entre sí):
 Un consumidor automatizado debe leer ambas salidas cuando exit≠0 en
 estas dos operaciones.
 
-Comandos: `speak`, `listen`, `stop`, `engines`, `templates`,
-`session new`, `validate`, `config list`, `config get
-engines|constraints`, `config validate [--file ruta]`, `config set
-<archivo>` — semántica en §CLI v1 del spec canónico. Además
+Comandos (12 de nivel superior): `speak`, `listen`, `diarize`, `stop`,
+`engines`, `version`, `doctor`, `templates`, `session new`, `validate`,
+`config` (`list`, `get engines|constraints`, `validate [--file ruta]`,
+`set <archivo>`) y `devices` — semántica en §CLI v1 del spec canónico.
+
+`speak --text <str>` pone el texto en argv, visible en `ps` para otros
+procesos del mismo usuario. `speak --text-stdin` lo lee completo de
+stdin (UTF-8, excluye `--text`) y es la forma recomendada para texto
+del usuario (spec canónico §CLI v1). `stop` responde `{stopped: true,
+senal_remota}` con exit 0 aunque no haya operación activa:
+`stopped:true` confirma el pedido, no una interrupción, y
+`senal_remota` sólo indica que se entregó una señal a otro proceso.
+
 `devices` (2026-11-11): inventario de audio del host local, sólo
 lectura, JSON por stdout, exit 0/1 — semántica en
 `contrato-hardware-v1.md`; superficie ESTRICTA: cualquier argumento o
@@ -79,11 +100,13 @@ Además `listen --device <nombre-exacto>` (2026-11-11, ampliación G2):
 selección de ENTRADA por nombre exacto — resolución al abrir dentro de
 ffmpeg, validación 0/1/N contra el listado fresco ANTES de abrir,
 homónimos fail-closed, JAMÁS fallback a `:0` cuando hay petición
-(`contrato-hardware-v1.md` §3.1/§10). En hosts no-darwin la petición
-responde `not_supported`; sin petición, conducta original intacta. La
-preferencia por defecto (`engines.stt.input_device`) vive en matriz
-EXTERNA gobernada por `GLOSOMATA_CONFIG` — la matriz versionada del
-repo jamás lleva valores personales de hardware.
+(`contrato-hardware-v1.md` §3.1/§10). `--device` sin valor es petición
+vacía → exit 2 `usage`, sin abrir ningún micrófono. En hosts
+no-darwin la petición responde `not_supported`; sin petición, conducta
+original intacta. La preferencia por defecto
+(`engines.stt.input_device`) vive en matriz EXTERNA gobernada por
+`GLOSOMATA_CONFIG` — la matriz versionada del repo jamás lleva valores
+personales de hardware.
 
 Además `diarize --file <ruta-audio>` (2026-11-12, D2/ADR-012):
 turnos de hablante del archivo en modo EXCLUSIVO, efímero sin
@@ -149,7 +172,8 @@ no). Entre runtimes distintos no hay contención ni `stop` compartido
    degradación a texto tras N reintentos fallidos.
 
 `speak` y `listen` incluyen `duration_ms` entero no negativo en sus
-resultados, incluso fallos e interrupciones. Mide tiempo wall-clock desde
+resultados, incluso fallos de operación e interrupciones; un rechazo
+`usage` por schema MCP puede omitirlo. Mide tiempo wall-clock desde
 la entrada a la operación hasta después de su limpieza; incluye carga de
 configuración, espera de subprocess y adquisición del lock. No mide una
 cola de espera del consumidor, porque v1 no tiene cola.
@@ -224,11 +248,14 @@ Un consumidor nuevo debe poder validar su instalación sin leer código:
 
 - `node: {version, ok, causa?}` — causa: `node_viejo`.
 - `config: {ok, code?, detalle?}` — si falla: `code: "config_unreadable"`
-  con `detalle` textual (ruta local de config, no secreto).
+  con `detalle` textual legible (ruta local de config o problema de
+  estructura; no secreto).
 - `tts: [{id, adapter, available, causa?}]` — `causa` ∈ conjunto cerrado:
   `plataforma_no_soportada`, `afplay_ausente`, `binario_ausente`,
   `modelo_ausente`, `python_ausente`, `script_ausente`,
-  `sin_kill_switch`, `adapter_desconocido`, `probe_fallido`.
+  `sin_kill_switch`, `adapter_desconocido`, `probe_fallido`,
+  `auth_ausente` (LFM3 sin `auth_file` válido; también en
+  `config validate`).
 - `stt: {whisper: {ok, causa?}, ffmpeg: {ok, causa?}, vad?, input_device?}` —
   causas de whisper/ffmpeg: `whisper_bin_ausente`,
   `whisper_model_ausente`, `config_unreadable`; y para ffmpeg:
@@ -301,8 +328,10 @@ comportamiento; este documento declara obligaciones, no las sustituye.
 2. Respetar el TTL de sesión: ante `session_expired`, acuñar nueva —
    nunca manipular `created_at`.
 3. Aplicar `next_turn` a SU copia; glosomata no guarda estado.
-4. No parsear stderr: sólo stdout (CLI) o mensajes JSON-RPC (MCP) son
-   contrato. El log de stderr es humano y cambia sin aviso.
+4. De stderr sólo es contrato la línea `glosomata: <código> ([detalle
+   JSON])` del CLI (§3); con stdout (CLI) y los mensajes JSON-RPC (MCP)
+   forma la superficie. El resto de stderr es log humano y cambia sin
+   aviso.
 5. Ante código desconocido (futuro), tratarlo como `internal_error`:
    la taxonomía sólo crece.
 
@@ -310,7 +339,8 @@ comportamiento; este documento declara obligaciones, no las sustituye.
 
 Garantías que el consumidor puede ofrecer a SUS usuarios por apoyarse en
 glosomata: 100% local (Phonon experimental usa loopback al Ollama
-local), sin retención por glosomata
+local, y LFM3 experimental al gateway local en `127.0.0.1:8092`), sin
+retención por glosomata
 (temporales en directorio 0700 y archivos 0600, borrados por operación
 y barridos por edad), logs sólo
 ids/códigos/duraciones, kill-switch por motor declarado en matriz —
@@ -318,8 +348,10 @@ la declaración se verifica en arranque (fail-closed: sin `kill_switch`
 el motor no es seleccionable) y el corte es SIGKILL al grupo del
 subprocess, efectivo en la ventana del poll (~50 ms). El
 `max_latency_ms` declarado es documentación de la operación, no un
-valor evaluado en runtime. La política de retención del daemon de Ollama
-no está cubierta por esta garantía. Detalles de amenaza: `SECURITY.md`.
+valor evaluado en runtime. Las políticas de retención del daemon de
+Ollama y del gateway de LFM3 no están cubiertas por esta garantía; cada
+motor experimental se activa sólo si el Operador lo declara en la
+matriz. Detalles de amenaza: `SECURITY.md`.
 
 ## 11. Reporte de incidencias y mejoras en GitHub
 
@@ -396,3 +428,11 @@ cosa.
   no es ventana fija, también por MCP); los specs base añaden
   `devices`, `devices_unavailable` y `diar_failed`. §6 registra
   `GLOSOMATA_TONO`, que llegó al código en el PR #51 sin documentarse.
+- v1.8 (2026-11-13, issue #54 punto 4): PROPUESTA → NORMATIVO, sin
+  cambios de conducta salvo una corrección: `listen --device` sin valor
+  caía en silencio a `:0` y ahora responde `usage`. Revisión r1:
+  `auth_ausente` entra al conjunto de causas de §7.1; §9.4 acota qué
+  parte de stderr es contrato; §2 declara el 143 por SIGTERM, `stopped`
+  fuera de la taxonomía y el truncado sin `engine`; §2 y §10 nombran el
+  loopback de LFM3 (también `SECURITY.md`); §3 enumera los 12 comandos,
+  `--text-stdin` y la salida de `stop`.

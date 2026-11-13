@@ -207,6 +207,13 @@ test('G2a: nombre único → captura con :nombre exacto, jamás índice', async 
   sinFallbackNiIndice(invs, 'unico');
 });
 
+test('G2a: `--device` sin valor → usage, jamás captura de `:0`', async () => {
+  const r = await escuchar(['--device']);
+  assert.equal(r.code, 2);
+  assert.equal(r.data.error, 'usage');
+  assert.equal(existsSync(log), false, 'ffmpeg invocado sin valor de --device');
+});
+
 test('G2a: forma inválida → usage ANTES de invocar ffmpeg para nada', async () => {
   for (const mala of ['', 'default', 'none', 'a:b', 'con "comillas"',
     "con 'comillas'"]) {

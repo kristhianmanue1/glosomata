@@ -469,7 +469,9 @@ async function listenRaw(argv, stopAtStart, opts = {}) {
   // --device > input_device > :0. Una petición se REVALIDA en cada
   // apertura contra el listado fresco y JAMÁS cae a :0 en silencio.
   const iDev = argv.indexOf('--device');
-  const pedidoCli = iDev >= 0 ? argv[iDev + 1] : undefined;
+  // `--device` sin valor es petición vacía (→ usage), no ausencia de
+  // petición: con `--device $MIC` y la variable vacía no se abre `:0`.
+  const pedidoCli = iDev >= 0 ? (argv[iDev + 1] ?? '') : undefined;
   const preferencia = typeof cfg.engines?.stt?.input_device === 'string'
     ? cfg.engines.stt.input_device : undefined;
   const pedido = pedidoCli !== undefined ? pedidoCli : preferencia;

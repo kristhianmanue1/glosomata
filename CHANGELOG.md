@@ -6,6 +6,14 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs(contrato): **el contrato de consumo para agentes pasa a
+  NORMATIVO** (v1.8, issue #54 punto 4) tras ronda adversarial `proceed`:
+  causa `auth_ausente` en `doctor`, la línea de error de stderr como
+  contrato, exit 143 por SIGTERM y el loopback de LFM3 en la cláusula de
+  privacidad y en `SECURITY.md`.
+- fix(stt): **`listen --device` sin valor responde `usage`**; antes
+  abría el micrófono por defecto (`:0`), justo lo que la selección por
+  nombre existe para impedir (`--device $MIC` con la variable vacía).
 - feat(config): **`config validate` y `doctor` diagnostican el VAD** — un
   VAD declarado y roto (parcial, ausente o un directorio) tumba el
   veredicto; `listen` sigue cayendo al detector RMS.

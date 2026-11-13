@@ -19,12 +19,14 @@ Propiedades declaradas (no negociables en PRs):
 - **Frontera GPL**: Piper corre como subprocess con texto por stdin;
   prohibido link dinámico y bundling (ADR-005).
 - **Superficie mínima**: MCP escucha stdio heredado del orquestador; no
-  abre socket ni servidor HTTP. Sólo Phonon usa un cliente HTTP de
-  loopback hacia Ollama; URL fija y sin proxy ni redirecciones (ADR-010).
+  abre socket ni servidor HTTP. Dos motores experimentales usan un
+  cliente HTTP de loopback con URL fija y sin proxy ni redirecciones:
+  Phonon hacia Ollama (ADR-010) y LFM3 hacia su gateway local en
+  `127.0.0.1:8092` (ADR-011).
 
 El texto pasa por subprocesses locales: `say`, `piper`,
 `python`+Kokoro, `whisper-cli`, `ffmpeg`, `afplay` y, opcionalmente,
-`curl` hacia Ollama local. El modelo de
+`curl` hacia Ollama local o hacia el gateway local de LFM3. El modelo de
 amenaza asume máquina de un solo usuario: no hay aislamiento entre
 procesos del mismo usuario.
 

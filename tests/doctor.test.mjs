@@ -77,6 +77,27 @@ test('doctor: motores con rutas ausentes → causa exacta por motor', (t) => {
   assert.equal(d.stt.whisper.causa, 'whisper_bin_ausente');
 });
 
+test('doctor: lfm3 sin credencial → causa auth_ausente (§7.1)', (t) => {
+  if (process.platform !== 'darwin') return t.skip('requiere darwin (curl/afplay)');
+  const ruta = configTemporal({
+    engines: {
+      tts: [
+        { id: 'lfm3-sin-auth', adapter: 'lfm3',
+          auth_file: '/no/existe/auth-glosomata.txt', selected: false,
+          kill_switch: { type: 'subprocess_kill', target: 'process_group',
+            max_latency_ms: 500 } },
+      ],
+      stt: { whisper_bin: '/no/existe/w', whisper_model: '/no/existe/m' },
+    },
+    constraints: {},
+  });
+  const { code, out } = doctor({ GLOSOMATA_CONFIG: ruta });
+  assert.equal(code, 1);
+  const d = JSON.parse(out);
+  assert.equal(d.tts[0].available, false);
+  assert.equal(d.tts[0].causa, 'auth_ausente');
+});
+
 test('doctor: todo operativo → exit 0 (camino verde del contrato)', (t) => {
   if (process.platform !== 'darwin') return t.skip('requiere darwin (say/afplay)');
   const ruta = configTemporal({
