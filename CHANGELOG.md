@@ -9,6 +9,9 @@ generadas desde commits/PRs reales.
 - feat(stt): **tono de turno y pausa de 1.5 s en `listen`** — un tono
   avisa que el micrófono se abre (`GLOSOMATA_TONO`), y la pausa para
   pensar sube de 1 s a 1.5 s, porque 1 s cortaba al Operador en vivo.
+  El piso de ruido pasa a ser el percentil 10 de todo lo escuchado: con
+  el tono, el Operador hablaba en la calibración y `listen` nunca
+  cortaba (en vivo: 33 s → 9 s).
 - feat(stt): **`listen` cierra el micrófono al terminar de hablar** —
   1 s de silencio tras voz corta la captura; `--timeout` queda como
   tope. Turno medido en vivo: 32 s → 7 s con `--timeout 30`.

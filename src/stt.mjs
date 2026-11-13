@@ -44,11 +44,20 @@ async function sonarTono() {
 // Detector puro (testeable sin micrófono): alimentar(buf) → true cuando
 // hubo voz y luego TRAMOS_SILENCIO_FIN tramos bajo el umbral. Fail-safe:
 // sin voz detectada jamás corta — decide el timeout, como antes.
+// Piso = percentil 10 de TODO lo escuchado, no el máximo de los primeros
+// 300 ms: con el tono de turno el humano habla de inmediato y la
+// calibración medía su voz (piso 1576 → umbral 4978 con una voz de
+// pico 1576; jamás cortaba — medido en vivo, 2026-11-13). «Hubo voz» se
+// juzga con el máximo histórico contra el umbral VIGENTE, para no perder
+// la voz que llegó antes de que el piso aprendiera el ruido.
+const PERCENTIL_PISO = 0.1;
+const FACTOR_UMBRAL = 2.5;
+const MARGEN_UMBRAL = 150;
+
 export function crearDetectorFin(silencioTramos = TRAMOS_SILENCIO_FIN) {
   let pendiente = Buffer.alloc(0);
-  let n = 0;
-  let piso = 0;
-  let habla = false;
+  const historia = [];
+  let maximo = 0;
   let silencio = 0;
   return {
     alimentar(buf) {
@@ -56,14 +65,14 @@ export function crearDetectorFin(silencioTramos = TRAMOS_SILENCIO_FIN) {
       while (pendiente.length >= TRAMO_BYTES) {
         const r = rmsS16(pendiente.subarray(0, TRAMO_BYTES));
         pendiente = pendiente.subarray(TRAMO_BYTES);
-        if (n++ < TRAMOS_CALIBRACION) {
-          piso = Math.max(piso, r);
-        } else if (r > piso * 3 + 250) {
-          habla = true;
-          silencio = 0;
-        } else if (habla && ++silencio >= silencioTramos) {
-          return true;
-        }
+        historia.push(r);
+        maximo = Math.max(maximo, r);
+        if (historia.length <= TRAMOS_CALIBRACION) continue;
+        const orden = [...historia].sort((a, b) => a - b);
+        const piso = orden[Math.floor((orden.length - 1) * PERCENTIL_PISO)];
+        const umbral = piso * FACTOR_UMBRAL + MARGEN_UMBRAL;
+        silencio = r > umbral ? 0 : silencio + 1;
+        if (maximo > umbral && silencio >= silencioTramos) return true;
       }
       return false;
     },

@@ -138,3 +138,28 @@ test('rutaTono: GLOSOMATA_TONO vacío apaga y una ruta lo reemplaza', () => {
   assert.equal(rutaTono('darwin', { GLOSOMATA_TONO: '' }), null);
   assert.equal(rutaTono('darwin', { GLOSOMATA_TONO: '/x/t.aiff' }), '/x/t.aiff');
 });
+
+// Traza RMS real (2026-11-13): el Operador habla JUSTO al sonar el tono
+// (voz desde el tramo 0) y calla ~3.5 s después; voz de pico 1576.
+const TRAZA_VOZ = ('648 336 1576 1065 1173 946 316 893 449 608 840 326 1424 '
+  + '1490 1040 578 878 1008 1218 941 577 871 876 879 229 1045 417 181 276 '
+  + '1118 544 366 319 301 612 390 332 281 229 128 133 196 142 219 215 93 158 '
+  + '216 166 151 127 129 164 192 126 139 159 102 135 124 125 141 152 127')
+  .split(' ').map(Number);
+
+test('detector: traza real con voz desde el tono corta tras el habla', () => {
+  const d = crearDetectorFin();
+  const r = alimentar(d, TRAZA_VOZ.map(tramo));
+  const corte = r.indexOf(true);
+  // antes (piso = máx. de 300 ms) jamás cortaba: rige el timeout
+  assert.ok(corte > 34 && corte <= 50, `corte en ${corte}`);
+});
+
+test('detector: voz que llena la calibración aún se detecta y corta', () => {
+  const d = crearDetectorFin();
+  const r = alimentar(d, [
+    ...Array(8).fill(tramo(1500)), // voz desde el primer tramo
+    ...Array(30).fill(tramo(100)),
+  ]);
+  assert.ok(r.includes(true));
+});
