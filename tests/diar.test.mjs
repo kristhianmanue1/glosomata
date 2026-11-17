@@ -51,7 +51,10 @@ if (log) fs.writeFileSync(log, JSON.stringify({
   HF_HUB_OFFLINE: process.env.HF_HUB_OFFLINE,
 }));
 const salir = (c) => process.exit(c);
-const emitir = (o) => { process.stdout.write(JSON.stringify(o)); salir(0); };
+// emitir drena ANTES de salir: exit() tras una escritura grande por
+// tubería la trunca (mismo defecto que el de src/cli.mjs)
+const emitir = (o) => process.stdout.write(JSON.stringify(o),
+  () => process.exit(0));
 const modos = {
   ok: () => emitir({ turns: [
     { speaker: 'voz_b', start_s: 1.5, end_s: 2.5 },
@@ -111,6 +114,16 @@ const modos = {
   ] }),
   gigante: () => {
     process.stdout.write('x'.repeat(17 * 1024 * 1024)); salir(0);
+  },
+  // regresión del stdout truncado (orden 2026-11-17): JSON VÁLIDO
+  // > 1 MB por TUBERÍA — antes de drenar exit(), se cortaba a 64 KiB
+  'gigante-json': () => {
+    const turns = [];
+    for (let i = 0; i < 20000; i++) {
+      turns.push({ speaker: 'voz_a', start_s: i * 0.2,
+        end_s: i * 0.2 + 0.1 });
+    }
+    emitir({ turns });
   },
   lento: () => setTimeout(() => emitir({ turns: [] }), 30000),
 };
@@ -715,6 +728,26 @@ test('diarize --embeddings: superficie estricta — duplicado o mal puesto → u
     assert.equal(r.code, 2, JSON.stringify(args));
     assert.match(r.err, /usage/, JSON.stringify(args));
   }
+});
+
+// Regresión del defecto CLI (orden 2026-11-17): process.exit() cortaba
+// stdout en TUBERÍA a ~64 KiB antes del volcado asíncrono (visto por
+// tequio con --embeddings sobre un tramo de 1800 s). Con el drenado
+// (exitCode + salida natural), un JSON > 1 MB llega COMPLETO y válido
+// por tubería, con el código de salida del contrato. Vehículo:
+// diarize con falso python (el defecto era de la CLI entera).
+test('CLI: JSON > 1 MB por tubería llega completo y válido', () => {
+  const r = spawnSync('node', [CLI, 'diarize', '--file', AUDIO_X], {
+    encoding: 'buffer', cwd: CWD, maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, GLOSOMATA_CONFIG: CFG_DIAR(),
+      GLOSOMATA_DIAR_FAKE_MODE: 'gigante-json' },
+  });
+  assert.equal(r.status, 0);
+  assert.ok(r.stdout.length > 1024 * 1024,
+    `stdout chico: ${r.stdout.length}`);
+  const d = JSON.parse(r.stdout.toString('utf8'));
+  assert.equal(d.turns.length, 20000);
+  assert.equal(d.num_speakers, 1);
 });
 
 after(() => rmSync(dirFalso, { recursive: true, force: true }));

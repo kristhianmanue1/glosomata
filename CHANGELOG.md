@@ -6,6 +6,20 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- fix: **stdout truncado por `process.exit` en tuberías (CLI entera)**
+  (defecto visto con `diarize --embeddings` sobre un tramo de 1 800 s:
+  73 728 B truncados por tubería con JSON inválido; 89 625 B válidos
+  a archivo — reporte del capitán de tequio): `src/cli.mjs` llamaba
+  `process.exit()` desde el `then`, cortando el volcado asíncrono de
+  stdout a los ~64 KiB del búfer de la tubería. Arreglo: `exitCode` +
+  terminación natural del proceso (el bucle drena stdout/stderr);
+  aplicado a los DOS caminos (éxito y error); el contrato de códigos
+  de salida (0/1/2) no cambia. Test de regresión: JSON VÁLIDO > 1 MB
+  (20000 turnos, ~1.8 MB) por tubería llega completo con exit 0 —
+  antes del fix se cortaba a 65 536 B exactos (reproducido). Nota:
+  las salidas del MCP (stdio del servidor) no usan este camino y no
+  cambian.
+
 - feat: **huellas de voz opcionales por hablante en `diarize`**
   (enmienda ADR-012 2026-11-17; autorización literal del Operador vía
   orquestador devherdr-expert; contrato de diarización v1.5) —
