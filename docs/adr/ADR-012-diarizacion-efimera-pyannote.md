@@ -170,7 +170,8 @@ no la identifica.
 
 Lo que cambia (todo ADITIVO y OPCIONAL — la alternativa descartada
 en 2026-11-12 anticipó que los embeddings eran «una apertura medible
-(fingerprinting) que exige decisión propia»: esa decisión llegó):
+(fingerprinting, rendimiento) que exige decisión propia»: esa
+decisión llegó):
 
 1. `diarize --embeddings` (flag opcional, sin valor): sin él, la
    salida es idéntica byte a byte. Sin superficie MCP nueva (diarize

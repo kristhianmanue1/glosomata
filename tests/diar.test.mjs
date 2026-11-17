@@ -90,6 +90,8 @@ const modos = {
     voz_a: [0.1, 0.2, 0.3, 0.4],
     voz_b: [0.5, 0.6, 0.7, 0.8, 0.9],
   } }),
+  // H4 (r1): vector de puros ceros — padding del motor para hablantes
+  // «extra»; norma 0 → coseno indefinido → se rechaza fail-closed
   'emb-cero': () => emitir({ turns: [
     { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
   ],
@@ -680,7 +682,12 @@ test('diarize --embeddings: silencio → speakers {} válido', () => {
 
 test('diarize --embeddings: incoherencias del motor → inferencia_fallida', () => {
   // emb-cero: vector de puros ceros (padding del motor, H4 r1):
-  // norma 0 → coseno indefinido → fail-closed, no huella basura
+  // norma 0 → coseno indefinido → fail-closed, no huella basura.
+  // Marcador de stderr por modo (H1 r2): un float PRESENTE en el
+  // fixture de ese modo (emb-cero es todo ceros: indistinguible de
+  // metadatos numéricos, se excluye del assert de contenido).
+  const marcador = { 'emb-sobra': '0.8', 'emb-falta': '0.4',
+    'emb-malo': '0.3', 'emb-dim': '0.9' };
   for (const modo of ['emb-sobra', 'emb-falta', 'emb-malo', 'emb-dim',
     'emb-cero']) {
     const r = salidaDiarize(['diarize', '--file', AUDIO_X, '--embeddings'],
@@ -688,8 +695,11 @@ test('diarize --embeddings: incoherencias del motor → inferencia_fallida', () 
     assert.equal(r.code, 1, modo);
     assert.match(r.err, /diar_failed/, modo);
     assert.match(r.err, /inferencia_fallida/, modo);
-    // y el fallo no filtra la huella por stderr (H2 r1)
-    assert.ok(!r.err.includes('0.44'), modo);
+    // y el fallo no filtra la huella por stderr (H1 r2: marcador real)
+    if (marcador[modo] !== undefined) {
+      assert.ok(!r.err.includes(marcador[modo]),
+        `${modo}: huella en stderr`);
+    }
   }
 });
 
