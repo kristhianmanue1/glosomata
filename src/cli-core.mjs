@@ -24,9 +24,13 @@ comandos:
                                        ve la locución)
   listen [--timeout <s>] [--device <nombre-exacto>]
                                        captura micrófono, imprime transcripción
-  diarize --file <ruta-audio>          turnos de hablante del archivo (modo
+  diarize --file <ruta-audio> [--embeddings]
+                                       turnos de hablante del archivo (modo
                                        exclusivo; sin persistir nada; sin
-                                       canal.lock) — requiere engines.diar
+                                       canal.lock) — requiere engines.diar;
+                                       --embeddings añade la huella de voz
+                                       por hablante (dato biométrico: sólo
+                                       stdout; enmienda ADR-012 2026-11-17)
   stop                                 interrumpe la operación de canal activa
                                        (y la diarización en curso de su
                                        runtime, vía registro de esperador)

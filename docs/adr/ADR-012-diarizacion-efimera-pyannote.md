@@ -149,4 +149,43 @@ Registro:
    Operador, una por una.
 4. El token de Hugging Face fue retirado del disco (2026-11-13,
    acción del coordinador): una descarga futura requiere un token
-   nuevo entregado por el Operador.
+   nuevo entregado por Operador.
+
+## Enmienda (2026-11-17): huella de voz opcional por hablante
+
+Decisión del Operador (relay literal del orquestador devherdr-expert,
+2026-11-17):
+
+«Autorizo que glosomata entregue, junto con la diarización, una
+huella de voz por hablante (embedding), sólo en local y sin guardar
+audio, para que tequio mantenga la identidad de los hablantes entre
+tramos; con tests y revisión en glosomata. Nada sale del equipo.»
+
+Motivo: tequio diariza grabaciones largas POR TRAMOS (2 h 8 min ya
+excede el tope `diar_max_wall_s` de 7 200 s) y necesita una huella
+por hablante canónico de cada llamada para emparejar hablantes entre
+tramos. La identidad entre tramos sigue siendo del consumidor: esta
+enmienda sólo entrega la MATERIA PRIMA (el centroide por hablante),
+no la identifica.
+
+Lo que cambia (todo ADITIVO y OPCIONAL — la alternativa descartada
+en 2026-11-12 anticipó que los embeddings eran «una apertura medible
+(fingerprinting) que exige decisión propia»: esa decisión llegó):
+
+1. `diarize --embeddings` (flag opcional, sin valor): sin él, la
+   salida es idéntica byte a byte. Sin superficie MCP nueva (diarize
+   es CLI-only).
+2. La salida añade, sólo con el flag: `speakers` (un objeto por
+   etiqueta CANÓNICA `{embedding: [floats], dim: N}`) y
+   `embedding_model`. Forma exacta: contrato v1.5 §2.
+3. Origen SIN modelos nuevos: los centroides por hablante que el
+   propio pipeline ya calcula al clusterizar
+   (`DiarizeOutput.speaker_embeddings`, subfolder `embedding`,
+   WeSpeaker 256-d en community-1). Coste extra ≈ serialización.
+4. Privacidad (la huella es un DATO BIOMÉTRICO): sólo por stdout al
+   consumidor; JAMÁS en disco, logs, stderr ni MCP-log; sin
+   retención en glosomata (política vigente). La custodia de las
+   huellas que recibe es responsabilidad del consumidor.
+
+Contrato: `contrato-diarizacion-v1.md` pasa a v1.5 (cambio menor, no
+v2). El contrato sigue NORMATIVO con esta enmienda aplicada.

@@ -110,16 +110,56 @@ export function canonizarTurnos(turns) {
     return { speaker: etiquetas.get(t.speaker),
       start_s: t.start_s, end_s: t.end_s };
   });
-  return { turns: out, num_speakers: etiquetas.size };
+  // `etiquetas` (cruda → canónica) alimenta la re-llave de las huellas
+  // (enmienda 2026-11-17); el llamador NO lo copia a la salida.
+  return { turns: out, num_speakers: etiquetas.size, etiquetas };
 }
 
-// Superficie ESTRICTA (contrato §2): exactamente `--file <valor>`.
-function parsearArgvDiarize(argv) {
-  if (argv.length !== 2 || argv[0] !== '--file'
-      || argv[1] === '' || argv[1].startsWith('--')) {
+// Huellas de voz (enmienda 2026-11-17, ADR-012): el script emite el
+// centroide por hablante CRUDO {etiqueta: [floats]}; glosomata
+// re-llavea por etiqueta CANÓNICA. Cobertura EXACTA (toda etiqueta
+// con turno debe tener huella; sin sobrantes), vectores de números
+// finitos no vacíos y dimensión homogénea — cualquier violación →
+// null (fail-closed: sin resultado parcial). Dato biométrico: vive
+// SOLO en la respuesta por stdout (contrato §8).
+const EMBEDDING_MODEL = 'speaker-diarization-community-1#embedding';
+
+function canonizarHuellas(embCrudo, etiquetas) {
+  if (embCrudo === null || typeof embCrudo !== 'object'
+      || Array.isArray(embCrudo)) return null;
+  const crudas = [...etiquetas.keys()];
+  const claves = Object.keys(embCrudo);
+  if (claves.length !== crudas.length
+      || !crudas.every((c) => Object.prototype.hasOwnProperty
+        .call(embCrudo, c))) {
     return null;
   }
-  return argv[1];
+  let dim = null;
+  const speakers = {};
+  for (const [cruda, canonica] of etiquetas) {
+    const v = embCrudo[cruda];
+    if (!Array.isArray(v) || v.length === 0) return null;
+    if (!v.every((x) => Number.isFinite(x))) return null;
+    if (dim === null) dim = v.length;
+    else if (v.length !== dim) return null;
+    speakers[canonica] = { embedding: v, dim: v.length };
+  }
+  return { speakers, embedding_model: EMBEDDING_MODEL };
+}
+
+// Superficie ESTRICTA (contrato §2): `--file <valor>` y, opcional,
+// el flag sin valor `--embeddings` (enmienda 2026-11-17) — a lo sumo
+// una vez y en cualquiera de las dos posiciones admitidas.
+function parsearArgvDiarize(argv) {
+  const sinHuellas = argv.length === 2 && argv[0] === '--file';
+  const conHuellasA = argv.length === 3 && argv[0] === '--file'
+    && argv[2] === '--embeddings';
+  const conHuellasB = argv.length === 3 && argv[0] === '--embeddings'
+    && argv[1] === '--file';
+  if (!sinHuellas && !conHuellasA && !conHuellasB) return null;
+  const ruta = conHuellasB ? argv[2] : argv[1];
+  if (ruta === '' || ruta.startsWith('--')) return null;
+  return { ruta, huellas: !sinHuellas };
 }
 
 export async function diarize(argv, stopAtStart = stopGeneration(), opts = {}) {
@@ -127,10 +167,11 @@ export async function diarize(argv, stopAtStart = stopGeneration(), opts = {}) {
 }
 
 async function diarizeRaw(argv, stopAtStart, opts = {}) {
-  const rutaAudio = parsearArgvDiarize(argv);
-  if (rutaAudio === null) {
+  const parsed = parsearArgvDiarize(argv);
+  if (parsed === null) {
     return { code: 2, data: { error: 'usage' } };
   }
+  const { ruta: rutaAudio, huellas } = parsed;
   const cfg = await cargarMatriz();
   const d = cfg.engines?.diar;
   if (d === undefined) {
@@ -161,7 +202,7 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
   resetStop(stopAtStart);
   try {
     const r = await correrDiarizacion(d, rutaAudio, maxDurS, maxWallS,
-      () => stopPedido() || stopRemoto);
+      huellas, () => stopPedido() || stopRemoto);
     if (r.detenido) {
       // stop/señal: truncado espejo de speak — stdout, stderr vacío
       return { code: 1, data: { turns: null, truncated: true } };
@@ -190,20 +231,37 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
       return { code: 1, data: { error: 'diar_failed',
         causa: 'inferencia_fallida' } };
     }
-    return { code: 0, data: { ...canon, mode: 'exclusive' } };
+    const data = { turns: canon.turns, num_speakers: canon.num_speakers,
+      mode: 'exclusive' };
+    if (huellas) {
+      // enmienda 2026-11-17: huellas sólo si se pidieron — sin el
+      // flag, la salida es idéntica byte a byte (contrato §2)
+      const huellasCanon = canonizarHuellas(crudo?.embeddings,
+        canon.etiquetas);
+      if (huellasCanon === null) {
+        return { code: 1, data: { error: 'diar_failed',
+          causa: 'inferencia_fallida' } };
+      }
+      data.speakers = huellasCanon.speakers;
+      data.embedding_model = huellasCanon.embedding_model;
+    }
+    return { code: 0, data };
   } finally {
     await liberarEspera(registro);
   }
 }
 
-function correrDiarizacion(d, rutaAudio, maxDurS, maxWallS, detenido) {
+function correrDiarizacion(d, rutaAudio, maxDurS, maxWallS, huellas,
+  detenido) {
   return new Promise((resolve) => {
     // Entorno del subprocess FIJADO (contrato §4, ADR-012): telemetría
     // OFF y sin red, SIN importar el ambiente del padre — argv sin
-    // contenido: sólo rutas y el tope de duración (H-1: el límite
-    // configurable viaja al script como 5º token).
+    // contenido: sólo rutas, el tope de duración (H-1: el límite
+    // configurable viaja al script como 5º token) y el modo de
+    // huellas como 6º (enmienda 2026-11-17).
     const child = spawnGrupo(d.python,
-      [d.script, d.pipeline, rutaAudio, String(maxDurS)],
+      [d.script, d.pipeline, rutaAudio, String(maxDurS),
+        huellas ? '1' : '0'],
       { env: { ...process.env,
         PYANNOTE_METRICS_ENABLED: '0', HF_HUB_OFFLINE: '1' } });
     child.stdin.end(); // stdin cerrado: EOF limpio para el hijo

@@ -114,10 +114,15 @@ original intacta. La preferencia por defecto
 `GLOSOMATA_CONFIG` — la matriz versionada del repo jamás lleva valores
 personales de hardware.
 
-Además `diarize --file <ruta-audio>` (2026-11-12, D2/ADR-012):
+Además `diarize --file <ruta-audio> [--embeddings]` (2026-11-12,
+D2/ADR-012; huellas opcionales 2026-11-17):
 turnos de hablante del archivo en modo EXCLUSIVO, efímero sin
 retención, FUERA del canal (sin `canal.lock`); superficie ESTRICTA
-(sólo `--file`; cualquier extra → exit 2 `usage`); semántica
+(`--file` y a lo sumo un `--embeddings` sin valor; cualquier otra
+forma → exit 2 `usage`); sin `--embeddings` la salida es idéntica
+byte a byte; con él, `speakers` añade UNA huella de voz por etiqueta
+canónica (dato BIOMÉTRICO: sólo stdout, jamás logs/stderr/disco) y
+`embedding_model`; semántica
 completa — formas, truncado, causas cerradas de `diar_failed`,
 entorno del subprocess con telemetría OFF, stop cross-process — en
 `contrato-diarizacion-v1.md`. Sin `engines.diar` declarado responde

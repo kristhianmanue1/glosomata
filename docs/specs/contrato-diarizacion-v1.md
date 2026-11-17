@@ -31,13 +31,15 @@ QUIÉN-CUÁNDO con pseudónimos locales a la respuesta.
 
 ## 2. Superficie CLI (única en v1)
 
-`glosomata diarize --file <ruta-audio>` — superficie NUEVA ESTRICTA:
-sólo el flag `--file` con valor; cualquier argumento extra, `--file`
-ausente o sin valor → exit 2 `usage` (no hereda la tolerancia legacy).
-SIN tool MCP en v1 (§10); sin flags de hints de hablantes; sin
-selección de modo.
+`glosomata diarize --file <ruta-audio> [--embeddings]` — superficie
+NUEVA ESTRICTA: `--file` con valor y, opcionalmente, el flag sin
+valor `--embeddings` (a lo sumo una vez, antes o después de
+`--file`); cualquier otra forma → exit 2 `usage` (no hereda la
+tolerancia legacy). SIN tool MCP en v1 (§10); sin flags de hints de
+hablantes; sin selección de modo.
 
-Forma de respuesta (exit 0, JSON por stdout):
+Forma de respuesta (exit 0, JSON por stdout) — SIN `--embeddings`
+(idéntica byte a byte a la de siempre, enmienda 2026-11-17):
 
 ```json
 {
@@ -68,6 +70,41 @@ Semántica de cada campo:
 - `mode`: constante `"exclusive"` en v1.
 - `duration_ms`: entero no negativo, wall-clock de la operación (misma
   métrica transversal del contrato de consumo §5).
+
+CON `--embeddings` (enmienda 2026-11-17, ADR-012) la respuesta añade
+exactamente dos campos:
+
+```json
+{
+  "turns": [ "..." ],
+  "num_speakers": 2,
+  "mode": "exclusive",
+  "speakers": {
+    "SPEAKER_00": { "embedding": [0.014, 0.4, 0.55, 0.0, 0.0],
+                    "dim": 256 },
+    "SPEAKER_01": { "embedding": [-0.45, 0.19, -0.05, 0.0, 0.0],
+                    "dim": 256 }
+  },
+  "embedding_model": "speaker-diarization-community-1#embedding",
+  "duration_ms": 45320
+}
+```
+
+- `speakers`: UNA huella por etiqueta CANÓNICA (no por turno): el
+  CENTROIDE por hablante que el propio pipeline calcula al
+  clusterizar (`DiarizeOutput.speaker_embeddings`; ninguna pasada
+  extra de inferencia — el coste de la opción es la serialización).
+  `embedding` es un arreglo de números finitos; `dim` su longitud
+  (256 en community-1, WeSpeaker). Audio en silencio: `speakers: {}`.
+- `embedding_model`: constante contractual que identifica el origen
+  de las huellas: el subfolder `embedding` del pipeline espejado.
+- Emparejamiento entre llamadas/tramos: métrica recomendada
+  COSENO sobre los vectores L2-normalizados que entrega el motor.
+  La identidad resultante es del CONSUMIDOR (§11): la huella es
+  materia prima, no un identificador.
+- Fail-closed: cobertura exacta entre huellas y etiquetas con turno,
+  números finitos y `dim` homogénea — cualquier incoherencia del
+  motor → `diar_failed/inferencia_fallida`, sin resultado parcial.
 
 Truncado por `stop`/señal: exit 1, resultado JSON por **stdout** —
 `{"turns": null, "truncated": true, "duration_ms": N}` — y **stderr
@@ -103,16 +140,19 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
 ## 4. Motor y entorno del subprocess (EngineDiar)
 
 - Invocación: `<python> <script> <pipeline_dir> <audio_ruta>
-  <max_duration_s>` — argv sin contenido alguno: sólo rutas (la del
-  audio es exposición declarada, §8) y el tope de duración en
-  segundos (H-1 del issue #43, resuelto en D2: el límite
-  configurable llega al motor como 5º token; el script reporta la
-  duración ANTES de inferir y responde exit 4 si excede). stdin
-  cerrado (EOF limpio). stdout del subprocess: UN objeto JSON con la
-  forma `{"turns":[…]}` (etiquetas crudas; glosomata canóniza §2),
-  acotado a 16 MiB (más allá → `inferencia_fallida`); cualquier otra
-  cosa es `inferencia_fallida`. stderr del subprocess: drenado y
-  descartado (política de logs).
+  <max_duration_s> <embeddings:0|1>` — argv sin contenido alguno: sólo
+  rutas (la del audio es exposición declarada, §8), el tope de
+  duración en segundos (H-1 del issue #43: el límite configurable
+  llega al motor como 5º token; el script reporta la duración ANTES
+  de inferir y responde exit 4 si excede) y el modo de huellas como
+  6º (enmienda 2026-11-17). stdin cerrado (EOF limpio). stdout del
+  subprocess: UN objeto JSON con la forma `{"turns":[…]}` (etiquetas
+  crudas; glosomata canóniza §2) y, con `embeddings=1`, además
+  `{"embeddings": {"<etiqueta cruda>": [floats]}}` (el centroide por
+  hablante crudo; glosomata re-llavea por etiqueta canónica y
+  valida), acotado a 16 MiB (más allá → `inferencia_fallida`);
+  cualquier otra cosa es `inferencia_fallida`. stderr del subprocess:
+  drenado y descartado (política de logs).
 - Exit codes del script (contrato Node↔script, D2): `0` ok; `3`
   `audio_ilegible` (no existe, ilegible, vacío o sin duración
   decodificable en la sonda); `4` `audio_demasiado_largo`; `2` mal
@@ -222,6 +262,13 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
   del pipeline, clase, duración de archivos y hints de hablantes; con
   `PYANNOTE_METRICS_ENABLED=0` fijado por glosomata, nada de eso
   sale. La garantía es del entorno del subprocess, no del motor.
+- **Huellas de voz = DATO BIOMÉTRICO** (enmienda 2026-11-17): sólo
+  viajan en la respuesta por STDOUT al consumidor que las pidió con
+  `--embeddings`; JAMÁS en disco, temporales, logs, stderr,
+  respuestas de error ni MCP-log (la política de ids/códigos/
+  duraciones queda intacta). glosomata no las retiene ni las deriva
+  dos veces. La custodia de las huellas recibidas —incluido su marco
+  legal de biometría— es responsabilidad del CONSUMIDOR (§11).
 
 ## 9. Límites declarados y residuales
 
@@ -231,10 +278,10 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
    contratan ni se transfieren a este host.
 2. **Etiquetas SIN identidad**: los pseudónimos canonicados de una
    respuesta NO son los de otra (la asignación y permutación de
-   clusters es del motor, con o sin el mismo archivo). La identidad
-   persistente exige embeddings: consumidor. El consumidor que
-   necesite estabilidad entre corridas la impone él; glosomata no
-   contrata determinismo de etiquetas.
+   clusters es del motor, con o sin el mismo archivo). El consumidor
+   que necesite estabilidad entre corridas la impone él con las
+   huellas de `--embeddings` (emparejamiento por coseno, §2);
+   glosomata no contrata determinismo de etiquetas.
 3. **El modo exclusivo ELIGE un hablante por instante**: en solapes
    reales, el hablante secundario del solape no aparece en el turno
    (ese es el diseño del modo: favorecer la reconciliación con STT).
@@ -250,31 +297,44 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
 5. **Dependencias del venv propio**: instalación y actualización son
    del Operador. Una actualización de pyannote.audio que cambie
    etiquetas o precisión no rompe este contrato: la superficie declara
-   las etiquetas opacas y fija la forma §2.
+   las etiquetas opacas y fija la forma §2. Para las HUELLAS (v1.5):
+   `dim` y `embedding_model` son del pipeline espejado — si una
+   actualización cambia la dimensión o el modelo de embedding, el
+   consumidor lo VE (`dim`/`embedding_model` viajan en la respuesta)
+   y el emparejamiento entre huellas de orígenes distintos es inválido
+   por diseño: comparar sólo huellas del mismo `embedding_model`.
 
 ## 10. Lo que v1 NO ofrece (pacto de no sorpresa)
 
 Sin tool MCP (una ruta de filesystem por MCP rompe la frontera curada;
-consumidor MCP real → decisión + ADR), sin embeddings, scores o
-confianza en la salida, sin hints `num/min/max_speakers`, sin modo con
+consumidor MCP real → decisión + ADR), sin scores o confianza en la
+salida, sin hints `num/min/max_speakers`, sin modo con
 solapes (regular), sin audio por stdin, sin streaming, sin cola, sin
-servidor, sin retención. Los no-objetivos del contrato de consumo §2
-siguen vigentes. Cualquier apertura exige decisión humana y ADR
-propios.
+servidor, sin retención. Las huellas de voz SON opcionales desde la
+enmienda v1.5 (`--embeddings`, ADR-012 2026-11-17): aditivas, sólo
+stdout, sólo con pedido expreso. Los no-objetivos del contrato de
+consumo §2 siguen vigentes. Cualquier otra apertura exige decisión
+humana y ADR propios.
 
 ## 11. Frontera con el consumidor (tequio)
 
 1. El consumidor posee la grabación, la transcripción y la identidad:
    `diarize` le entrega turnos anónimos reconciliables con los
-   timestamps de SU transcripción (modo exclusivo).
+   timestamps de SU transcripción (modo exclusivo) y, si los pide,
+   una huella por hablante (v1.5) para mantener la identidad ENTRE
+   tramos de una misma llamada — emparejamiento por coseno entre
+   huellas del mismo `embedding_model` (§9.5).
 2. El consumidor NO debe interpretar etiquetas como identidades
    estables (§9.2) ni afirmar participación a partir de un solo
-   turno: la atribución de identidad es SU dominio (embeddings,
-   enrollment) y SU responsabilidad.
+   turno: la atribución de identidad es SU dominio y SU
+   responsabilidad. La huella es materia prima para SU emparejamiento
+   —un dato biométrico cuya custodia y marco legal le pertenecen—,
+   no un identificador emitido por glosomata.
 3. Reproceso: el consumidor puede volver a llamar `diarize` sobre el
    mismo archivo; glosomata no recuerda nada entre llamadas y las
    etiquetas pueden permutar entre corridas (§9.2): los turnos son
-   equivalentes, las etiquetas no.
+   equivalentes, las etiquetas no — las huellas sí son comparables
+   entre corridas del mismo `embedding_model`.
 4. El audio de entrada puede contener voces de terceros no informados:
    la decisión de grabar y procesar es del consumidor y de su marco
    legal; glosomata sólo declara que el procesamiento es local y sin
@@ -329,3 +389,13 @@ propios.
   #43. Conforme al canon de §6 (rutas convencionales en la matriz
   versionada; precedente whisper/piper), `engines.diar` queda
   declarado en `glosomata.json` del repo — mismo commit.
+- v1.5 (2026-11-17): **enmienda de huellas de voz opcionales**
+  (ADR-012, enmienda 2026-11-17; autorización literal del Operador
+  vía orquestador devherdr-expert): `diarize --embeddings` añade
+  `speakers` (un centroide por etiqueta canónica, WeSpeaker 256-d en
+  community-1 — sin modelos ni cómputo nuevos: son los centroides
+  del clustering) y `embedding_model`; emparejamiento recomendado por
+  coseno. ADITIVO y OPCIONAL: sin el flag la salida es idéntica byte
+  a byte. Huella = dato biométrico: sólo stdout, jamás disco/logs/
+  stderr (§8); custodia del consumidor (§11). Sin flag MCP nuevo
+  (diarize sigue CLI-only). El contrato SIGUE NORMATIVO.

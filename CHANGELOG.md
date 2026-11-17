@@ -6,6 +6,34 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **huellas de voz opcionales por hablante en `diarize`**
+  (enmienda ADR-012 2026-11-17; autorización literal del Operador vía
+  orquestador devherdr-expert; contrato de diarización v1.5) —
+  `diarize --file <ruta> --embeddings` añade a la respuesta
+  `speakers` (UNA huella por etiqueta CANÓNICA:
+  `{embedding: [floats], dim: 256}`, el CENTROIDE por hablante que el
+  propio pipeline ya calcula al clusterizar — WeSpeaker 256-d del
+  subfolder `embedding` de community-1: SIN modelos ni cómputo
+  nuevos, coste extra ≈ serialización) y `embedding_model`
+  (`speaker-diarization-community-1#embedding`); emparejamiento
+  recomendado por coseno entre huellas del mismo modelo. ADITIVO y
+  OPCIONAL: sin el flag la salida es idéntica byte a byte (test que
+  lo pinea); superficie estricta (flag a lo sumo una vez, antes o
+  después de `--file`); modo de huellas como 6º token del argv del
+  script (`0|1`, rechazando otros valores con exit 2);
+  fail-closed ante incoherencias motor↔huellas (cobertura exacta,
+  números finitos, `dim` homogénea → `inferencia_fallida`); silencio
+  → `speakers: {}`. PRIVACIDAD: la huella es un DATO BIOMÉTRICO —
+  sólo stdout al consumidor, JAMÁS disco/temporales/logs/stderr/
+  respuestas de error/MCP-log (contrato §8); custodia y marco legal
+  del consumidor (§11). Sin tool/parámetro MCP (diarize sigue
+  CLI-only). Verificado end-to-end con el motor real (audio
+  sintético de dos voces: 2 huellas de dim 256, forma idéntica sin
+  flag, nada en stderr). Tests: +6 herméticos (38 en
+  tests/diar.test.mjs). Docs en el mismo commit: enmienda ADR-012,
+  contrato v1.5 (§2/§4/§8/§9/§10/§11/historia), spec §CLI, contrato
+  de consumo §3, USO del CLI.
+
 - docs(contrato): **el contrato de consumo para agentes pasa a
   NORMATIVO** (v1.8, issue #54 punto 4) tras ronda adversarial `proceed`:
   causa `auth_ausente` en `doctor`, la línea de error de stderr como

@@ -4,21 +4,26 @@
 Contrato con src/diar.mjs (contrato-diarizacion-v1.md §4):
 
 - argv: <este-script> <pipeline_dir> <audio_ruta> <max_duration_s>
-  — SIN contenido: sólo rutas y el tope de duración (H-1, issue #43).
+  <embeddings:0|1> — SIN contenido: sólo rutas, el tope de duración
+  (H-1, issue #43) y el modo de huellas (enmienda 2026-11-17).
 - Entorno: EXIGE PYANNOTE_METRICS_ENABLED=0 y HF_HUB_OFFLINE=1 (los
   fija glosomata; si no llegan, este script rehúsa — fail-closed, la
   telemetría OFF es decisión del Operador, no un deseo).
-- stdout: UN objeto JSON {"turns": [{"speaker", "start_s", "end_s"}]}
-  con la diarización EXCLUSIVA (labels crudas; glosomata canóniza).
-  Nada más sale por stdout. stderr es humano/descartado.
+- stdout: UN objeto JSON {"turns": [...]} y, con embeddings=1,
+  además {"embeddings": {"<etiqueta cruda>": [floats, ...]}} — el
+  CENTROIDE por hablante que el pipeline ya calcula al clusterizar
+  (DiarizeOutput.speaker_embeddings, alineado a labels()). Nada más
+  sale por stdout. stderr es humano/descartado. Las huellas son un
+  DATO BIOMÉTRICO: jamás se escriben a disco ni logs (sólo stdout).
 - NO escribe artefactos de datos (ni RTTM, ni WAV, ni resultados).
 - Exit codes: 0 ok · 3 audio_ilegible (no existe, ilegible, vacío o
   sin duración decodificable) · 4 audio_demasiado_largo · 2 mal uso
   (argv inesperado o entorno sin las dos variables) · otro fallo.
 
 La carga del pipeline es por RUTA LOCAL (espejo del Operador): este
-script jamás descarga pesos ni toca la red. Verificación física
-pendiente del ensayo vivo D3 (autorización expresa del Operador).
+script jamás descarga pesos ni toca la red. Sin modelos nuevos para
+las huellas: son las del propio pipeline (subfolder embedding,
+WeSpeaker 256-d en community-1).
 """
 
 import json
@@ -33,20 +38,24 @@ def mal_uso(mensaje: str) -> None:
 
 
 def main() -> None:
-    # sys.argv NO incluye al intérprete: [script, pipeline, audio, max]
-    # son CUATRO elementos (contrato §4: 5 tokens a nivel OS).
-    if len(sys.argv) != 4:
+    # sys.argv NO incluye al intérprete: [script, pipeline, audio, max,
+    # embeddings] son CINCO elementos (contrato §4: 6 tokens a nivel OS).
+    if len(sys.argv) != 5:
         mal_uso(
             "uso: diarize_pyannote.py <pipeline_dir> <audio> "
-            "<max_duration_s>"
+            "<max_duration_s> <embeddings:0|1>"
         )
-    _, pipeline_dir, audio_ruta, max_dur_arg = sys.argv
+    _, pipeline_dir, audio_ruta, max_dur_arg, emb_arg = sys.argv
 
     # Fail-closed sobre el entorno exigido (contrato §4/ADR-012).
     if os.environ.get("PYANNOTE_METRICS_ENABLED") != "0":
         mal_uso("PYANNOTE_METRICS_ENABLED debe ser 0")
     if os.environ.get("HF_HUB_OFFLINE") != "1":
         mal_uso("HF_HUB_OFFLINE debe ser 1")
+
+    if emb_arg not in ("0", "1"):
+        mal_uso("embeddings debe ser 0 o 1")
+    con_huellas = emb_arg == "1"
 
     try:
         max_dur_s = float(max_dur_arg)
@@ -95,7 +104,24 @@ def main() -> None:
             }
         )
 
-    json.dump({"turns": turnos}, sys.stdout)
+    resultado = {"turns": turnos}
+
+    if con_huellas:
+        # Centroides por hablante que el clustering ya calculó:
+        # speaker_embeddings es (num_speakers, dim) en el orden de
+        # speaker_diarization.labels(). Se emiten crudos (glosomata
+        # canóniza las etiquetas). Dato biométrico: sólo stdout.
+        etiquetas = [str(e) for e in salida.speaker_diarization.labels()]
+        huellas = salida.speaker_embeddings
+        if huellas is None or len(huellas) != len(etiquetas):
+            print("huellas incoherentes con las etiquetas", file=sys.stderr)
+            sys.exit(1)
+        resultado["embeddings"] = {
+            etiqueta: [float(x) for x in huellas[i]]
+            for i, etiqueta in enumerate(etiquetas)
+        }
+
+    json.dump(resultado, sys.stdout)
     sys.stdout.flush()
     sys.exit(0)
 

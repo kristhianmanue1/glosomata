@@ -58,6 +58,39 @@ const modos = {
     { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
     { speaker: 'voz_b', start_s: 3, end_s: 4 },
   ] }),
+  'ok-emb': () => emitir({ turns: [
+    { speaker: 'voz_b', start_s: 1.5, end_s: 2.5 },
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+  ],
+  embeddings: {
+    voz_a: [0.11, 0.22, 0.33, 0.44],
+    voz_b: [-0.11, -0.22, -0.33, -0.44],
+  } }),
+  'emb-sobra': () => emitir({ turns: [
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+  ],
+  embeddings: {
+    voz_a: [0.1, 0.2, 0.3, 0.4],
+    voz_fantasma: [0.5, 0.6, 0.7, 0.8],
+  } }),
+  'emb-falta': () => emitir({ turns: [
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+    { speaker: 'voz_b', start_s: 1.5, end_s: 2.5 },
+  ],
+  embeddings: { voz_a: [0.1, 0.2, 0.3, 0.4] } }),
+  'emb-malo': () => emitir({ turns: [
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+  ],
+  embeddings: { voz_a: [0.1, 'no-numero', 0.3, 0.4] } }),
+  'emb-dim': () => emitir({ turns: [
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+    { speaker: 'voz_b', start_s: 1.5, end_s: 2.5 },
+  ],
+  embeddings: {
+    voz_a: [0.1, 0.2, 0.3, 0.4],
+    voz_b: [0.5, 0.6, 0.7, 0.8, 0.9],
+  } }),
+  'emb-silencio': () => emitir({ turns: [], embeddings: {} }),
   ilegible: () => salir(3),
   largo: () => salir(4),
   crash: () => salir(1),
@@ -409,8 +442,10 @@ test('diarize: ok → turnos canónicos, modo exclusive y duration_ms', () => {
   assert.equal(d.mode, 'exclusive');
   assert.ok(Number.isInteger(d.duration_ms) && d.duration_ms >= 0);
   // H-1: el tope de duración viaja como 5º token del argv del script
+  // (y el modo de huellas como 6º, enmienda 2026-11-17: '0' sin flag)
   const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
-  assert.deepEqual(log.argv, [fixScript, fixPipeline, AUDIO_X, '14400']);
+  assert.deepEqual(log.argv,
+    [fixScript, fixPipeline, AUDIO_X, '14400', '0']);
 });
 
 test('diarize: entorno del subprocess FIJADO (telemetría OFF sin herencia)', () => {
@@ -478,7 +513,9 @@ test('diarize: stdout sobre el tope 16 MiB → inferencia_fallida (H-3 r1)', () 
 // del repo con python3 DEL SISTEMA (stdlib sólo; los imports de
 // pyannote viven DESPUÉS de estos guards): la forma exacta que
 // diar.mjs construye debe pasar el guard de argv, y los exits
-// tempranos (2/3) deben ser los contratados.
+// tempranos (2/3) deben ser los contratados. Desde la enmienda
+// 2026-11-17 la forma son CINCO tokens tras el intérprete (con el
+// modo de huellas).
 test('script real: guard de argv y exits tempranos sin pyannote', () => {
   const script = new URL('../src/diar/diarize_pyannote.py',
     import.meta.url).pathname;
@@ -488,19 +525,21 @@ test('script real: guard de argv y exits tempranos sin pyannote', () => {
   const ENV_OK = { PYANNOTE_METRICS_ENABLED: '0', HF_HUB_OFFLINE: '1' };
 
   // env sin las dos variables exigidas → exit 2 (rehúsa)
-  const sinEnv = correr(['/no/pipeline', '/no/audio.wav', '14400'],
+  const sinEnv = correr(['/no/pipeline', '/no/audio.wav', '14400', '0'],
     { PYANNOTE_METRICS_ENABLED: undefined, HF_HUB_OFFLINE: undefined });
   assert.equal(sinEnv.status, 2);
 
-  // forma EXACTA de diar.mjs (4 tokens tras el intérprete): el guard
+  // forma EXACTA de diar.mjs (5 tokens tras el intérprete): el guard
   // acepta y el audio inexistente responde exit 3 ANTES de importar
-  const formaReal = correr(['/no/pipeline', '/no/audio.wav', '14400'],
+  const formaReal = correr(['/no/pipeline', '/no/audio.wav', '14400', '0'],
     ENV_OK);
   assert.equal(formaReal.status, 3);
 
-  // token extra → exit 2 de nuevo
-  const extra = correr(['/no/p', '/no/a.wav', '1', 'extra'], ENV_OK);
+  // token extra o modo de huellas inválido → exit 2 de nuevo
+  const extra = correr(['/no/p', '/no/a.wav', '1', '0', 'extra'], ENV_OK);
   assert.equal(extra.status, 2);
+  const modoMalo = correr(['/no/p', '/no/a.wav', '14400', '2'], ENV_OK);
+  assert.equal(modoMalo.status, 2);
 });
 
 test('diarize: wall-clock evaluado → diar_failed/timeout_inferencia', () => {
@@ -570,6 +609,84 @@ test('get_config (configSaneada): matriz CON diar → sin exposición', () => {
   assert.ok(!JSON.stringify(out).includes('diar'));
   assert.ok(!Object.keys(out.constraints ?? {})
     .some((k) => k.startsWith('diar')));
+});
+
+// —— Enmienda 2026-11-17 (huellas de voz opcionales) ——
+
+test('diarize --embeddings: huellas por etiqueta canónica con dim y modelo', () => {
+  const rutaLog = join(dirFalso, 'log-emb.json');
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X, '--embeddings'],
+    CFG_DIAR(), { GLOSOMATA_DIAR_FAKE_LOG: rutaLog,
+      GLOSOMATA_DIAR_FAKE_MODE: 'ok-emb' });
+  assert.equal(r.code, 0);
+  const d = JSON.parse(r.out);
+  // voz_a es primera EN EL TIEMPO → SPEAKER_00 (la cruda jamás sale)
+  assert.deepEqual(Object.keys(d.speakers), ['SPEAKER_00', 'SPEAKER_01']);
+  assert.deepEqual(d.speakers.SPEAKER_00,
+    { embedding: [0.11, 0.22, 0.33, 0.44], dim: 4 });
+  assert.deepEqual(d.speakers.SPEAKER_01,
+    { embedding: [-0.11, -0.22, -0.33, -0.44], dim: 4 });
+  assert.equal(d.embedding_model,
+    'speaker-diarization-community-1#embedding');
+  // el modo viaja como 6º token del argv del script
+  const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
+  assert.equal(log.argv[4], '1');
+  // biométrico: la huella vive en stdout, JAMÁS en stderr
+  assert.ok(!String(r.err ?? '').includes('0.123456789'));
+});
+
+test('diarize --embeddings: flag también admitido antes de --file', () => {
+  const r = salidaDiarize(['diarize', '--embeddings', '--file', AUDIO_X],
+    CFG_DIAR(), { GLOSOMATA_DIAR_FAKE_MODE: 'ok-emb' });
+  assert.equal(r.code, 0);
+  assert.ok(JSON.parse(r.out).speakers);
+});
+
+test('diarize SIN --embeddings: salida idéntica aunque el motor las traiga', () => {
+  const rutaLog = join(dirFalso, 'log-noemb.json');
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X], CFG_DIAR(),
+    { GLOSOMATA_DIAR_FAKE_LOG: rutaLog,
+      GLOSOMATA_DIAR_FAKE_MODE: 'ok-emb' });
+  assert.equal(r.code, 0);
+  const d = JSON.parse(r.out);
+  assert.equal('speakers' in d, false);
+  assert.equal('embedding_model' in d, false);
+  // modo '0' en el argv: el motor ni las calcula si se las piden
+  const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
+  assert.equal(log.argv[4], '0');
+});
+
+test('diarize --embeddings: silencio → speakers {} válido', () => {
+  const r = salidaDiarize(['diarize', '--file', AUDIO_X, '--embeddings'],
+    CFG_DIAR(), { GLOSOMATA_DIAR_FAKE_MODE: 'emb-silencio' });
+  assert.equal(r.code, 0);
+  const d = JSON.parse(r.out);
+  assert.deepEqual(d.speakers, {});
+  assert.equal(d.num_speakers, 0);
+});
+
+test('diarize --embeddings: incoherencias del motor → inferencia_fallida', () => {
+  for (const modo of ['emb-sobra', 'emb-falta', 'emb-malo', 'emb-dim']) {
+    const r = salidaDiarize(['diarize', '--file', AUDIO_X, '--embeddings'],
+      CFG_DIAR(), { GLOSOMATA_DIAR_FAKE_MODE: modo });
+    assert.equal(r.code, 1, modo);
+    assert.match(r.err, /diar_failed/, modo);
+    assert.match(r.err, /inferencia_fallida/, modo);
+  }
+});
+
+test('diarize --embeddings: superficie estricta — duplicado o mal puesto → usage', () => {
+  const ruta = CFG_DIAR();
+  for (const args of [
+    ['--file', AUDIO_X, '--embeddings', '--embeddings'],
+    ['--embeddings', '--embeddings', '--file', AUDIO_X],
+    ['--file', AUDIO_X, '--embeddings', 'extra'],
+    ['--embeddings'],
+  ]) {
+    const r = salidaDiarize(['diarize', ...args], ruta);
+    assert.equal(r.code, 2, JSON.stringify(args));
+    assert.match(r.err, /usage/, JSON.stringify(args));
+  }
 });
 
 after(() => rmSync(dirFalso, { recursive: true, force: true }));
