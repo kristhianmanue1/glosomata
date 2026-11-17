@@ -149,7 +149,7 @@ Registro:
    Operador, una por una.
 4. El token de Hugging Face fue retirado del disco (2026-11-13,
    acción del coordinador): una descarga futura requiere un token
-   nuevo entregado por Operador.
+   nuevo entregado por el Operador.
 
 ## Enmienda (2026-11-17): huella de voz opcional por hablante
 

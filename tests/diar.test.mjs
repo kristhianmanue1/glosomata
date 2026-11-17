@@ -90,6 +90,10 @@ const modos = {
     voz_a: [0.1, 0.2, 0.3, 0.4],
     voz_b: [0.5, 0.6, 0.7, 0.8, 0.9],
   } }),
+  'emb-cero': () => emitir({ turns: [
+    { speaker: 'voz_a', start_s: 0.2, end_s: 1.0 },
+  ],
+  embeddings: { voz_a: [0, 0, 0, 0] } }),
   'emb-silencio': () => emitir({ turns: [], embeddings: {} }),
   ilegible: () => salir(3),
   largo: () => salir(4),
@@ -385,15 +389,17 @@ after(() => rmSync(dirFix, { recursive: true, force: true }));
 
 // —— D2: operación diarize (contrato §2-§5) ——
 
-// exit≠1 con stdout JSON (errores diar_failed), o exit 2 usage
+// exit≠1 con stdout JSON (errores diar_failed), o exit 2 usage.
+// H2 (r1): captura stderr SIEMPRE (también en éxito) — la garantía
+// biométrica «ninguna huella en stderr» se aserta con los valores
+// REALES del fixture.
 function salidaDiarize(argvCli, rutaCfg, extra = {}) {
-  try {
-    const out = cli(argvCli, rutaCfg, extra);
-    return { code: 0, out };
-  } catch (e) {
-    return { code: e.status, out: String(e.stdout ?? ''),
-      err: String(e.stderr ?? '') };
-  }
+  const r = spawnSync('node', [CLI, ...argvCli], {
+    encoding: 'utf8', cwd: CWD,
+    env: { ...process.env, GLOSOMATA_CONFIG: rutaCfg, ...extra },
+  });
+  return { code: r.status, out: String(r.stdout ?? ''),
+    err: String(r.stderr ?? '') };
 }
 
 const CFG_DIAR = () => configTemporal(configDiarizable());
@@ -631,8 +637,12 @@ test('diarize --embeddings: huellas por etiqueta canónica con dim y modelo', ()
   // el modo viaja como 6º token del argv del script
   const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
   assert.equal(log.argv[4], '1');
-  // biométrico: la huella vive en stdout, JAMÁS en stderr
-  assert.ok(!String(r.err ?? '').includes('0.123456789'));
+  // H2 (r1): garantía biométrica CON valores reales del fixture —
+  // ni stderr del proceso NI el registro del falso llevan huella
+  assert.ok(!r.err.includes('0.11') && !r.err.includes('0.44'),
+    'huella en stderr');
+  assert.ok(!JSON.stringify(log).includes('0.11'),
+    'huella en el registro del motor falso');
 });
 
 test('diarize --embeddings: flag también admitido antes de --file', () => {
@@ -651,7 +661,10 @@ test('diarize SIN --embeddings: salida idéntica aunque el motor las traiga', ()
   const d = JSON.parse(r.out);
   assert.equal('speakers' in d, false);
   assert.equal('embedding_model' in d, false);
-  // modo '0' en el argv: el motor ni las calcula si se las piden
+  // H5 (r1): pineo exacto de la forma — las claves son las de siempre
+  assert.deepEqual(Object.keys(d),
+    ['turns', 'num_speakers', 'mode', 'duration_ms']);
+  // modo '0' en el argv: el motor ni las calcula si no se las piden
   const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
   assert.equal(log.argv[4], '0');
 });
@@ -666,12 +679,17 @@ test('diarize --embeddings: silencio → speakers {} válido', () => {
 });
 
 test('diarize --embeddings: incoherencias del motor → inferencia_fallida', () => {
-  for (const modo of ['emb-sobra', 'emb-falta', 'emb-malo', 'emb-dim']) {
+  // emb-cero: vector de puros ceros (padding del motor, H4 r1):
+  // norma 0 → coseno indefinido → fail-closed, no huella basura
+  for (const modo of ['emb-sobra', 'emb-falta', 'emb-malo', 'emb-dim',
+    'emb-cero']) {
     const r = salidaDiarize(['diarize', '--file', AUDIO_X, '--embeddings'],
       CFG_DIAR(), { GLOSOMATA_DIAR_FAKE_MODE: modo });
     assert.equal(r.code, 1, modo);
     assert.match(r.err, /diar_failed/, modo);
     assert.match(r.err, /inferencia_fallida/, modo);
+    // y el fallo no filtra la huella por stderr (H2 r1)
+    assert.ok(!r.err.includes('0.44'), modo);
   }
 });
 

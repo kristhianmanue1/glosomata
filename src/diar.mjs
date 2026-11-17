@@ -140,6 +140,9 @@ function canonizarHuellas(embCrudo, etiquetas) {
     const v = embCrudo[cruda];
     if (!Array.isArray(v) || v.length === 0) return null;
     if (!v.every((x) => Number.isFinite(x))) return null;
+    // artefacto de padding del motor (vector de puros ceros, H4 r1):
+    // norma 0 = huella no emparejable (coseno indefinido) — fail-closed
+    if (v.every((x) => x === 0)) return null;
     if (dim === null) dim = v.length;
     else if (v.length !== dim) return null;
     speakers[canonica] = { embedding: v, dim: v.length };

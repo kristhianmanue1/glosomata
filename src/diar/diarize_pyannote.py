@@ -109,16 +109,24 @@ def main() -> None:
     if con_huellas:
         # Centroides por hablante que el clustering ya calculó:
         # speaker_embeddings es (num_speakers, dim) en el orden de
-        # speaker_diarization.labels(). Se emiten crudos (glosomata
-        # canóniza las etiquetas). Dato biométrico: sólo stdout.
-        etiquetas = [str(e) for e in salida.speaker_diarization.labels()]
+        # speaker_diarization.labels(). Se FILTRAN a las etiquetas con
+        # al menos un turno EXCLUSIVO (un hablante totalmente
+        # solapado no aparece en los turnos: sin huella que los
+        # cubra, la cobertura exacta de glosomata fallaría toda la
+        # llamada — hallazgo H3 r1) y se emiten crudos (glosomata
+        # canóniza). Dato biométrico: sólo stdout.
+        con_turno = {t["speaker"] for t in turnos}
+        etiquetas = [str(e) for e in salida.speaker_diarization.labels()
+                     if str(e) in con_turno]
+        indice = {str(e): i for i, e in enumerate(
+            salida.speaker_diarization.labels())}
         huellas = salida.speaker_embeddings
-        if huellas is None or len(huellas) != len(etiquetas):
+        if huellas is None or any(e not in indice for e in etiquetas):
             print("huellas incoherentes con las etiquetas", file=sys.stderr)
             sys.exit(1)
         resultado["embeddings"] = {
-            etiqueta: [float(x) for x in huellas[i]]
-            for i, etiqueta in enumerate(etiquetas)
+            etiqueta: [float(x) for x in huellas[indice[etiqueta]]]
+            for etiqueta in etiquetas
         }
 
     json.dump(resultado, sys.stdout)

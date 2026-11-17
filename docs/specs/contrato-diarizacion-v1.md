@@ -303,6 +303,15 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
    consumidor lo VE (`dim`/`embedding_model` viajan en la respuesta)
    y el emparejamiento entre huellas de orígenes distintos es inválido
    por diseño: comparar sólo huellas del mismo `embedding_model`.
+6. **Huellas y hablantes sin turno exclusivo** (v1.5, H3/H4 de la
+   ronda r1): el script filtra las huellas a las etiquetas con al
+   menos un turno EXCLUSIVO — un hablante cuyo habla quedó íntegra en
+   solapes (modo exclusivo, §9.3) NO aparece en los turnos y por
+   tanto NO lleva huella en la respuesta; su voz está en los
+   solapes que el modo descarta. Un vector de NORMA CERO (artefacto
+   de padding del motor para hablantes «extra») se rechaza
+   fail-closed (`inferencia_fallida`): una huella no emparejable
+   (coseno indefinido) no se entrega como si lo fuera.
 
 ## 10. Lo que v1 NO ofrece (pacto de no sorpresa)
 
