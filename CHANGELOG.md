@@ -21,11 +21,12 @@ generadas desde commits/PRs reales.
   sin diferencia medible en M2 (observación, no cota). Docs:
   `docs/diarize-dispositivo-gpu.md` (guía CUDA para el Dell RTX 2060
   con venv por release y `--require-hashes`), contrato §2/§4/§6/
-  historia v1.6, consumo §3. Tests: +6 herméticos (44 en los dos
+  historia v1.6, consumo §3. Tests: +5 herméticos (44 en los dos
   archivos de diarización — `tests/diar.test.mjs` se divide en
   D1/probe y `tests/diarize-op.test.mjs` operación CLI por el límite
-  de 800 líneas del gate). Huellas sin cambios; sin datos reales en
-  tests.
+  de 800 líneas del gate; ronda r1 del revisor restauró 9 tests de
+  D1 que la división había perdido). Huellas sin cambios; sin datos
+  reales en tests.
 
 - fix: **stdout truncado por `process.exit` en tuberías (CLI entera)**
   (defecto visto con `diarize --embeddings` sobre un tramo de 1 800 s:

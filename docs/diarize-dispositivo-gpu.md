@@ -44,14 +44,21 @@ python3.12 -m venv .venv-diar
   --index-url https://download.pytorch.org/whl/cu126
 .venv-diar/bin/pip install pyannote.audio
 
-# 4) hashes reproducibles: congela y verifica
+# 4) hashes reproducibles: congela y verifica. OJO: el índice de
+#    PyTorch SÓLO trae wheels de torch; el resto vive en PyPI —
+#    pip-compile necesita ambos índices
 .venv-diar/bin/pip install pip-tools
 .venv-diar/bin/pip-compile --generate-hashes \
   --index-url https://download.pytorch.org/whl/cu126 \
+  --extra-index-url https://pypi.org/simple \
   -o requirements-diar.txt requirements-diar.in
 .venv-diar/bin/pip install --require-hashes -r requirements-diar.txt
 
-# 5) verifica CUDA disponible (antes de declarar device cuda)
+# 5) verifica CUDA disponible (antes de declarar device cuda).
+#    «Disponible» es torch.cuda.is_available(); si la inferencia
+#    FALLA en ejecución (p. ej. OOM con audio enorme), la operación
+#    responde diar_failed/inferencia_fallida — disponible ≠ funciona
+#    en todo input: el tope diar_max_duration_s sigue siendo tu red.
 .venv-diar/bin/python -c "import torch; print(torch.cuda.is_available())"
 
 # 6) espejo del pipeline (paso del Operador, igual que en el Mac)

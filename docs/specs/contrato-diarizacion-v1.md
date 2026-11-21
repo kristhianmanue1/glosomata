@@ -43,9 +43,12 @@ Forma de respuesta (exit 0, JSON por stdout) — SIN `--embeddings`
 
 ```json
 {
-  "turns": [ "..." ],
+  "turns": [
+    { "speaker": "SPEAKER_00", "start_s": 0.2, "end_s": 1.5 }
+  ],
   "num_speakers": 1,
   "mode": "exclusive",
+  "device": "cpu",
   "duration_ms": 45320
 }
 ```
