@@ -304,8 +304,6 @@ test('config set válido con diar sano: escribe y reporta diar', (t) => {
     JSON.parse(cli(['config', 'list'], real)).engines.diar, DIAR_SANO);
 });
 
-after(() => rmSync(dirFalso, { recursive: true, force: true }));
-
 // —— D2: operación diarize (contrato §2-§5) ——
 
 // exit≠1 con stdout JSON (errores diar_failed), o exit 2 usage.

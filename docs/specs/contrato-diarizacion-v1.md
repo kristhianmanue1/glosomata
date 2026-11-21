@@ -39,7 +39,8 @@ tolerancia legacy). SIN tool MCP en v1 (§10); sin flags de hints de
 hablantes; sin selección de modo.
 
 Forma de respuesta (exit 0, JSON por stdout) — SIN `--embeddings`
-(idéntica byte a byte a la de siempre, enmienda 2026-11-17):
+(la de siempre más el campo aditivo `device`, v1.6; históricamente
+idéntica byte a byte hasta v1.5, enmienda 2026-11-17):
 
 ```json
 {
@@ -82,13 +83,14 @@ Semántica de cada campo:
   coseno de huellas 1.000000; `docs/diarize-dispositivo-gpu.md`).
 
 CON `--embeddings` (enmienda 2026-11-17, ADR-012) la respuesta añade
-exactamente dos campos:
+exactamente dos campos (más `device`, que viaja siempre desde v1.6):
 
 ```json
 {
   "turns": [ "..." ],
   "num_speakers": 2,
   "mode": "exclusive",
+  "device": "cpu",
   "speakers": {
     "SPEAKER_00": { "embedding": [0.014, 0.4, 0.55, 0.0, 0.0],
                     "dim": 256 },

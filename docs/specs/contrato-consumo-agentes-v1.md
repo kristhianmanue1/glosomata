@@ -121,7 +121,8 @@ turnos de hablante del archivo en modo EXCLUSIVO, efímero sin
 retención, FUERA del canal (sin `canal.lock`); superficie ESTRICTA
 (`--file` y a lo sumo un `--embeddings` sin valor; cualquier otra
 forma → exit 2 `usage`); sin `--embeddings` la salida es idéntica
-byte a byte; con él, `speakers` añade UNA huella de voz por etiqueta
+byte a byte — salvo el campo aditivo `device` (v1.6), que viaja
+siempre; con él, `speakers` añade UNA huella de voz por etiqueta
 canónica (dato BIOMÉTRICO: sólo stdout, jamás logs/stderr/disco) y
 `embedding_model`; `device` informa el dispositivo de cómputo
 EFECTIVO (`cpu|cuda|mps`, por matriz `engines.diar.device`, default

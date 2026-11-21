@@ -48,6 +48,12 @@ python3.12 -m venv .venv-diar
 #    PyTorch SÓLO trae wheels de torch; el resto vive en PyPI —
 #    pip-compile necesita ambos índices
 .venv-diar/bin/pip install pip-tools
+```bash
+# requirements-diar.in es TU lista de intenciones (una línea):
+#   pyannote.audio
+# y opcionalmente el pin de torch con la variante CUDA:
+#   torch==<versión-petición> --index-url ...
+# (el .txt con hashes lo genera pip-compile a partir de él)
 .venv-diar/bin/pip-compile --generate-hashes \
   --index-url https://download.pytorch.org/whl/cu126 \
   --extra-index-url https://pypi.org/simple \
