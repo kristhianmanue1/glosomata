@@ -437,6 +437,9 @@ humana y ADR propios.
   `device` con el EFECTIVO (aditivo: consumidor compatible según
   contrato de consumo §2 — el aviso de la vuelta atrás es ese
   campo). Verificado en motor real (cpu↔mps: turnos idénticos,
-  coseno de huellas 1.000000; camino de fallback cuda→cpu). Guía de
+  coseno de huellas 1.000000, mps ≈2,4× más rápido en audio de
+  29 s — observación; camino de fallback cuda→cpu; ruido nativo del
+  clustering en fd 1 puesto en cuarentena a fd 2 — hallazgo B1 de
+  la ronda r3, corregido). Guía de
   despliegue CUDA para el Dell en `docs/diarize-dispositivo-gpu.md`.
   El contrato SIGUE NORMATIVO.

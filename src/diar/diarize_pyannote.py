@@ -99,30 +99,44 @@ def main() -> None:
     # no del audio: exit != {0,3,4} → inferencia_fallida en glosomata.
     from pyannote.audio import Pipeline
 
-    pipeline = Pipeline.from_pretrained(pipeline_dir)
+    # CUARENTENA DE STDOUT (hallazgo B1, ronda r3): librerías nativas
+    # (clustering VBx) pueden escribir warnings DIRECTO a fd 1 —
+    # p. ej. «WARNING: Value of auxiliary function has decreased!» en
+    # mps — y corromper el JSON del protocolo. Durante la carga y la
+    # inferencia, fd 1 apunta a fd 2 (stderr, que glosomata drena);
+    # el JSON se emite por el fd 1 original, restaurado después.
+    _stdout_real = os.dup(1)
+    os.dup2(2, 1)
+    try:
+        pipeline = Pipeline.from_pretrained(pipeline_dir)
 
-    # Dispositivo de cómputo (petición 2026-11-21): default cpu; si el
-    # pedido no está disponible se VUELVE a cpu sin caerse — el
-    # dispositivo EFECTIVO viaja en la salida ("device") y por stderr
-    # va un aviso humano (sin contenido: sólo nombres de hardware).
-    dispositivo = dev_arg
-    if dispositivo != "cpu":
-        import torch
+        # Dispositivo de cómputo (petición 2026-11-21): default cpu; si
+        # el pedido no está disponible se VUELVE a cpu sin caerse — el
+        # dispositivo EFECTIVO viaja en la salida ("device") y por
+        # stderr va un aviso humano (sin contenido: sólo nombres de
+        # hardware).
+        dispositivo = dev_arg
+        if dispositivo != "cpu":
+            import torch
 
-        disponible = (
-            torch.cuda.is_available() if dispositivo == "cuda"
-            else torch.backends.mps.is_available()
-        )
-        if not disponible:
-            print(
-                f"diarize: {dispositivo} no disponible; usando cpu",
-                file=sys.stderr,
+            disponible = (
+                torch.cuda.is_available() if dispositivo == "cuda"
+                else torch.backends.mps.is_available()
             )
-            dispositivo = "cpu"
-        else:
-            pipeline.to(torch.device(dispositivo))
+            if not disponible:
+                print(
+                    f"diarize: {dispositivo} no disponible; usando cpu",
+                    file=sys.stderr,
+                )
+                dispositivo = "cpu"
+            else:
+                pipeline.to(torch.device(dispositivo))
 
-    salida = pipeline(audio_ruta)
+        salida = pipeline(audio_ruta)
+    finally:
+        sys.stdout.flush()
+        os.dup2(_stdout_real, 1)
+        os.close(_stdout_real)
 
     turnos = []
     for turno, hablante in salida.exclusive_speaker_diarization:

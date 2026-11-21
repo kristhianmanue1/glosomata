@@ -255,7 +255,8 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
       mode: 'exclusive', device: usado };
     if (huellas) {
       // enmienda 2026-11-17: huellas sólo si se pidieron — sin el
-      // flag, la salida es idéntica byte a byte (contrato §2)
+      // flag, la salida difiere de la de v1.5 sólo en el campo
+      // aditivo `device` (v1.6, siempre presente)
       const huellasCanon = canonizarHuellas(crudo?.embeddings,
         canon.etiquetas);
       if (huellasCanon === null) {

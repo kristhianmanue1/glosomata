@@ -17,9 +17,16 @@ generadas desde commits/PRs reales.
   el stderr del subprocess se drena por política). Sin CUDA/MPS el
   sistema sigue operativo. Verificado con motor real (audio
   sintético): turnos IDÉNTICOS cpu↔mps, coseno de huellas 1.000000,
-  camino de fallback cuda→cpu observado (`device:"cpu"`); latencia
-  sin diferencia medible en M2 (observación, no cota). Docs:
-  `docs/diarize-dispositivo-gpu.md` (guía CUDA para el Dell RTX 2060
+  camino de fallback cuda→cpu observado (`device:"cpu"`); en audio
+  de 29 s: mps 8,3 s vs cpu 20,0 s (2,4×) — en corto no se media
+  (observaciones, no cotas). Hallazgo B1 de la ronda r3 corregido:
+  el clustering VBx puede escribir warnings nativos DIRECTO a fd 1
+  («auxiliary function has decreased», observado en mps) — el script
+  pone fd 1→fd 2 en CUARENTENA durante carga+inferencia y emite el
+  JSON por el fd original: protocolo stdout estructuralmente limpio
+  para cualquier ruido nativo (van al stderr que glosomata drena).
+  Docs: `docs/diarize-dispositivo-gpu.md` (guía CUDA para el Dell
+  RTX 2060
   con venv por release y `--require-hashes`), contrato §2/§4/§6/
   historia v1.6, consumo §3. Tests: +5 herméticos (44 en los dos
   archivos de diarización — `tests/diar.test.mjs` se divide en

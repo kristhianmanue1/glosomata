@@ -11,17 +11,22 @@ política de logs; nunca lleva contenido).
 
 ## Equivalencia verificada (2026-11-21, Apple Silicon M2)
 
-Con audio sintético de dos voces (17.3 s), `cpu` vs `mps`:
+Con audio sintético de dos voces (17.3 s y 29 s), `cpu` vs `mps`:
 turnos **idénticos** y huellas con **coseno 1.000000** por hablante.
-Tolerancia de referencia para comparar dispositivos: los turnos
-deben coincidir y el coseno de huellas ≥ 0.999999 (en esta prueba
-dio 1.0 exacto); diferencias mayores indican un problema, no
-ruido. Latencia: **sin diferencia medible** en este host y modelo
-(≈16.7 s ambos; el pipeline es pequeño y el M2 ya es rápido en
-CPU) — el beneficio de GPU se espera en audio LARGO (horas) y en
-CUDA. `cuda` no es verificable en este host (sin NVIDIA): se
-verificó el CAMINO del fallback (pedir `cuda` aquí entrega
-`"device": "cpu"`), no la inferencia CUDA misma.
+Con audio de 29 s: **mps 8,3 s vs cpu 20,0 s (≈2,4×)** — la ventaja
+aparece con audio largo; en clips cortos no se mide. Latencias =
+observaciones de este host, nunca cotas. `cuda` no es verificable
+en este host (sin NVIDIA): se verificó el CAMINO del fallback
+(pedir `cuda` aquí entrega `"device": "cpu"`), no la inferencia
+CUDA misma.
+
+**Ruido nativo en stdout (hallazgo B1, ronda r3):** el clustering
+VBx puede escribir warnings («Value of auxiliary function has
+decreased!», observado en mps) DIRECTO a fd 1, corrompiendo el JSON.
+El script pone fd 1→fd 2 en cuarentena durante carga+inferencia y
+emite el JSON por el fd original: el protocolo queda limpio para
+cualquier ruido de librerías nativas (va al stderr que glosomata
+drena por política de logs).
 
 ## Despliegue en el Dell (RTX 2060, 6 GB) — guía para Malintzin
 
@@ -48,7 +53,6 @@ python3.12 -m venv .venv-diar
 #    PyTorch SÓLO trae wheels de torch; el resto vive en PyPI —
 #    pip-compile necesita ambos índices
 .venv-diar/bin/pip install pip-tools
-```bash
 # requirements-diar.in es TU lista de intenciones (una línea):
 #   pyannote.audio
 # y opcionalmente el pin de torch con la variante CUDA:
