@@ -42,6 +42,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Ruta al espejo LOCAL del pipeline pyannote/speaker-diarization-community-1 (clonado con git-lfs tras aceptar condiciones): directorio con config.yaml — la firma estructural que el probe exige (pesos_ausentes si falta). La carga es por ruta, jamás por red (HF_HUB_OFFLINE=1 en el subprocess, D2)."
+        },
+        "device": {
+          "type": "string",
+          "enum": ["cpu", "cuda", "mps"],
+          "description": "Dispositivo de cómputo de la diarización (petición 2026-11-21). Default cpu; si el pedido no está disponible el motor vuelve a CPU sin caerse y el dispositivo EFECTIVO viaja en la respuesta ('device'). cuda requiere PyTorch con CUDA (ver docs/diarize-dispositivo-gpu.md); mps es Apple Silicon."
         }
       },
       "description": "Motor de diarización (opcional, ADR-012). Ausente: la superficie diarize responde not_supported. Declarado: config validate/set y doctor exigen que el probe estructural pase (regla phonon_ollama/lfm3). No es un motor tts[]: sin kill_switch ni selected (contrato-diarizacion-v1.md §6)."

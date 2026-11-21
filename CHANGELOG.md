@@ -6,6 +6,27 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **dispositivo de cómputo de la diarización (`cpu|cuda|mps`)**
+  (contrato v1.6; petición del Operador 2026-11-21 vía tequio/
+  Malintzin, «la diarizacion es donde mas se consume […] adelante con
+  recomendaciones») — clave opcional `engines.diar.device` en la
+  matriz (schema enum; **default `cpu`**: sin la clave nada cambia),
+  7º token del argv del script; si el pedido no está disponible el
+  motor VUELVE a CPU sin caerse y la respuesta gana el campo ADITIVO
+  `device` con el EFECTIVO (el aviso de la vuelta atrás es ese campo:
+  el stderr del subprocess se drena por política). Sin CUDA/MPS el
+  sistema sigue operativo. Verificado con motor real (audio
+  sintético): turnos IDÉNTICOS cpu↔mps, coseno de huellas 1.000000,
+  camino de fallback cuda→cpu observado (`device:"cpu"`); latencia
+  sin diferencia medible en M2 (observación, no cota). Docs:
+  `docs/diarize-dispositivo-gpu.md` (guía CUDA para el Dell RTX 2060
+  con venv por release y `--require-hashes`), contrato §2/§4/§6/
+  historia v1.6, consumo §3. Tests: +6 herméticos (44 en los dos
+  archivos de diarización — `tests/diar.test.mjs` se divide en
+  D1/probe y `tests/diarize-op.test.mjs` operación CLI por el límite
+  de 800 líneas del gate). Huellas sin cambios; sin datos reales en
+  tests.
+
 - fix: **stdout truncado por `process.exit` en tuberías (CLI entera)**
   (defecto visto con `diarize --embeddings` sobre un tramo de 1 800 s:
   73 728 B truncados por tubería con JSON inválido; 89 625 B válidos

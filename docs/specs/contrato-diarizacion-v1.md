@@ -43,9 +43,7 @@ Forma de respuesta (exit 0, JSON por stdout) — SIN `--embeddings`
 
 ```json
 {
-  "turns": [
-    { "speaker": "SPEAKER_00", "start_s": 0.2, "end_s": 1.5 }
-  ],
+  "turns": [ "..." ],
   "num_speakers": 1,
   "mode": "exclusive",
   "duration_ms": 45320
@@ -70,6 +68,15 @@ Semántica de cada campo:
 - `mode`: constante `"exclusive"` en v1.
 - `duration_ms`: entero no negativo, wall-clock de la operación (misma
   métrica transversal del contrato de consumo §5).
+- `device` (v1.6, petición 2026-11-21): el dispositivo de cómputo
+  EFECTIVO de la inferencia (`cpu|cuda|mps`). Default `cpu`; si la
+  matriz pide uno no disponible, el motor vuelve a CPU SIN caerse y
+  este campo lo evidencia (pedir `cuda` en un host sin CUDA entrega
+  `"device": "cpu"`): ése ES el aviso de la vuelta atrás — el stderr
+  del subprocess se drena por política de logs. La forma de la
+  salida no cambia por el dispositivo: mismos turnos, misma
+  equivalencia numérica (verificada cpu↔mps: turnos idénticos,
+  coseno de huellas 1.000000; `docs/diarize-dispositivo-gpu.md`).
 
 CON `--embeddings` (enmienda 2026-11-17, ADR-012) la respuesta añade
 exactamente dos campos:
@@ -140,19 +147,24 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
 ## 4. Motor y entorno del subprocess (EngineDiar)
 
 - Invocación: `<python> <script> <pipeline_dir> <audio_ruta>
-  <max_duration_s> <embeddings:0|1>` — argv sin contenido alguno: sólo
-  rutas (la del audio es exposición declarada, §8), el tope de
-  duración en segundos (H-1 del issue #43: el límite configurable
-  llega al motor como 5º token; el script reporta la duración ANTES
-  de inferir y responde exit 4 si excede) y el modo de huellas como
-  6º (enmienda 2026-11-17). stdin cerrado (EOF limpio). stdout del
-  subprocess: UN objeto JSON con la forma `{"turns":[…]}` (etiquetas
-  crudas; glosomata canóniza §2) y, con `embeddings=1`, además
-  `{"embeddings": {"<etiqueta cruda>": [floats]}}` (el centroide por
-  hablante crudo; glosomata re-llavea por etiqueta canónica y
-  valida), acotado a 16 MiB (más allá → `inferencia_fallida`);
-  cualquier otra cosa es `inferencia_fallida`. stderr del subprocess:
-  drenado y descartado (política de logs).
+  <max_duration_s> <embeddings:0|1> <device:cpu|cuda|mps>` — argv sin
+  contenido alguno: sólo rutas (la del audio es exposición
+  declarada, §8), el tope de duración en segundos (H-1 del issue
+  #43: el límite configurable llega al motor como 5º token; el
+  script reporta la duración ANTES de inferir y responde exit 4 si
+  excede), el modo de huellas como 6º (enmienda 2026-11-17) y el
+  dispositivo de cómputo como 7º (v1.6, petición 2026-11-21: el
+  EFECTIVO —tras la vuelta a CPU— viaja en la respuesta `device`).
+  Valor de dispositivo inválido → exit 2 del script (mal uso).
+  stdin cerrado (EOF limpio). stdout del
+  subprocess: UN objeto JSON con la forma `{"device": usado,
+  "turns":[…]}` (etiquetas crudas; glosomata canóniza §2) y, con
+  `embeddings=1`, además `{"embeddings": {"<etiqueta cruda>":
+  [floats]}}` (el centroide por hablante crudo; glosomata re-llavea
+  por etiqueta canónica y valida), acotado a 16 MiB (más allá →
+  `inferencia_fallida`); cualquier otra cosa es
+  `inferencia_fallida`. stderr del subprocess: drenado y descartado
+  (política de logs).
 - Exit codes del script (contrato Node↔script, D2): `0` ok; `3`
   `audio_ilegible` (no existe, ilegible, vacío o sin duración
   decodificable en la sonda); `4` `audio_demasiado_largo`; `2` mal
@@ -206,7 +218,8 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
   "diar": {
     "python": ".venv-diar/bin/python",
     "script": "src/diar/diarize_pyannote.py",
-    "pipeline": ".local-models/pyannote/speaker-diarization-community-1"
+    "pipeline": ".local-models/pyannote/speaker-diarization-community-1",
+    "device": "cpu"
   }
 }
 ```
@@ -214,7 +227,10 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
 - `engines.diar` es OPCIONAL (abierto al schema formal en D1). Ausente
   → `not_supported` (§3). `config validate`/`config set`: `diar`
   DECLARADO debe pasar el probe (misma regla que `phonon_ollama`/
-  `lfm3`: declarado-but-roto bloquea el set).
+  `lfm3`: declarado-but-roto bloquea el set). Clave opcional
+  `device` (`cpu|cuda|mps`, default `cpu`, v1.6/petición 2026-11-21):
+  dispositivo de cómputo; no disponible → vuelta a CPU sin caer, con
+  el efectivo en la respuesta (`docs/diarize-dispositivo-gpu.md`).
 - NO es un motor `tts[]`: no declara `kill_switch` (el corte es por
   señal/grupo y por el wall-clock evaluado, como el STT) y no hay
   selección múltiple: cero o un motor de diarización.
@@ -408,3 +424,14 @@ humana y ADR propios.
   a byte. Huella = dato biométrico: sólo stdout, jamás disco/logs/
   stderr (§8); custodia del consumidor (§11). Sin flag MCP nuevo
   (diarize sigue CLI-only). El contrato SIGUE NORMATIVO.
+- v1.6 (2026-11-21): **dispositivo de cómputo opcional** (petición
+  del Operador vía tequio/Malintzin, autorizada con «adelante con
+  recomendaciones»): `engines.diar.device` (`cpu|cuda|mps`, default
+  `cpu`) viaja al script como 7º token; si el pedido no está
+  disponible el motor VUELVE a CPU sin caerse y la respuesta gana
+  `device` con el EFECTIVO (aditivo: consumidor compatible según
+  contrato de consumo §2 — el aviso de la vuelta atrás es ese
+  campo). Verificado en motor real (cpu↔mps: turnos idénticos,
+  coseno de huellas 1.000000; camino de fallback cuda→cpu). Guía de
+  despliegue CUDA para el Dell en `docs/diarize-dispositivo-gpu.md`.
+  El contrato SIGUE NORMATIVO.

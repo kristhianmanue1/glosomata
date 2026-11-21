@@ -124,6 +124,12 @@ export function canonizarTurnos(turns) {
 // SOLO en la respuesta por stdout (contrato §8).
 const EMBEDDING_MODEL = 'speaker-diarization-community-1#embedding';
 
+// Dispositivos de cómputo contratados (petición 2026-11-21). Valor
+// fuera del enum en la matriz → cpu (el schema lo rechaza en
+// `config validate`; esto es el mismo fail-closed amable de runtime
+// que respeta el default).
+const DISPOSITIVOS = new Set(['cpu', 'cuda', 'mps']);
+
 function canonizarHuellas(embCrudo, etiquetas) {
   if (embCrudo === null || typeof embCrudo !== 'object'
       || Array.isArray(embCrudo)) return null;
@@ -190,6 +196,10 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
     ? cfg.constraints.diar_max_duration_s : DEFAULT_MAX_DUR_S;
   const maxWallS = Number.isFinite(cfg.constraints?.diar_max_wall_s)
     ? cfg.constraints.diar_max_wall_s : DEFAULT_MAX_WALL_S;
+  // Petición 2026-11-21: dispositivo de cómputo de la matriz
+  // (cpu|cuda|mps; default cpu — sin la clave, nada cambia). El
+  // EFECTIVO lo decide el script (vuelta a CPU si no disponible).
+  const dispositivo = DISPOSITIVOS.has(d.device) ? d.device : 'cpu';
 
   // H-2 (issue #43): registro como esperador para que `stop` de OTRO
   // proceso alcance esta operación aunque no tome canal.lock — la
@@ -205,7 +215,7 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
   resetStop(stopAtStart);
   try {
     const r = await correrDiarizacion(d, rutaAudio, maxDurS, maxWallS,
-      huellas, () => stopPedido() || stopRemoto);
+      huellas, dispositivo, () => stopPedido() || stopRemoto);
     if (r.detenido) {
       // stop/señal: truncado espejo de speak — stdout, stderr vacío
       return { code: 1, data: { turns: null, truncated: true } };
@@ -234,8 +244,15 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
       return { code: 1, data: { error: 'diar_failed',
         causa: 'inferencia_fallida' } };
     }
+    // dispositivo EFECTIVO (petición 2026-11-21): el script informa el
+    // usado tras su vuelta a CPU; valor fuera del enum → fail-closed
+    const usado = crudo?.device;
+    if (!DISPOSITIVOS.has(usado)) {
+      return { code: 1, data: { error: 'diar_failed',
+        causa: 'inferencia_fallida' } };
+    }
     const data = { turns: canon.turns, num_speakers: canon.num_speakers,
-      mode: 'exclusive' };
+      mode: 'exclusive', device: usado };
     if (huellas) {
       // enmienda 2026-11-17: huellas sólo si se pidieron — sin el
       // flag, la salida es idéntica byte a byte (contrato §2)
@@ -255,16 +272,18 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
 }
 
 function correrDiarizacion(d, rutaAudio, maxDurS, maxWallS, huellas,
-  detenido) {
+  dispositivo, detenido) {
   return new Promise((resolve) => {
     // Entorno del subprocess FIJADO (contrato §4, ADR-012): telemetría
     // OFF y sin red, SIN importar el ambiente del padre — argv sin
     // contenido: sólo rutas, el tope de duración (H-1: el límite
-    // configurable viaja al script como 5º token) y el modo de
-    // huellas como 6º (enmienda 2026-11-17).
+    // configurable viaja al script como 5º token), el modo de
+    // huellas como 6º (enmienda 2026-11-17) y el dispositivo de
+    // cómputo como 7º (petición 2026-11-21: cpu|cuda|mps; el EFECTIVO
+    // —tras la vuelta a CPU del script— viaja en la respuesta).
     const child = spawnGrupo(d.python,
       [d.script, d.pipeline, rutaAudio, String(maxDurS),
-        huellas ? '1' : '0'],
+        huellas ? '1' : '0', dispositivo],
       { env: { ...process.env,
         PYANNOTE_METRICS_ENABLED: '0', HF_HUB_OFFLINE: '1' } });
     child.stdin.end(); // stdin cerrado: EOF limpio para el hijo

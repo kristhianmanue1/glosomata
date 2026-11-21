@@ -58,7 +58,8 @@
     "diar": {
       "python": "/ruta/a/.venv-diar/bin/python",
       "script": "src/diar/diarize_pyannote.py",
-      "pipeline": "/ruta/a/.local-models/pyannote/speaker-diarization-community-1"
+      "pipeline": "/ruta/a/.local-models/pyannote/speaker-diarization-community-1",
+      "device": "cpu"
     }
   },
   "constraints": {

@@ -115,14 +115,17 @@ original intacta. La preferencia por defecto
 personales de hardware.
 
 Además `diarize --file <ruta-audio> [--embeddings]` (2026-11-12,
-D2/ADR-012; huellas opcionales 2026-11-17):
+D2/ADR-012; huellas opcionales 2026-11-17; `device` en la salida
+2026-11-21):
 turnos de hablante del archivo en modo EXCLUSIVO, efímero sin
 retención, FUERA del canal (sin `canal.lock`); superficie ESTRICTA
 (`--file` y a lo sumo un `--embeddings` sin valor; cualquier otra
 forma → exit 2 `usage`); sin `--embeddings` la salida es idéntica
 byte a byte; con él, `speakers` añade UNA huella de voz por etiqueta
 canónica (dato BIOMÉTRICO: sólo stdout, jamás logs/stderr/disco) y
-`embedding_model`; semántica
+`embedding_model`; `device` informa el dispositivo de cómputo
+EFECTIVO (`cpu|cuda|mps`, por matriz `engines.diar.device`, default
+cpu, vuelta a CPU si no disponible); semántica
 completa — formas, truncado, causas cerradas de `diar_failed`,
 entorno del subprocess con telemetría OFF, stop cross-process — en
 `contrato-diarizacion-v1.md`. Sin `engines.diar` declarado responde

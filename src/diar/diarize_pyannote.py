@@ -4,17 +4,21 @@
 Contrato con src/diar.mjs (contrato-diarizacion-v1.md §4):
 
 - argv: <este-script> <pipeline_dir> <audio_ruta> <max_duration_s>
-  <embeddings:0|1> — SIN contenido: sólo rutas, el tope de duración
-  (H-1, issue #43) y el modo de huellas (enmienda 2026-11-17).
+  <embeddings:0|1> <device:cpu|cuda|mps> — SIN contenido: sólo rutas,
+  el tope de duración (H-1, issue #43), el modo de huellas (enmienda
+  2026-11-17) y el dispositivo de cómputo (petición 2026-11-21:
+  default cpu; si el pedido no está disponible vuelve a CPU y el
+  dispositivo EFECTIVO viaja en la salida como "device").
 - Entorno: EXIGE PYANNOTE_METRICS_ENABLED=0 y HF_HUB_OFFLINE=1 (los
   fija glosomata; si no llegan, este script rehúsa — fail-closed, la
   telemetría OFF es decisión del Operador, no un deseo).
-- stdout: UN objeto JSON {"turns": [...]} y, con embeddings=1,
-  además {"embeddings": {"<etiqueta cruda>": [floats, ...]}} — el
-  CENTROIDE por hablante que el pipeline ya calcula al clusterizar
-  (DiarizeOutput.speaker_embeddings, alineado a labels()). Nada más
-  sale por stdout. stderr es humano/descartado. Las huellas son un
-  DATO BIOMÉTRICO: jamás se escriben a disco ni logs (sólo stdout).
+- stdout: UN objeto JSON {"device": usado, "turns": [...]} y, con
+  embeddings=1, además {"embeddings": {"<etiqueta cruda>":
+  [floats, ...]}} — el CENTROIDE por hablante que el pipeline ya
+  calcula al clusterizar (DiarizeOutput.speaker_embeddings,
+  alineado a labels()). Nada más sale por stdout. stderr es
+  humano/descartado. Las huellas son un DATO BIOMÉTRICO: jamás se
+  escriben a disco ni logs (sólo stdout).
 - NO escribe artefactos de datos (ni RTTM, ni WAV, ni resultados).
 - Exit codes: 0 ok · 3 audio_ilegible (no existe, ilegible, vacío o
   sin duración decodificable) · 4 audio_demasiado_largo · 2 mal uso
@@ -39,13 +43,14 @@ def mal_uso(mensaje: str) -> None:
 
 def main() -> None:
     # sys.argv NO incluye al intérprete: [script, pipeline, audio, max,
-    # embeddings] son CINCO elementos (contrato §4: 6 tokens a nivel OS).
-    if len(sys.argv) != 5:
+    # embeddings, device] son SEIS elementos (contrato §4: 7 tokens a
+    # nivel OS).
+    if len(sys.argv) != 6:
         mal_uso(
             "uso: diarize_pyannote.py <pipeline_dir> <audio> "
-            "<max_duration_s> <embeddings:0|1>"
+            "<max_duration_s> <embeddings:0|1> <device:cpu|cuda|mps>"
         )
-    _, pipeline_dir, audio_ruta, max_dur_arg, emb_arg = sys.argv
+    _, pipeline_dir, audio_ruta, max_dur_arg, emb_arg, dev_arg = sys.argv
 
     # Fail-closed sobre el entorno exigido (contrato §4/ADR-012).
     if os.environ.get("PYANNOTE_METRICS_ENABLED") != "0":
@@ -56,6 +61,9 @@ def main() -> None:
     if emb_arg not in ("0", "1"):
         mal_uso("embeddings debe ser 0 o 1")
     con_huellas = emb_arg == "1"
+
+    if dev_arg not in ("cpu", "cuda", "mps"):
+        mal_uso("device debe ser cpu, cuda o mps")
 
     try:
         max_dur_s = float(max_dur_arg)
@@ -92,6 +100,28 @@ def main() -> None:
     from pyannote.audio import Pipeline
 
     pipeline = Pipeline.from_pretrained(pipeline_dir)
+
+    # Dispositivo de cómputo (petición 2026-11-21): default cpu; si el
+    # pedido no está disponible se VUELVE a cpu sin caerse — el
+    # dispositivo EFECTIVO viaja en la salida ("device") y por stderr
+    # va un aviso humano (sin contenido: sólo nombres de hardware).
+    dispositivo = dev_arg
+    if dispositivo != "cpu":
+        import torch
+
+        disponible = (
+            torch.cuda.is_available() if dispositivo == "cuda"
+            else torch.backends.mps.is_available()
+        )
+        if not disponible:
+            print(
+                f"diarize: {dispositivo} no disponible; usando cpu",
+                file=sys.stderr,
+            )
+            dispositivo = "cpu"
+        else:
+            pipeline.to(torch.device(dispositivo))
+
     salida = pipeline(audio_ruta)
 
     turnos = []
@@ -104,7 +134,7 @@ def main() -> None:
             }
         )
 
-    resultado = {"turns": turnos}
+    resultado = {"device": dispositivo, "turns": turnos}
 
     if con_huellas:
         # Centroides por hablante que el clustering ya calculó:
