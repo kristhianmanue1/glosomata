@@ -6,6 +6,30 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- docs: **lock del despliegue Linux+CUDA de la diarización** (petición
+  del Operador 2026-11-21 vía tequio/Malintzin; R-1 del inventario del
+  Dell — `malintzin-release` se niega a desplegar sin él) — nuevo
+  `requirements/diar-linux-cuda.lock`: 113 ruedas manylinux x86_64
+  (cp312/abi3/py3-none, cada una con sus hashes sha256; instala con
+  `pip install --require-hashes -r`), adaptado del borrador de
+  Malintzin del 2026-11-21 (generado con uv desde las versiones
+  EXACTAS del `.venv-diar` del Mac; `pyannote-audio==4.0.7` idéntico:
+  paridad con el host de la equivalencia verificada). Es un lock
+  PYTHON de despliegue, NO una dependencia del paquete: cero deps npm
+  se mantiene. Análisis CUDA por documentación (fuentes NVIDIA en la
+  docs): la pila CUDA 13.2 de `torch==2.15.0` exige driver >= 580 y el
+  del Dell (621.x, UMD 13.5) cumple con holgura; Turing (RTX 2060,
+  sm_75) sigue soportado en CUDA 13; la vuelta a CUDA 12.x que pedía
+  la petición no es necesaria (driver retrocompatible). Verificados de
+  forma automatizada: 113/113 paquetes con hash y los 113 sha256 del
+  inventario presentes en su bloque. `pyannoteai-sdk==0.4.0`
+  (dependencia obligatoria de pyannote-audio 4.x) queda: NO se usa en
+  inferencia — pipeline 100% local con `HF_HUB_OFFLINE=1`
+  (verificado en `src/diar/diarize_pyannote.py`, que no importa el
+  sdk). Docs: `docs/diarize-dispositivo-gpu.md` gana «Lock del
+  despliegue» (comando + análisis CUDA con fuentes). Sin cambios de
+  código, contrato ni tests.
+
 - feat: **dispositivo de cómputo de la diarización (`cpu|cuda|mps`)**
   (contrato v1.6; petición del Operador 2026-11-21 vía tequio/
   Malintzin, «la diarizacion es donde mas se consume […] adelante con
