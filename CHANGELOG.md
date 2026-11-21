@@ -20,11 +20,15 @@ generadas desde commits/PRs reales.
   camino de fallback cuda→cpu observado (`device:"cpu"`); en audio
   de 29 s: mps 8,3 s vs cpu 20,0 s (2,4×) — en corto no se media
   (observaciones, no cotas). Hallazgo B1 de la ronda r3 corregido:
-  el clustering VBx puede escribir warnings nativos DIRECTO a fd 1
-  («auxiliary function has decreased», observado en mps) — el script
-  pone fd 1→fd 2 en CUARENTENA durante carga+inferencia y emite el
-  JSON por el fd original: protocolo stdout estructuralmente limpio
-  para cualquier ruido nativo (van al stderr que glosomata drena).
+  el clustering VBx emite warnings por la vía del stdout (print de
+  Python en vbx.py, observado en mps) y corrompía el JSON — el
+  script pone fd 1→fd 2 en CUARENTENA durante carga+inferencia con
+  fflush de libc DENTRO (H1 r4: cubre búferes C) y emite el JSON por
+  el fd original: protocolo stdout limpio para prints y salida
+  nativa con búfer (van al stderr que glosomata drena). Residual
+  declarado (H3 r4): la cuarentena vive en el script Python y sólo
+  se ejercita con el motor real (verificada en r4 con el warning
+  provocado).
   Docs: `docs/diarize-dispositivo-gpu.md` (guía CUDA para el Dell
   RTX 2060
   con venv por release y `--require-hashes`), contrato §2/§4/§6/

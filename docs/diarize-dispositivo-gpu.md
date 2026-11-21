@@ -20,13 +20,19 @@ en este host (sin NVIDIA): se verificó el CAMINO del fallback
 (pedir `cuda` aquí entrega `"device": "cpu"`), no la inferencia
 CUDA misma.
 
-**Ruido nativo en stdout (hallazgo B1, ronda r3):** el clustering
-VBx puede escribir warnings («Value of auxiliary function has
-decreased!», observado en mps) DIRECTO a fd 1, corrompiendo el JSON.
-El script pone fd 1→fd 2 en cuarentena durante carga+inferencia y
-emite el JSON por el fd original: el protocolo queda limpio para
-cualquier ruido de librerías nativas (va al stderr que glosomata
-drena por política de logs).
+**Ruido de librerías en stdout (hallazgo B1, ronda r3):** el
+clustering VBx emite warnings («Value of auxiliary function has
+decreased!», observado en mps) por la vía del stdout — un `print`
+de Python (vbx.py) y, potencialmente, salida con búfer de libc —
+corrompiendo el JSON. El script pone fd 1→fd 2 en cuarentena
+durante carga+inferencia, hace `fflush` de libc DENTRO de la
+cuarentena (H1 r4: cubre búferes C que se volcarían tras el JSON) y
+emite el JSON por el fd 1 original: el protocolo queda limpio tanto
+para `print`s como para salida nativa con búfer (todo va al stderr
+que glosomata drena por política de logs). Residual declarado: sin
+test hermético de la cuarentena (vive en el script Python y sólo
+se ejercita con el motor real — verificado en r4 con el warning
+provocado; H3 r4).
 
 ## Despliegue en el Dell (RTX 2060, 6 GB) — guía para Malintzin
 

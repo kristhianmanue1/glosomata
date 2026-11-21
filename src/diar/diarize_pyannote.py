@@ -135,6 +135,13 @@ def main() -> None:
         salida = pipeline(audio_ruta)
     finally:
         sys.stdout.flush()
+        # búferes de libc (H1 r4): una librería C puede tener stdout
+        # pendiente SIN fflush — se vuelca al salir, DESPUÉS del
+        # JSON, por el fd restaurado. Con fd 1 aún apuntando a fd 2,
+        # fflush(None) manda ese residuo al stderr drenado.
+        import ctypes
+
+        ctypes.CDLL(None).fflush(None)
         os.dup2(_stdout_real, 1)
         os.close(_stdout_real)
 
