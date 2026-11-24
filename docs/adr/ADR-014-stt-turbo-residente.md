@@ -46,9 +46,9 @@ tequio transcribe reuniones LARGAS por tramos CORTOS (~19 s de
 media; 413 tramos en 2 h) mientras graba. El STT efímero por
 petición recarga el modelo cada vez; con large-v3-turbo eso es
 inaceptable. El Operador decidió: turbo para tequio, LFM3 sigue en
-glosomata para TTS (ADR-011 intacto); la descarga queda acotada
-como arriba (propuesta del orquestador, confirmación del Operador
-pendiente; cualquier otra descarga o instalación se consulta antes).
+glosomata para TTS (ADR-011 intacto); la descarga de q8_0 queda
+autorizada en cadena como arriba («Autoridad y su alcance»);
+cualquier otra descarga o instalación se consulta antes.
 
 Hoy tequio habla `POST /v1/chat/completions` con `input_audio`
 (formato del gateway LFM3: Bearer + `X-Project-ID`).
