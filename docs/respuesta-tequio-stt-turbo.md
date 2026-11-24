@@ -96,3 +96,26 @@ igualada, sin pérdida de recall).
   fragmentos del payload; nada se persiste (decodificación en
   memoria; temporales, si imperativos, en tmpfs borrado por
   petición).
+
+## 7) Adenda (2026-11-23): semántica del 401 y rotación sin hueco
+
+**(a) 401 SIEMPRE para toda falla de credencial.** Sí: el envoltorio
+devuelve **401** para token ausente, malformado, vencido, revocado o
+incorrecto — **403 no se usa en v1** (queda reservado; jamás para
+credenciales) y una falla de credencial **jamás produce 5xx** (la
+validación es lectura local del archivo + comparación en tiempo
+constante: determinista). Así el cliente de tequio puede tratar 401
+= «equipo Dell no usable → Mac» sin ambigüedad. Los 5xx quedan para
+fallos reales del servicio (modelo/VRAM/inferencia) y el 503 con
+`Retry-After` para saturación — semánticas distintas, sin solaparse
+con el 401.
+
+**(b) Dos tokens válidos a la vez durante la rotación.** Sí: el
+archivo de credenciales (0600, fuera de Git, generado por Malintzin)
+contiene una **lista ordenada** — el vigente primero, luego uno o
+más «en gracia». El envoltorio compara (tiempo constante) contra
+TODOS los de la lista y recarga el archivo cuando cambia su mtime,
+sin reinicio. Procedimiento de rotación sin hueco: (1) Malintzin
+escribe `{nuevo, viejo}`; (2) tequio cambia su configuración al
+nuevo cuando quiera (ambos funcionan); (3) Malintzin elimina el
+viejo de la lista. Ningún request cae en el intercambio.

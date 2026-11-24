@@ -137,9 +137,16 @@ del contrato del artefacto y su revisión los exige:
 
 - **Bind**: 127.0.0.1 y/o la interfaz tailnet del host; jamás
   0.0.0.0. Origen del token: lo genera Malintzin al desplegar
-  (CSPRNG, archivo 0600 fuera de Git); rotación documentada;
-  comparación en tiempo constante; fallos de credencial → 401/403
-  sin detalle.
+  (CSPRNG, archivo 0600 fuera de Git) — **lista ordenada de uno o
+  más tokens** (vigente + en gracia) para rotar SIN hueco: se añade
+  el nuevo, tequio conmuta, se retira el viejo; recarga por mtime
+  sin reinicio; rotación documentada. Comparación en tiempo
+  constante contra toda la lista. **Toda falla de credencial
+  (ausente/malformado/vencido/revocado/incorrecto) → 401,
+  determinista** (403 sin uso en v1; las credenciales jamás producen
+  5xx — 5xx es sólo del servicio y 503+`Retry-After` de la
+  saturación), para que el consumidor trate 401 como «equipo no
+  usable» sin ambigüedad.
 - **No persistencia** (AGENTS.md): ningún audio ni transcripción en
   disco; conversión y decodificación EN MEMORIA (temporales, si
   imperativos, en tmpfs borrado por petición). Logs del servicio:
