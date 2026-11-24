@@ -148,3 +148,32 @@ viejo de la lista. Ningún request cae en el intercambio.
    exclusividad el STT responde 503 y tequio decide); si se
    necesitara prioridad STT estricta en vivo, la alternativa ya
    declarada es diarizar por tramos o en CPU.
+
+## 9) Adenda 3 (2026-11-24): proceso/hijos de `glosomata diarize` y señales de tequio
+
+**No es un solo proceso**: `diarize` = proceso Node (padre) + UN
+subprocess python (el script de diarización) lanzado **en su propio
+grupo de procesos** (`detached`, `spawnGrupo`). pyannote corre DENTRO
+de ese python (threads de torch, no procesos aparte): no hay nietos
+esperables.
+
+- **SIGTERM al Node**: el handler de glosomata mata el GRUPO del
+  hijo con **SIGKILL** (`process.kill(-pid)`) — TODA la inferencia
+  (python + sus threads) muere y la GPU se libera —, y luego el
+  propio Node termina (exit natural o 143 tras 250 ms). Con SIGTERM
+  solo ya queda limpio; el SIGKILL de respaldo a los 10 s no debería
+  encontrar nada vivo.
+- **El hueco real**: si el Node muere por **SIGKILL directo a su
+  pid** (sin tocar el grupo), el python `detached` SOBREVIVE como
+  huérfano con la GPU tomada — glosomata no puede limpiar lo que ya
+  no corre. Recomendación para el tope de tequio: señalar al GRUPO,
+  no al pid — lanzar `diarize` en su propio grupo y hacer
+  `kill -TERM -<pgid>` y, al vencer, `kill -KILL -<pgid>` (Node +
+  python juntos). Alternativa ya disponible: dejar el tope en manos
+  de glosomata (`diar_max_wall_s`, evaluado por el propio comando
+  con SIGKILL al grupo → `diar_failed/timeout_inferencia`), o pasar
+  por el envoltorio de Malintzin (exit 75), que es quien posee el
+  ciclo de vida en el Dell.
+- `stop` (cross-process, mismo runtime) tiene la misma semántica:
+  entrega la orden al portador y el resultado es el truncado
+  (`{"turns": null, "truncated": true}`).
