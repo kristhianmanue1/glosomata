@@ -8,25 +8,28 @@ generadas desde commits/PRs reales.
 
 - docs: **ADR-014 (PROPUESTA): motor STT Whisper large-v3-turbo
   residente para tequio** (fase 2 de la orden del orquestador
-  2026-11-23; autorización literal y descarga ACOTADA del Operador:
-  sólo turbo ggml q5_0/q8_0 oficial de whisper.cpp con sha256) —
-  artefacto de despliegue `services/stt-turbo/` (Malintzin lo
-  despliega en el Dell: systemd --user, tailnet, token; el no-objetivo
-  HTTP del NÚCLEO queda intacto, frontera gateway-LFM3), motor
-  residente con espejo verificado fail-closed, builds CUDA (Dell) y
-  Metal (Mac) con manifiesto-lock propio (tag+sha de whisper.cpp,
-  flags, sha256 de modelos), antialucinación medida (VAD Silero /
-  no_speech / audio_ctx) y plan de medición sintética del Dell
-  (VRAM residente, mediana/p95 por tramo, convivencia con la
-  diarización). Interfaz HTTP PENDIENTE de acuerdo con
-  tequio-capitan-opus vía orquestador: propuesta A
-  (misma forma `POST /v1/chat/completions` + `input_audio` con
-  Bearer/X-Project-ID: tequio sólo cambia URL; recomendada) vs B
-  (`POST /v1/audio/transcriptions`: semántica limpia, coste de
-  cambio de cliente para tequio). LFM3 sigue en glosomata (TTS,
-  ADR-011 intacto). El cambio del contrato `diarize`
-  (min/max_speakers + revisión del tope de pared) va en rama propia
-  con ejecutor y revisión.
+  2026-11-23) — artefacto de despliegue `services/stt-turbo/`
+  (Malintzin lo despliega en el Dell: systemd --user, tailnet,
+  token) con cláusula de alcance explícita frente a ADR-008/§2.6
+  (el NÚCLEO sigue sin HTTP; alternativa de repo aparte a decisión
+  del Operador; adaptador STT de flota diferido con ADR propio);
+  motor residente con espejo sha256 contra el manifiesto oficial
+  (fail-closed); builds CUDA/Metal con manifiesto-lock json
+  (tag+sha de whisper.cpp, `CMAKE_CUDA_ARCHITECTURES=75`, sha del
+  binario, licencias); requisitos de SEGURIDAD del servicio (bind,
+  token, no persistencia, logs sin contenido, topes de cuerpo,
+  concurrencia 1, VRAM fail-closed); antialucinación medida con
+  umbral; medición sintética del Dell. **Descarga: acotación del
+  ORQUESTADOR (turbo ggml q5_0/q8_0 oficial + sha256) PENDIENTE de
+  confirmación del Operador** — el literal del Operador decidió el
+  motor; build-deps = consulta previa. Interfaz HTTP PENDIENTE de
+  acuerdo con tequio-capitan-opus vía orquestador: propuesta A
+  (misma forma `chat/completions`+`input_audio`: tequio sólo cambia
+  URL; recomendada) vs B (`/v1/audio/transcriptions`). LFM3 sigue
+  en glosomata (TTS, ADR-011 intacto). El cambio del contrato
+  `diarize` (min/max_speakers con códigos existentes + guía del
+  tope de pared SIN tocar el default 7200) va en rama propia con
+  ejecutor y revisión.
 
 - docs: **lock del despliegue Linux+CUDA de la diarización** (petición
   del Operador 2026-11-21 vía tequio/Malintzin; R-1 del inventario del
