@@ -38,18 +38,70 @@ núcleo lo importa.
 
 ## Archivo de tokens y rotación sin hueco (§7b)
 
-Archivo de texto, **una línea por token**, la primera es la vigente y
-las siguientes quedan «en gracia». Perms 0600 (perms más abiertos =>
-lista vacía => todo 401, fail-closed). El envoltorio recarga el archivo
-cuando cambia su mtime, **sin reinicio**, y compara en tiempo constante
-contra TODAS las líneas.
+Archivo de texto, **una línea por token**, perms 0600 (perms más
+abiertos => lista vacía => todo 401, fail-closed). La primera línea
+es la vigente y las siguientes quedan «en gracia» — la gracia es
+cualquiera de las líneas, sea cual sea su formato.
 
-Rotación en 3 pasos (Malintzin):
+Cada línea admite, **independientemente de las demás**, dos formatos:
 
-1. Añade el nuevo arriba sin retirar el viejo:
-   `printf 'nuevo\nviejo\n' > tokens.new && chmod 600 tokens.new && mv tokens.new tokens`
+- el **token en claro**, o
+- su **sha256 en hex minúscula** (exactamente 64 caracteres
+  `[a-f0-9]`):
+
+  ```sh
+  printf %s 'el-token-secreto' | sha256sum      # Linux
+  printf %s 'el-token-secreto' | shasum -a 256  # macOS
+  ```
+
+  El hash es del token **sin salto de línea** (`printf %s`, nunca
+  `echo`, que añade `\n`). Un hash en MAYÚSCULAS no casa con el
+  formato: la línea pasaría por token CLARO — no autentica al token
+  real, y presentar la propia cadena en mayúsculas SÍ autenticaría
+  (una línea clara como otra). Si el hash te sale en mayúsculas,
+  pásalo a minúsculas antes de escribirlo.
+
+La clasificación es por regex, por línea: 64 hex minúsculos = hash;
+cualquier otra cosa = token claro. Los formatos pueden **mezclarse**
+en el mismo archivo. **Cruce declarado**: la improbabilidad de que un
+token claro cruce sea exactamente 64 hex minúsculos se declara en vez
+de ocultarse; si ocurriera, esa línea se trataría como hash y el
+token claro de esa línea no autenticaría (se regenera el token y
+listo).
+
+**Orden de despliegue**: las líneas hash exigen el `servidor.mjs` de
+este commit — el despliegue registrado en `build.lock.json`
+(`0901b76`) NO las entiende: allí una línea hash cuenta como token
+claro y el PROPIO hash autenticaría. Despliega el envoltorio nuevo
+antes de escribir el primer hash; hasta entonces, rota en claro.
+
+La autenticación compara el `Bearer` presentado en **tiempo constante
+contra TODAS las líneas**: las claras tal cual; las de hash vía
+`sha256(bearer)` contra la línea (calculado una vez por petición,
+sólo si hay líneas hash). Presentar el propio hash como Bearer **no**
+autentica. `X-Project-ID` viaja en claro y se compara igual: no es
+secreto.
+
+Las líneas hash no convierten un token débil en fuerte: si el archivo
+se filtra, son atacables offline por fuerza bruta (como
+`/etc/shadow`). Genera los tokens con CSPRNG (exigencia de ADR-014)
+y entropía alta — 128 bits o más.
+
+Un archivo ausente, ilegible o con perms abiertos **no bloquea el
+arranque** ni tumba el servicio: la lista queda vacía y toda petición
+cae en **401 recuperable** — el archivo puede aparecer (o corregir
+perms) después y la siguiente petición ya lo carga. El envoltorio
+recarga el archivo cuando cambia mtime+tamaño+inodo+MODO, **sin
+reinicio** (una línea es una línea: la línea 5 del archivo sigue
+siendo la línea 5, sin re-interpretar el contenido).
+
+Rotación en 3 pasos (Malintzin), con cualquier mezcla de formatos:
+
+1. Añade el nuevo arriba sin retirar el viejo (ejemplo con el nuevo
+   en hash y el viejo en claro):
+   `printf 'HASH64-DEL-NUEVO\nviejo-claro\n' > tokens.new && chmod 600 tokens.new && mv tokens.new tokens`
 2. Tequio cambia su configuración al nuevo cuando quiera (ambos valen).
-3. Retira el viejo: `printf 'nuevo\n' > tokens.new && chmod 600 tokens.new && mv tokens.new tokens`
+3. Retira el viejo: `printf 'HASH64-DEL-NUEVO\n' > tokens.new && chmod 600 tokens.new && mv tokens.new tokens`
 
 Ningún request cae en el intercambio.
 
@@ -165,5 +217,8 @@ despliega descarga; el servicio verifica fail-closed).
 ## Tests
 
 `tests/stt-turbo.test.mjs` (suite del repo): hijo falso en loopback,
-tokens en tmp y capa de cerrojo inyectada. Sin whisper real, sin Linux,
-sin `flock` real — ver «no verificado» en el informe del ejecutor.
+tokens en tmp y capa de cerrojo inyectada. La capa de tokens tiene
+suite propia, `tests/stt-turbo-tokens.test.mjs` (claro/hash/mixto,
+rotación con formatos, cruce), nacida aparte por el límite de 800
+líneas del gate (precedente diar). Sin whisper real, sin Linux, sin
+`flock` real — ver «no verificado» en el informe del ejecutor.

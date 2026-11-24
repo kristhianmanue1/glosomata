@@ -101,14 +101,31 @@ function compararConstante(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
+// sha256 hex minúsculas de un secreto presentado: para las líneas del
+// archivo de tokens escritas como hash (formato de línea, ver README).
+function sha256Hex(texto) {
+  return crypto.createHash('sha256').update(String(texto), 'utf8')
+    .digest('hex');
+}
+
+// Clasificación de línea por regex, INDEPENDIENTE por línea: 64 hex
+// minúsculos = sha256 del token; cualquier otra cosa = token claro.
+// El cruce improbable (un token claro que SEA exactamente 64 hex)
+// queda tratado como hash y DECLARADO en el README, no oculto.
+const LINEA_ES_SHA256 = /^[a-f0-9]{64}$/;
+
 // Archivo de tokens (una por línea; la primera es la vigente, el resto
-// «en gracia» durante la rotación §7b). Recarga sin reinicio cuando
-// cambia mtime+tamaño+inodo+MODO: el modo entra en la clave para que
-// un `chmod` tardío (0644→0600 o el inverso) siempre re-evalúe
-// (corrección r1, M1). Cualquier problema (ausente, ilegible, perms >
-// 0600) deja la lista VACÍA: toda credencial cae en 401 determinista,
-// jamás 5xx (§7a). Fail-closed recuperable: el archivo puede aparecer
-// después y la siguiente petición lo carga.
+// «en gracia» durante la rotación §7b — la gracia es cualquiera de
+// las líneas). Cada línea admite, INDEPENDIENTE por línea, DOS
+// formatos: el token en claro o su sha256 en hex minúsculas (64
+// [a-f0-9]); pueden mezclarse (clasificación por regex, arriba).
+// Recarga sin reinicio cuando cambia mtime+tamaño+inodo+MODO: el modo
+// entra en la clave para que un `chmod` tardío (0644→0600 o el
+// inverso) siempre re-evalúe (corrección r1, M1). Cualquier problema
+// (ausente, ilegible, perms > 0600) deja la lista VACÍA: toda
+// credencial cae en 401 determinista, jamás 5xx (§7a). Fail-closed
+// recuperable: el archivo puede aparecer después y la siguiente
+// petición lo carga.
 export function crearAlmacenTokens(ruta, log) {
   let cache = { tokens: [], mtimeMs: -1, size: -1, ino: -1, modo: -1 };
   let ultimoProblema = null;
@@ -147,11 +164,22 @@ export function crearAlmacenTokens(ruta, log) {
   return {
     // Valida Bearer contra TODAS las líneas y el proyecto exacto, ambos
     // en tiempo constante. Sin corto-circuito: todas las líneas se
-    // comparan siempre.
+    // comparan siempre. Línea clara: directa contra el Bearer; línea
+    // hash: sha256(bearer) contra la línea — el sha del presentado se
+    // calcula UNA vez por verificación y sólo si hay líneas hash (el
+    // patrón de tiempo lo decide el ARCHIVO, jamás el bearer).
     verificar(bearer, proyecto, projectIdEsperado) {
       const { tokens } = cargar();
       let ok = false;
-      for (const t of tokens) ok = compararConstante(t, bearer) || ok;
+      let bearerSha = null;
+      for (const t of tokens) {
+        if (LINEA_ES_SHA256.test(t)) {
+          if (bearerSha === null) bearerSha = sha256Hex(bearer);
+          ok = compararConstante(t, bearerSha) || ok;
+        } else {
+          ok = compararConstante(t, bearer) || ok;
+        }
+      }
       return ok && compararConstante(projectIdEsperado, proyecto);
     },
   };

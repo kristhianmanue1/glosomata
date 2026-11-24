@@ -33,6 +33,37 @@ generadas desde commits/PRs reales.
   lock»), README (`STT_TURBO_MODEL_SHA256`, unidad systemd, «Build y
   modelos») y clave `origen_sha256` del lock.
 
+- feat(stt-turbo): **tokens por línea en claro O su sha256** — cada
+  línea del archivo de tokens admite, INDEPENDIENTE por línea, dos
+  formatos: el token en claro o su sha256 en hex minúscula
+  (exactamente 64 caracteres `[a-f0-9]`); clasificación por regex y
+  formatos MEZCLABLES en el mismo archivo (propuesta de Malintzin
+  como en el gateway LFM3; implementación decidida por el capitán).
+  Autenticación en tiempo constante: el Bearer presentado se compara
+  contra TODAS las líneas claras tal cual y contra las de hash vía
+  `sha256(bearer)` (calculado UNA vez por petición, sólo si hay
+  líneas hash; cero deps, `crypto.createHash`). `X-Project-ID` sigue
+  en claro (no es secreto); rotación sin hueco y «vigente+gracia»
+  aplican igual — la gracia es cualquiera de las líneas, sea cual sea
+  su formato; recarga por mtime+tamaño+inodo+MODO sin cambios; archivo
+  ausente/ilegible/perms abiertos => lista vacía => 401 recuperable
+  SIN bloquear el arranque (igual que hoy). README declara los
+  bordes: cruce improbable (token claro de exactamente 64 hex se
+  trata como hash), hash en MAYÚSCULAS pasa por token claro (y la
+  propia cadena autenticaría: pásalo a minúsculas), líneas hash
+  atacables offline si el archivo se filtra (tokens CSPRNG ≥128
+  bits) y ORDEN de despliegue — el envoltorio registrado en el lock
+  (`0901b76`) NO entiende hashes: desplegar el `servidor.mjs` nuevo
+  antes de rotar con hash (hallazgo H1 de la ronda adversarial).
+  Tests: +5 herméticos en `tests/stt-turbo-tokens.test.mjs` (suite
+  nueva por el límite de 800 líneas del gate, precedente diar):
+  línea hash autentica al token y JAMÁS al propio hash presentado
+  (401 byte-exacto y sin inferencia consumida), mixto claro+hash en
+  el mismo archivo, rotación claro→mixto→hash sin hueco, cruce
+  pineado (64-hex claro clasifica hash; sha en MAYÚSCULAS clasifica
+  claro y la propia cadena autentica) y perms 0644→0600→0644 con
+  formato hash.
+
 - feat: **artefacto `services/stt-turbo/` (ADR-014 ACEPTADO)** —
   envoltorio HTTP fino (Node ≥20, ESM, cero deps) del whisper-server de
   whisper.cpp SIN modificar (hijo en 127.0.0.1, puerto interno
