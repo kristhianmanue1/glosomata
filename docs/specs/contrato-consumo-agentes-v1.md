@@ -63,6 +63,15 @@ Dentro de la misma versión mayor (`v1.x`):
    gateway local de LFM3-Omni en `127.0.0.1:8092` (ADR-011). Cualquier
    otra apertura requiere decisión y ADR propios.
 
+   **Adenda (2026-11-23, ADR-014):** `services/` es código de
+   despliegue para TERCEROS (Malintzin), muerto para el núcleo: la
+   CLI/MCP de glosomata no lo ejecuta, no lo instala y ningún test del
+   núcleo lo importa. El primer artefacto es `services/stt-turbo/`
+   (envoltorio HTTP del whisper-server para el Dell); cada artefacto
+   nuevo de esa familia exige ADR propio con su cláusula de alcance.
+   El «sin servidor HTTP/socket» de este punto rige al NÚCLEO, que
+   sigue sin abrir ningún puerto.
+
 ## 3. Superficie CLI (S1)
 
 Entrada `node src/cli.mjs <comando>` (o `glosomata` vía `bin` de
@@ -452,3 +461,8 @@ cosa.
   fuera de la taxonomía y el truncado sin `engine`; §2 y §10 nombran el
   loopback de LFM3 (también `SECURITY.md`); §3 enumera los 12 comandos,
   `--text-stdin` y la salida de `stop`.
+- v1.9 (2026-11-23, ADR-014 ACEPTADO): adenda a §2.6 — `services/` es
+  código de despliegue para terceros (Malintzin), MUERTO para el
+  núcleo (la CLI/MCP no lo ejecuta ni lo instala; ningún test del
+  núcleo lo importa); primer artefacto `services/stt-turbo/`. Sin
+  cambios de superficie CLI/MCP ni de taxonomía.

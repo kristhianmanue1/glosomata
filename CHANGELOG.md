@@ -6,6 +6,52 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat: **artefacto `services/stt-turbo/` (ADR-014 ACEPTADO)** —
+  envoltorio HTTP fino (Node ≥20, ESM, cero deps) del whisper-server de
+  whisper.cpp SIN modificar (hijo en 127.0.0.1, puerto interno
+  aleatorio/config; despliegue de Malintzin en el Dell; MUERTO para el
+  núcleo, enmienda §2.6 del contrato de consumo v1.9): `POST
+  /v1/chat/completions` forma A (`input_audio`; todo lo demás del
+  formato chat se ignora, `model` libre, respuesta subconjunto chat
+  completion con `large-v3-turbo-q8_0`); 401 determinista para TODA
+  falla de credencial (Bearer + X-Project-ID contra lista de tokens
+  0600 una por línea, comparación en tiempo constante contra TODAS,
+  recarga por mtime sin reinicio — rotación sin hueco en 3 pasos; 403
+  sin uso); WAV PCM 16 kHz mono ≤120 s sin conversión (413/415 con
+  código), cuerpo ≤25 MiB, `stream:true` → 400; `GET /healthz` sin
+  auth (200/503, cuerpo vacío); cerrojo GPU de Malintzin §8.4
+  COMPARTIDO y SIN ESPERA por tramo (`flock -s -n` con tenedor
+  `sleep`, liberar matándolo; no obtenido → 503 + `Retry-After: 2`;
+  fail-closed sin flock/XDG salvo `STT_TURBO_LOCK=none` de desarrollo);
+  concurrencia 1 con cola acotada (default 4 en espera, desborde 503);
+  idioma `STT_TURBO_LANG` fijo al hijo; muerte del hijo → 503 sin
+  reinicio (systemd); sha256 del modelo opcional en arranque
+  (fail-closed); logs stderr con ids/códigos/duraciones JAMÁS
+  contenido; taxonomía de errores propia del artefacto (README).
+  README de despliegue Dell (variables, unidad systemd `--user`,
+  tailnet, rotación, cerrojo, límites) + `build.lock.json` ESQUELETO
+  (tag/sha de whisper.cpp, flags `GGML_CUDA`/
+  `CMAKE_CUDA_ARCHITECTURES=75`, SOLO modelo q8_0 — valores
+  `"PENDIENTE"` honestos de fijar por Malintzin, sin hashes
+  inventados). Ronda adversarial (subagente, 2 rondas, veredicto
+  proceed) absorbida en el mismo commit: respuesta cortada a mitad de
+  cuerpo del hijo ya no cuelga la cola de inferencia (B1), liberación
+  del cerrojo mata al GRUPO del tenedor `flock` (sin `-F` forkea y el
+  `sleep` hereda el fd: matar sólo al padre no liberaba, H1), los
+  chunks `data` múltiples se SUMAN contra el bypass del tope de 120 s
+  (M1), `fmt` duplicado fail-closed, recarga de tokens por
+  mtime+tamaño+inodo, exit del hijo retira la base interna (sin
+  suplantación por re-bind del puerto efímero). Tests: +20 herméticos
+  (hijo falso en loopback, tokens en tmp, cerrojo inyectado; forma A
+  exacta, idioma fijo, 401×7, rotación con gracia, healthz 200/503,
+  hijo muerto 503, hijo colgado 502, hijo traidor sin envenenar la
+  cola, 413×2, 415×7 (incluye dos-chunks-data y dos-fmt), stream 400
+  booleano y string, cerrojo ocupado con Retry-After, fail-closed del
+  cerrojo, concurrencia 1 con maxActivos=1, desborde de cola, rutas,
+  y subproceso real con stderr AFIRMANDO sin transcripción ni token y
+  stdout vacío — marcadores reales — más sha del modelo
+  verificado/rechazado).
+
 - docs: **ADR-014 (PROPUESTA): motor STT Whisper large-v3-turbo
   residente para tequio** (fase 2 de la orden del orquestador
   2026-11-23) — artefacto de despliegue `services/stt-turbo/`

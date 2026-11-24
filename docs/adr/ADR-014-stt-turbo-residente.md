@@ -1,10 +1,13 @@
 # ADR-014: motor STT Whisper large-v3-turbo residente para tequio
 
-Estado: PROPUESTA (fase 2 de la orden del orquestador 2026-11-23;
+Estado: **ACEPTADO** (2026-11-23) — validación del diseño por
+orquestador/tequio (sí a la interfaz A y a las adendas §7/§8 de
+`docs/respuesta-tequio-stt-turbo.md`) y revisión adversarial del
+diseño (PR #62); fase 2 de la orden del orquestador 2026-11-23,
 autorización del motor por el Operador, cita en
-`docs/peticion-orquestador-stt-turbo-20261123.md`). Pasa a aceptado
-con la validación del diseño por el orquestador/tequio (interfaz) y
-la revisión adversarial de este documento.
+`docs/peticion-orquestador-stt-turbo-20261123.md`. El artefacto vive en
+`services/stt-turbo/` (código muerto para el núcleo, enmienda §2.6 del
+contrato de consumo en el mismo commit).
 Numeración: 013 es del VAD (Silero); este ADR toma 014.
 
 ## Autoridad y su alcance (honesto, tras hallazgo H3 r1)

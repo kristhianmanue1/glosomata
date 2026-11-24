@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "notas": "Esqueleto de referencia del build y los artefactos del despliegue (ADR-014). Los valores PENDIENTE los fija Malintzin al construir en el Dell; no se inventan hashes. El build se declara NO reproducible: el sha256 del binario identifica el artefacto, por build.",
+  "whisper_cpp": {
+    "repositorio": "https://github.com/ggml-org/whisper.cpp",
+    "tag": "PENDIENTE",
+    "commit_sha": "PENDIENTE",
+    "verificacion_submodulos": "PENDIENTE"
+  },
+  "builds": {
+    "dell_linux_cuda": {
+      "cmake_flags": [
+        "GGML_CUDA=ON",
+        "CMAKE_CUDA_ARCHITECTURES=75"
+      ],
+      "cuda_toolkit_minimo": "PENDIENTE",
+      "driver_minimo": "PENDIENTE",
+      "compilador": "PENDIENTE",
+      "binario": "whisper-server",
+      "binario_sha256": "PENDIENTE"
+    },
+    "mac_metal": {
+      "cmake_flags": [
+        "GGML_METAL=ON"
+      ],
+      "compilador": "PENDIENTE",
+      "binario": "whisper-server",
+      "binario_sha256": "PENDIENTE"
+    }
+  },
+  "modelos": {
+    "large-v3-turbo-q8_0": {
+      "archivo": "ggml-large-v3-turbo-q8_0.bin",
+      "origen_sha256": "manifiesto oficial de whisper.cpp",
+      "sha256": "PENDIENTE",
+      "nota": "única cuantización del alcance (elección del Operador); q5_0 no se descarga ni se usa"
+    }
+  },
+  "licencias": {
+    "whisper_cpp": "MIT",
+    "pesos_whisper": "MIT",
+    "nota": "confirmar que las conversiones ggml-turbo oficiales heredan MIT y registrarlo aquí (frontera de licencias como ADR-005/010)"
+  }
+}
