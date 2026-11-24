@@ -18,12 +18,15 @@ Numeración: 013 es del VAD (Silero); este ADR toma 014.
   anota)». El alcance del despliegue y del lock queda en SOLO q8_0.
 - **Acotación de la descarga** (sha256 verificado contra el
   manifiesto oficial de whisper.cpp): es del ORQUESTADOR, por escrito,
-  2026-11-23, y ahora referida sólo a q8_0. La regla del repo es
-  permiso humano explícito una por una: la descarga concreta queda
-  registrada como acotada por la cadena Operador (motor +
-  cuantización) → orquestador (sha256, origen oficial);
-  si el Operador pide el trámite explícito de descarga, se hace
-  igual que la nota de delegación del ADR-012.
+  2026-11-23, y ahora referida sólo a q8_0. Estado único y
+  consistente (vale también para Consecuencias y para el §8): la
+  descarga de q8_0 está AUTORIZADA en CADENA — el Operador eligió
+  motor y cuantización (literales arriba), el orquestador acotó
+  origen oficial y sha256 — y su EJECUCIÓN se hace como la nota de
+  delegación del ADR-012: quien despliega descarga, el servicio
+  verifica fail-closed, y CUALQUIER otra descarga o instalación
+  (otros modelos, whisper.cpp/CUDA/ffmpeg/Xcode, build-deps) exige
+  consulta previa una por una.
 - **Otras descargas/instalaciones** (código fuente de whisper.cpp
   por tag+sha, toolkit CUDA/cuBLAS en el Dell, ffmpeg si se usa,
   Xcode CLT en el Mac): CONSULTA PREVIA en cada caso, igual que los
@@ -123,7 +126,7 @@ Hoy tequio habla `POST /v1/chat/completions` con `input_audio`
    Se ejecuta en rama propia con revisión.
 8. **Descarga de modelos**: la ejecuta quien despliegue (Malintzin
    en el Dell; el Operador o su delegado en el Mac), bajo la
-   acotación del orquestador CONFIRMADA por el Operador; el
+   autorización en cadena de «Autoridad y su alcance»; el
    servicio verifica sha256 contra el manifiesto oficial antes de
    cargar (fail-closed). glosomata no descarga.
 
@@ -223,10 +226,12 @@ playground. La reconciliación honesta:
   despliegue para terceros (Malintzin), muerto para el núcleo; el
   gate de tamaños y la suite los tratan como código normal y el
   contrato de consumo §2.6 se enmienda en el commit del servicio.
-- La acotación de descarga queda REGISTRADA como propuesta del
-  orquestador PENDIENTE de confirmación del Operador (regla una por
-  una); build-deps (whisper.cpp, CUDA, ffmpeg, Xcode) = consulta
-  previa. Cualquier otro modelo o instalación, igual.
+- La descarga de q8_0 queda AUTORIZADA EN CADENA (Operador: motor y
+  cuantización; orquestador: origen oficial y sha256) y su ejecución
+  sigue el patrón de la nota de delegación del ADR-012 (quien
+  despliega descarga; verificación fail-closed en arranque);
+  build-deps (whisper.cpp, CUDA, ffmpeg, Xcode) y cualquier otro
+  modelo o instalación = consulta previa una por una.
 - Interfaz propuesta definitiva A (especificación con campos en
   `docs/respuesta-tequio-stt-turbo.md`, que además responde las seis
   preguntas de tequio: servidor/ruta, convivencia GPU con cerrojo
