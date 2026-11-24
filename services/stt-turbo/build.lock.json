@@ -1,23 +1,44 @@
 {
   "version": 1,
-  "notas": "Esqueleto de referencia del build y los artefactos del despliegue (ADR-014). Los valores PENDIENTE los fija Malintzin al construir en el Dell; no se inventan hashes. El build se declara NO reproducible: el sha256 del binario identifica el artefacto, por build.",
+  "notas": "Lock del build y de los artefactos del despliegue (ADR-014). Valores de whisper_cpp, dell_linux_cuda, modelo q8_0, envoltorio y licencias fijados por Malintzin al construir en dell-g7 (2026-11-24; inventario commit 646d6d1 de su repo, sobre glosomata 0901b76): copiados fiel de esa fuente, sin hashes inventados. El build se declara NO reproducible: el sha256 del binario identifica ESTE build, por build. mac_metal queda \"PENDIENTE\": nadie lo ha construido aún.",
   "whisper_cpp": {
     "repositorio": "https://github.com/ggml-org/whisper.cpp",
-    "tag": "PENDIENTE",
-    "commit_sha": "PENDIENTE",
-    "verificacion_submodulos": "PENDIENTE"
+    "tag": "v1.9.5",
+    "tag_objeto": "d2a764c648779feb36d44363f212a29b00aad1af",
+    "commit_sha": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
+    "firma_github_verificada": false,
+    "obtencion": "archivo de codeload.github.com/ggml-org/whisper.cpp/tar.gz/d1be6fde11ac6e0407606b4e42fe72d34add8037 (no git clone: bloqueado por el guardarraíl del controlador)",
+    "archivo_sha256": "645445da884df6dbd52b30f82d7be7c01d1767c938714e477e786b88d529e9f4",
+    "archivo_bytes": 9631456,
+    "verificacion_submodulos": "sin submódulos (el árbol del commit no tiene .gitmodules)",
+    "ggml_version": "0.26.0"
   },
   "builds": {
     "dell_linux_cuda": {
       "cmake_flags": [
+        "CMAKE_BUILD_TYPE=Release",
         "GGML_CUDA=ON",
-        "CMAKE_CUDA_ARCHITECTURES=75"
+        "CMAKE_CUDA_ARCHITECTURES=75",
+        "CMAKE_CUDA_COMPILER=/usr/local/cuda-12.8/bin/nvcc",
+        "BUILD_SHARED_LIBS=OFF",
+        "GGML_NATIVE=OFF",
+        "WHISPER_BUILD_TESTS=OFF",
+        "WHISPER_SDL2=OFF",
+        "WHISPER_CURL=OFF"
       ],
-      "cuda_toolkit_minimo": "PENDIENTE",
-      "driver_minimo": "PENDIENTE",
-      "compilador": "PENDIENTE",
+      "objetivo": "whisper-server",
+      "cuda_toolkit": "12.8 (cuda-nvcc-12-8 12.8.93-1, cuda-cudart-dev-12-8 12.8.90-1, libcublas-dev-12-8 12.8.5.5-1, cuda-cccl-12-8 12.8.90-1; repo NVIDIA wsl-ubuntu)",
+      "cuda_toolkit_minimo": "12.8",
+      "driver_minimo": "el del host Windows con CUDA UMD ≥ 12.8; medido: KMD 621.24, CUDA UMD 13.5",
+      "gpu": "NVIDIA GeForce RTX 2060 (sm_75), 6 GB",
+      "compilador": "gcc 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1), cmake 3.28.3",
+      "so": "Ubuntu 24.04.5 LTS en WSL2 (kernel 6.18.58.1-microsoft-standard-WSL2)",
+      "enlace_dinamico": "libcudart.so.12, libcublas.so.12, libcublasLt.so.12 de /usr/local/cuda-12.8/targets/x86_64-linux/lib; libcuda.so.1 de /usr/lib/wsl/lib",
       "binario": "whisper-server",
-      "binario_sha256": "PENDIENTE"
+      "ruta_dell": "~/.local/share/malintzin/builds/whisper.cpp/v1.9.5-cuda12.8-sm75/bin/whisper-server",
+      "binario_bytes": 66898176,
+      "binario_sha256": "311d4f2106e0792b3d22153924ddbed00af534b6b664739356bb1a842f71f429",
+      "registro_build": "~/malintzin/logs/build-whisper-20261124-034457.log"
     },
     "mac_metal": {
       "cmake_flags": [
@@ -31,14 +52,23 @@
   "modelos": {
     "large-v3-turbo-q8_0": {
       "archivo": "ggml-large-v3-turbo-q8_0.bin",
-      "origen_sha256": "manifiesto oficial de whisper.cpp",
-      "sha256": "PENDIENTE",
+      "origen": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo-q8_0.bin",
+      "origen_sha256": "metadatos LFS de Hugging Face (ggerganov/whisper.cpp, commit 5359861c739e…); el models/README.md de whisper.cpp v1.9.5 no publica hash de q8_0 (sólo SHA1 de turbo y q5_0)",
+      "bytes": 874188075,
+      "sha256": "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
+      "ruta_dell": "~/.local/share/malintzin/models/whisper-large-v3-turbo-ggml/5359861c739e/ggml-large-v3-turbo-q8_0.bin",
       "nota": "única cuantización del alcance (elección del Operador); q5_0 no se descarga ni se usa"
     }
   },
+  "envoltorio": {
+    "glosomata_commit": "0901b76",
+    "ruta_dell": "~/srv/stt-turbo/releases/0901b76 (enlace ~/srv/stt-turbo/current)",
+    "servidor_mjs_sha256": "c4ae6c707eb6dec07192f72343c13b0beddcf0fa91ddd4d7874a282a5e73f412",
+    "node": "v24.18.0 (nvm)"
+  },
   "licencias": {
-    "whisper_cpp": "MIT",
-    "pesos_whisper": "MIT",
-    "nota": "confirmar que las conversiones ggml-turbo oficiales heredan MIT y registrarlo aquí (frontera de licencias como ADR-005/010)"
+    "whisper_cpp": "MIT (LICENSE del repositorio; API de GitHub: MIT)",
+    "pesos_whisper": "MIT (cardData del repositorio ggerganov/whisper.cpp en Hugging Face: license mit)",
+    "nota": "confirmado: la conversión ggml-turbo oficial del repo ggerganov/whisper.cpp en Hugging Face declara MIT (cardData) — frontera de licencias registrada como ADR-005/010"
   }
 }

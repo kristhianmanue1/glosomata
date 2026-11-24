@@ -6,6 +6,33 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat(stt-turbo): **lock real del build dell-g7 y origen del sha256
+  de q8_0 corregido a Hugging Face** — `build.lock.json` pasa de
+  esqueleto `"PENDIENTE"` a los valores que Malintzin construyó en
+  dell-g7 (2026-11-24; inventario commit `646d6d1` de su repo, sobre
+  glosomata `0901b76`), copiados fiel: whisper.cpp v1.9.5 (commit
+  `d1be6fde…`, tarball de codeload —git clonado está bloqueado en el
+  host—, sha256 y bytes del archivo, sin submódulos, ggml 0.26.0),
+  build `dell_linux_cuda` completo (flags Release/CUDA
+  `CMAKE_CUDA_ARCHITECTURES=75`/nvcc de cuda-12.8/estático/sin tests
+  SDL2 ni curl, toolkit 12.8 con paquetes exactos, driver mínimo,
+  RTX 2060 sm_75 6 GB, gcc 13.3.0, Ubuntu 24.04.5 en WSL2, enlaces
+  dinámicos CUDA, whisper-server de 66 898 176 B con sha256 — build
+  declarado NO reproducible), modelo large-v3-turbo-q8_0 (874 188 075
+  B, sha256 `317eb69c…59a1`, URL de origen), envoltorio (commit,
+  sha256 de `servidor.mjs`, node v24.18.0) y licencias confirmadas
+  (MIT por LICENSE del repo y por cardData de HF). `mac_metal` queda
+  `"PENDIENTE"` (nadie lo ha construido). **Corrección de documento**:
+  ADR-014, README del servicio y changelog decían que el sha del
+  modelo se verificaba «contra el manifiesto oficial de whisper.cpp» —
+  el models/README.md de v1.9.5 NO publica hash de q8_0 (sólo SHA1 de
+  turbo y q5_0): el origen de verdad es el repo oficial
+  `ggerganov/whisper.cpp` en Hugging Face (commit `5359861c…`,
+  metadatos LFS). Corregido en ADR-014 («Autoridad y su alcance»,
+  «Origen de los sha256 esperados», §8 y «Requisitos de seguridad…
+  lock»), README (`STT_TURBO_MODEL_SHA256`, unidad systemd, «Build y
+  modelos») y clave `origen_sha256` del lock.
+
 - feat: **artefacto `services/stt-turbo/` (ADR-014 ACEPTADO)** —
   envoltorio HTTP fino (Node ≥20, ESM, cero deps) del whisper-server de
   whisper.cpp SIN modificar (hijo en 127.0.0.1, puerto interno
@@ -71,8 +98,10 @@ generadas desde commits/PRs reales.
   token) con cláusula de alcance explícita frente a ADR-008/§2.6
   (el NÚCLEO sigue sin HTTP; alternativa de repo aparte a decisión
   del Operador; adaptador STT de flota diferido con ADR propio);
-  motor residente con espejo sha256 contra el manifiesto oficial
-  (fail-closed); builds CUDA/Metal con manifiesto-lock json
+  motor residente con espejo sha256 contra el origen oficial
+  (fail-closed; origen de verdad corregido más arriba: metadatos LFS
+  de Hugging Face, no el README de whisper.cpp); builds CUDA/Metal
+  con manifiesto-lock json
   (tag+sha de whisper.cpp, `CMAKE_CUDA_ARCHITECTURES=75`, sha del
   binario, licencias); requisitos de SEGURIDAD del servicio (bind,
   token, no persistencia, logs sin contenido, topes de cuerpo,

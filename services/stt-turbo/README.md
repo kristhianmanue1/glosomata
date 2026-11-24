@@ -28,7 +28,7 @@ núcleo lo importa.
 | `STT_TURBO_LANG` | `es` | idioma FIJO enviado al hijo; nada del cuerpo lo cambia |
 | `STT_TURBO_WHISPER_BIN` | — | binario `whisper-server` del build del lock |
 | `STT_TURBO_MODEL` | — | ruta del espejo local `ggml-large-v3-turbo-q8_0.bin` |
-| `STT_TURBO_MODEL_SHA256` | — | si se fija, el arranque verifica el sha256 del espejo y aborta si no coincide (fail-closed). Pendiente del manifiesto oficial (ver `build.lock.json`) |
+| `STT_TURBO_MODEL_SHA256` | — | si se fija, el arranque verifica el sha256 del espejo y aborta si no coincide (fail-closed). Valor real en `build.lock.json`: `317eb69c…59a1`, con origen en los metadatos LFS de Hugging Face (no el README de whisper.cpp) |
 | `STT_TURBO_INTERNAL_PORT` | aleatorio | puerto loopback del hijo |
 | `STT_TURBO_QUEUE` | `4` | tope de peticiones EN ESPERA (+1 en inferencia); desborde → 503 |
 | `STT_TURBO_LOCK` | `auto` | `none` desactiva el cerrojo (SOLO desarrollo) |
@@ -125,7 +125,10 @@ Environment=STT_TURBO_PROJECT_ID=tequio
 Environment=STT_TURBO_TOKENS=%h/.config/stt-turbo/tokens
 Environment=STT_TURBO_WHISPER_BIN=%h/.local/bin/whisper-server
 Environment=STT_TURBO_MODEL=%h/.local/share/whisper/ggml-large-v3-turbo-q8_0.bin
-Environment=STT_TURBO_MODEL_SHA256=<sha256 del manifiesto oficial>
+# sha256 del lock (origen: metadatos LFS de ggerganov/whisper.cpp en
+# Hugging Face, commit 5359861c… — el models/README.md de whisper.cpp
+# v1.9.5 no publica hash de q8_0)
+Environment=STT_TURBO_MODEL_SHA256=317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 ExecStart=/usr/bin/node /ruta/al/repo/glosomata/services/stt-turbo/servidor.mjs
 Restart=on-failure
@@ -142,12 +145,22 @@ firewall. El binario systemd no abre nada más; jamás `0.0.0.0`.
 
 ## Build y modelos
 
-`build.lock.json` (esqueleto versionado): tag+sha de whisper.cpp, flags
-cmake (`GGML_CUDA`, `CMAKE_CUDA_ARCHITECTURES=75` para la RTX 2060),
-sha256 del binario construido y del modelo q8_0 contra el manifiesto
-oficial. Los valores `"PENDIENTE"` los fija Malintzin al construir;
-el repo no inventa hashes. Descargas: bajo la autorización en cadena de
-ADR-014 (quien despliega descarga; el servicio verifica fail-closed).
+`build.lock.json`: tag+sha de whisper.cpp (**v1.9.5 @
+`d1be6fde…`**, tarball de codeload con sha256 propio, sin submódulos,
+ggml 0.26.0), flags cmake completos del build, sha256 del binario
+construido (build declarado **NO reproducible**: el sha identifica
+ESTE build) y del modelo q8_0. Los valores de `dell_linux_cuda` los
+fijó Malintzin al construir en dell-g7 (2026-11-24; inventario commit
+`646d6d1` de su repo, sobre glosomata `0901b76`) y se copiaron fiel;
+el repo no inventa hashes. `mac_metal` queda `"PENDIENTE"`: nadie lo
+ha construido aún.
+
+El sha256 de q8_0 (`317eb69c…59a1`) tiene por origen de verdad los
+**metadatos LFS** del repo oficial `ggerganov/whisper.cpp` de
+Hugging Face (commit `5359861c…`) — **no** el models/README.md de
+whisper.cpp v1.9.5, que no publica hash de q8_0 (sólo SHA1 de turbo
+y q5_0). Descargas: bajo la autorización en cadena de ADR-014 (quien
+despliega descarga; el servicio verifica fail-closed).
 
 ## Tests
 

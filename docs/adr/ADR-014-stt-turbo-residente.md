@@ -19,8 +19,9 @@ Numeración: 013 es del VAD (Silero); este ADR toma 014.
   2026-11-23): **q8_0** es la versión para tequio; «q5_0 ya no hace
   falta (no se descarga; si ya estaba, se conserva sin usar y se
   anota)». El alcance del despliegue y del lock queda en SOLO q8_0.
-- **Acotación de la descarga** (sha256 verificado contra el
-  manifiesto oficial de whisper.cpp): es del ORQUESTADOR, por escrito,
+- **Acotación de la descarga** (sha256 verificado contra el origen
+  oficial — Hugging Face, ver «Origen de los sha256 esperados»,
+  corregido 2026-11-24): es del ORQUESTADOR, por escrito,
   2026-11-23, y ahora referida sólo a q8_0. Estado único y
   consistente (vale también para Consecuencias y para el §8): la
   descarga de q8_0 está AUTORIZADA en CADENA — el Operador eligió
@@ -34,8 +35,12 @@ Numeración: 013 es del VAD (Silero); este ADR toma 014.
   por tag+sha, toolkit CUDA/cuBLAS en el Dell, ffmpeg si se usa,
   Xcode CLT en el Mac): CONSULTA PREVIA en cada caso, igual que los
   build-deps; nadie las instala por omisión.
-- **Origen de los sha256 esperados**: el manifiesto del repo oficial
-  de whisper.cpp (no un hash recalculado de lo descargado); el
+- **Origen de los sha256 esperados** (corregido 2026-11-24, tras la
+  construcción real de Malintzin): el models/README.md de whisper.cpp
+  v1.9.5 NO publica hash de q8_0 (sólo SHA1 de turbo y q5_0) — el
+  origen de verdad del sha256 de q8_0 son los METADATOS LFS del repo
+  oficial `ggerganov/whisper.cpp` en Hugging Face (commit
+  5359861c739e…; nunca un hash recalculado de lo descargado); el
   servicio arranca sólo si el espejo local de q8_0 coincide
   (fail-closed) y verifica también el sha256 del BINARIO construido
   contra el registrado en el lock de ese build (build declarado NO
@@ -82,7 +87,8 @@ Hoy tequio habla `POST /v1/chat/completions` con `input_audio`
    ruedas Python: es un manifiesto versionado
    (`services/stt-turbo/lock.md` o json) con el release exacto de
    whisper.cpp (tag + sha del commit), flags de build por
-   plataforma, y los sha256 de los dos modelos ggml. Las ruedas
+   plataforma, y el sha256 del modelo ggml del alcance (sólo q8_0,
+   «Autoridad y su alcance»). Las ruedas
    Python del entorno de diarización siguen en
    `requirements/diar-linux-cuda.lock` (R-1, sin cambios).
 4. **Interfaz HTTP** (propuesta definitiva A, a confirmar por tequio
@@ -130,8 +136,9 @@ Hoy tequio habla `POST /v1/chat/completions` con `input_audio`
 8. **Descarga de modelos**: la ejecuta quien despliegue (Malintzin
    en el Dell; el Operador o su delegado en el Mac), bajo la
    autorización en cadena de «Autoridad y su alcance»; el
-   servicio verifica sha256 contra el manifiesto oficial antes de
-   cargar (fail-closed). glosomata no descarga.
+   servicio verifica sha256 contra el origen oficial de Hugging Face
+   antes de cargar (fail-closed; ver «Origen de los sha256
+   esperados»). glosomata no descarga.
 
 ## Requisitos de seguridad del servicio (hallazgo H1 r1)
 
@@ -185,7 +192,10 @@ del contrato del artefacto y su revisión los exige:
   versión mínima del toolkit CUDA/driver, compilador, sha256 del
   binario resultante (build declarado NO reproducible: el sha
   identifica el artefacto), sha256 de los modelos ggml contra el
-  manifiesto oficial, y verificación de submódulos.
+  origen oficial de Hugging Face (metadatos LFS de
+  ggerganov/whisper.cpp — corrección 2026-11-24: el models/README.md
+  de whisper.cpp v1.9.5 no publica hash de q8_0), y verificación de
+  submódulos.
 - **Licencias** (H5 r1): whisper.cpp MIT, pesos Whisper MIT;
   confirmar que las conversiones ggml-turbo oficiales heredan y
   registrarlo en el lock (frontera de licencias como ADR-005/010).
