@@ -119,3 +119,32 @@ sin reinicio. Procedimiento de rotación sin hueco: (1) Malintzin
 escribe `{nuevo, viejo}`; (2) tequio cambia su configuración al
 nuevo cuando quiera (ambos funcionan); (3) Malintzin elimina el
 viejo de la lista. Ningún request cae en el intercambio.
+
+## 8) Adenda 2 (2026-11-23): salud, idioma, X-Project-ID y cerrojo de Malintzin
+
+1. **Salud**: `GET /healthz` SIN autenticación, `200` sólo cuando el
+   proceso hijo (whisper-server) está arriba con el modelo cargado
+   (whisper-server carga el modelo ANTES de escuchar: puerto interno
+   respondiendo == listo); `503` en arranque o drenaje. No expone
+   contenido. **Puerto por configuración, default 8093** (8091/8092
+   son de la familia del gateway LFM3, ADR-011).
+2. **Idioma**: sí — `language=es` FIJO en el despliegue
+   (`STT_TURBO_LANG`, default `es`). El envoltorio IGNORA cualquier
+   instrucción de texto del cuerpo (transcribe sólo el audio): nada
+   de la forma chat influye en la inferencia (sin
+   prompt-injection por campos).
+3. **X-Project-ID**: valor esperado por configuración
+   (`STT_TURBO_PROJECT_ID`), **default `tequio`** — lo que tequio
+   ya manda. Comparación exacta junto con el Bearer (tiempo
+   constante); discrepancia → 401 (regla del §7a).
+4. **Cerrojo de Malintzin (aceptado)**: la diarización toma
+   `$XDG_RUNTIME_DIR/stt-turbo-gpu.lock` en EXCLUSIVO durante toda
+   su inferencia (espera ≤120 s; sin lograrlo sale 75); el
+   envoltorio STT toma el MISMO archivo COMPARTIDO y SIN ESPERA
+   (`flock -s -n`) por tramo: si no lo obtiene → `503` con
+   `Retry-After` (nunca espera, nunca degradación silenciosa).
+   Regla operativa que lo hace coherente: la diarización de una
+   pasada se programa cuando NO hay reunión en vivo (durante su
+   exclusividad el STT responde 503 y tequio decide); si se
+   necesitara prioridad STT estricta en vivo, la alternativa ya
+   declarada es diarizar por tramos o en CPU.
