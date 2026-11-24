@@ -12,22 +12,30 @@ Numeración: 013 es del VAD (Silero); este ADR toma 014.
 - **Literal del Operador** (decide el MOTOR, no la descarga):
   «nos vamos por turbo glosmata tendra tambien LFM3 pero para tequio
   usaremos turbo en su controtato asi que podemos solo cargar turbo».
-- **Acotación de la descarga** (q5_0/q8_0 del repo oficial de
-  whisper.cpp, sha256 verificado): es del ORQUESTADOR, por escrito,
-  2026-11-23. La regla del repo es permiso humano explícito una por
-  una: la descarga concreta queda PENDIENTE de esa confirmación del
-  Operador; este ADR la registra como propuesta acotada, no como
-  autorización consumada.
+- **Cuantización ELEGIDA por el Operador** (relay del orquestador,
+  2026-11-23): **q8_0** es la versión para tequio; «q5_0 ya no hace
+  falta (no se descarga; si ya estaba, se conserva sin usar y se
+  anota)». El alcance del despliegue y del lock queda en SOLO q8_0.
+- **Acotación de la descarga** (sha256 verificado contra el
+  manifiesto oficial de whisper.cpp): es del ORQUESTADOR, por escrito,
+  2026-11-23, y ahora referida sólo a q8_0. La regla del repo es
+  permiso humano explícito una por una: la descarga concreta queda
+  registrada como acotada por la cadena Operador (motor +
+  cuantización) → orquestador (sha256, origen oficial);
+  si el Operador pide el trámite explícito de descarga, se hace
+  igual que la nota de delegación del ADR-012.
 - **Otras descargas/instalaciones** (código fuente de whisper.cpp
   por tag+sha, toolkit CUDA/cuBLAS en el Dell, ffmpeg si se usa,
   Xcode CLT en el Mac): CONSULTA PREVIA en cada caso, igual que los
   build-deps; nadie las instala por omisión.
 - **Origen de los sha256 esperados**: el manifiesto del repo oficial
   de whisper.cpp (no un hash recalculado de lo descargado); el
-  servicio arranca sólo si el espejo local coincide (fail-closed) y
-  verifica también el sha256 del BINARIO construido contra el
-  registrado en el lock de ese build (build declarado NO
-  reproducible; el sha es del artefacto, por build).
+  servicio arranca sólo si el espejo local de q8_0 coincide
+  (fail-closed) y verifica también el sha256 del BINARIO construido
+  contra el registrado en el lock de ese build (build declarado NO
+  reproducible; el sha es del artefacto, por build). Si existiera un
+  espejo q5_0 previo, se conserva SIN USAR y se anota en el lock
+  (decisión del Operador).
 
 ## Contexto
 
@@ -57,8 +65,10 @@ Hoy tequio habla `POST /v1/chat/completions` con `input_audio`
    ADR-013) y no forma parte de éste.
 2. **Motor**: whisper.cpp (subprocess/librería según artefacto) con
    large-v3-turbo ggml; modelo RESIDENTE (cargado una vez por
-   proceso del servicio). Cuantizaciones autorizadas: q5_0 (por
-   defecto en el Dell de 6 GB) y q8_0 (alternativa de calidad);
+   proceso del servicio). Cuantización ELEGIDA por el Operador:
+   **q8_0** («q5_0 ya no hace falta»: no se descarga; un espejo
+   q5_0 previo se conserva SIN USAR y se anota en el lock). La
+   medición de VRAM del Dell valida la convivencia elegida.
    espejo local con sha256 verificado antes de arrancar
    (fail-closed: sha distinto → el servicio no arranca).
 3. **Builds**: Dell Linux con CUDA (cuBLAS) para la RTX 2060;
@@ -69,21 +79,26 @@ Hoy tequio habla `POST /v1/chat/completions` con `input_audio`
    plataforma, y los sha256 de los dos modelos ggml. Las ruedas
    Python del entorno de diarización siguen en
    `requirements/diar-linux-cuda.lock` (R-1, sin cambios).
-4. **Interfaz HTTP** (a acordar con tequio-capitan-opus vía
-   orquestador — PENDIENTE, este ADR propone):
+4. **Interfaz HTTP** (propuesta definitiva A, a confirmar por tequio
+   en el acuerdo — especificación completa con campos en
+   `docs/respuesta-tequio-stt-turbo.md` §1):
    - **Opción A (preferida por la petición)**: exponer
      `POST /v1/chat/completions` con `input_audio` y la misma
      autenticación (Bearer + `X-Project-ID`), de modo que tequio
-     sólo cambie la URL. Coste: glosomata mantiene un adaptador de
-     forma (semántica de chat reutilizada para transcripción: fea
-     pero estable para el consumidor; el wrapper es fino y
-     versionado).
+     sólo cambie la URL. Arquitectura: whisper-server upstream SIN
+     modificar (bound 127.0.0.1) + envoltorio fino propio como
+     único expuesto a la tailnet. Coste: mantener el adaptador de
+     forma versionado (subconjunto de chat completions, sin
+     streaming en v1, errores con código sin contenido).
    - **Opción B**: `POST /v1/audio/transcriptions` (forma estándar
-     STT, multipart o base64). Coste para tequio: cambio de cliente
-     y de parser de respuesta; ganancia: semántica limpia.
-   - Recomendación del capitán: **A**, con `model` del cuerpo
-     nombrando la cuantización (`large-v3-turbo-q5_0`) y la
-     respuesta en la MISMA forma que tequio ya parsea del gateway.
+     STT). Coste para tequio: cambio de cliente y de parser.
+   - Convivencia GPU: cerrojo común `flock` por segmento con
+     prioridad STT; 503 + `Retry-After` del STT saturado; la
+     política por defecto la fijan las mediciones del Dell. El
+     envoltorio de diarización sale con **75 (EX_TEMPFAIL)** cuando
+     el Dell está ocupado (el contrato de exit codes del CLI de
+     glosomata queda intacto: 0/1/2) — detalle en
+     `docs/respuesta-tequio-stt-turbo.md` §2-§3.
 5. **Antialucinación** (tramos cortos, modelo grande): VAD Silero
    pre-filtro (ya en el ecosistema, ADR-013) o umbral `no_speech`;
    `audio_ctx`/equivalente para <30 s; **medición obligatoria** del
@@ -212,11 +227,13 @@ playground. La reconciliación honesta:
   orquestador PENDIENTE de confirmación del Operador (regla una por
   una); build-deps (whisper.cpp, CUDA, ffmpeg, Xcode) = consulta
   previa. Cualquier otro modelo o instalación, igual.
-- Interfaz PENDIENTE de acuerdo: este ADR no se acepta hasta que el
-  orquestador confirme A o B con tequio; el resto del diseño no
-  depende de esa elección. La premisa «tequio ya parsea
-  chat/completions+input_audio» es testimonio del orquestador
-  (verificable sólo del lado de tequio; H6 r1).
+- Interfaz propuesta definitiva A (especificación con campos en
+  `docs/respuesta-tequio-stt-turbo.md`, que además responde las seis
+  preguntas de tequio: servidor/ruta, convivencia GPU con cerrojo
+  común y prioridad STT, exit 75 del envoltorio de diarización, tope
+  7200 intacto con guía de configuración, antialucinación con VAD y
+  sin condicionar texto previo, topes de cuerpo y errores sin
+  contenido): el ADR no se acepta hasta que tequio confirme.
 - Mediciones del Dell: observaciones, nunca cotas (regla vigente);
   el criterio de VRAM (arranque fail-closed / degradado explícito)
   sí es contractual.
