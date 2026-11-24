@@ -12,7 +12,10 @@ núcleo lo importa.
 - Privacidad: nada de audio ni transcripción en disco (decodificación en
   memoria); logs a stderr con SOLO ids, códigos y duraciones; errores con
   código y mensaje estático, sin echo.
-- Sin reinicio automático del hijo en v1: lo reinicia systemd.
+- **Muerte del hijo = baja del envoltorio**: el proceso sale con
+  exit ≠ 0 (log `envoltorio_baja`) y `Restart=on-failure` de systemd
+  recupera la unidad completa; sin esto el 503 sería permanente. El
+  apagado propio (SIGTERM/SIGINT) sale con 0.
 
 ## Variables de entorno
 
@@ -126,7 +129,8 @@ Environment=STT_TURBO_MODEL_SHA256=<sha256 del manifiesto oficial>
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 ExecStart=/usr/bin/node /ruta/al/repo/glosomata/services/stt-turbo/servidor.mjs
 Restart=on-failure
-# El servicio NO reinicia al hijo por sí solo (v1): esta unidad lo hace.
+# Hijo muerto: el envoltorio sale con exit 1 y esta unidad lo reinicia
+# (sin reinicio del hijo dentro del proceso).
 
 [Install]
 WantedBy=default.target

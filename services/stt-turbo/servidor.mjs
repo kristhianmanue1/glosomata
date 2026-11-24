@@ -103,15 +103,14 @@ function compararConstante(a, b) {
 
 // Archivo de tokens (una por línea; la primera es la vigente, el resto
 // «en gracia» durante la rotación §7b). Recarga sin reinicio cuando
-// cambia mtime+tamaño. Cualquier problema (ausente, ilegible, perms >
+// cambia mtime+tamaño+inodo+MODO: el modo entra en la clave para que
+// un `chmod` tardío (0644→0600 o el inverso) siempre re-evalúe
+// (corrección r1, M1). Cualquier problema (ausente, ilegible, perms >
 // 0600) deja la lista VACÍA: toda credencial cae en 401 determinista,
 // jamás 5xx (§7a). Fail-closed recuperable: el archivo puede aparecer
 // después y la siguiente petición lo carga.
 export function crearAlmacenTokens(ruta, log) {
-  // La clave de caché incluye el inodo: un reemplazo con mismo tamaño
-  // y mismo mtime (cp -p / mv en el mismo FS) no sirve la lista vieja
-  // (hallazgo L2 de la revisión adversarial).
-  let cache = { tokens: [], mtimeMs: -1, size: -1, ino: -1 };
+  let cache = { tokens: [], mtimeMs: -1, size: -1, ino: -1, modo: -1 };
   let ultimoProblema = null;
   const cargar = () => {
     let st;
@@ -124,21 +123,24 @@ export function crearAlmacenTokens(ruta, log) {
       }
       return { tokens: [] };
     }
+    const modo = st.mode & 0o777;
     if (cache.mtimeMs === st.mtimeMs && cache.size === st.size
-        && cache.ino === st.ino) return cache;
+        && cache.ino === st.ino && cache.modo === modo) return cache;
     try {
       if ((st.mode & 0o077) !== 0) throw new Error('perms');
       const tokens = fs.readFileSync(ruta, 'utf8')
         .split('\n').map((l) => l.trim())
         .filter((l) => l.length > 0 && !l.startsWith('#'));
-      cache = { tokens, mtimeMs: st.mtimeMs, size: st.size, ino: st.ino };
+      cache = { tokens, mtimeMs: st.mtimeMs, size: st.size, ino: st.ino,
+        modo };
       if (ultimoProblema !== null) log('tokens_cargados', { n: tokens.length });
       ultimoProblema = null;
       return cache;
     } catch {
-      log('tokens_invalidos', { modo: (st.mode & 0o777).toString(8) });
+      log('tokens_invalidos', { modo: modo.toString(8) });
       ultimoProblema = 'tokens_invalidos';
-      cache = { tokens: [], mtimeMs: st.mtimeMs, size: st.size, ino: st.ino };
+      cache = { tokens: [], mtimeMs: st.mtimeMs, size: st.size, ino: st.ino,
+        modo };
       return cache;
     }
   };
@@ -353,6 +355,7 @@ export function crearServidor(env, deps = {}) {
   const cerrojo = deps.cerrojo ?? crearCerrojoFlock(cfg, log);
   let hijo = null;
   let upstreamBase = null; // http://127.0.0.1:<puerto interno>
+  let cierreDeliberado = false; // apagado propio: la muerte del hijo no cuenta
 
   // Concurrencia 1: cola de promesas serializa la inferencia; enCurso
   // cuenta la que corre + las que esperan; el tope de ESPERA es
@@ -398,7 +401,11 @@ export function crearServidor(env, deps = {}) {
     }
   };
 
-  const procesarTramo = async (audio) => {
+  const procesarTramo = async (audio, estaMuerto) => {
+    // Cliente que ya se fue: NO adquiere el cerrojo ni consume
+    // inferencia (corrección r1, M2). Segunda comprobación tras la
+    // (posible) espera del cerrojo, por si abortó mientras esperaba.
+    if (estaMuerto && estaMuerto()) return { descartada: true };
     const lock = await cerrojo.acquire();
     if (!lock.ok) {
       if (lock.razon === 'no_disponible') {
@@ -407,6 +414,10 @@ export function crearServidor(env, deps = {}) {
       }
       throw new FalloHttp(503, 'cerrojo_ocupado',
         'GPU ocupada por diarización', RETRY_AFTER);
+    }
+    if (estaMuerto && estaMuerto()) {
+      lock.release();
+      return { descartada: true };
     }
     try {
       return await inferir(audio);
@@ -492,9 +503,19 @@ export function crearServidor(env, deps = {}) {
     }
     enCurso++;
     try {
-      const tarea = cola.then(() => procesarTramo(audio));
+      // Aborto del cliente: res 'close' con la respuesta SIN terminar.
+      // (req 'close' NO sirve: en Node >= 16 también dispara al
+      // completarse el stream del request en conexiones sanas —
+      // verificado empíricamente; con req se descartaría a todos.)
+      let abortado = false;
+      res.on('close', () => { if (!res.writableEnded) abortado = true; });
+      const tarea = cola.then(() => procesarTramo(audio, () => abortado));
       cola = tarea.then(() => {}, () => {});
       const texto = await tarea;
+      if (texto !== null && typeof texto === 'object' && texto.descartada) {
+        // El cliente ya no está: nada que responder; sólo constancia.
+        return { estado: 0, code: 'cliente_abortado' };
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         id: 'chatcmpl-' + crypto.randomBytes(12).toString('hex'),
@@ -542,6 +563,7 @@ export function crearServidor(env, deps = {}) {
       throw new FalloHttp(404, 'ruta_desconocida', 'ruta no expuesta');
     }).then((info) => {
       log('request', { id, estado: info?.estado ?? 0,
+        ...(info?.code ? { code: info.code } : {}),
         ms: Math.round(performance.now() - iniciado),
         ...(info?.audioMs !== undefined ? { audio_ms: info.audioMs } : {}) });
     }, (e) => {
@@ -612,6 +634,13 @@ export function crearServidor(env, deps = {}) {
       // Retira la base: ni healthz ni inferencia pueden confundir un
       // re-bind del puerto efímero con el hijo (hallazgo L3).
       upstreamBase = null;
+      // Corrección r1 (H1): la muerte del hijo TUMBA el envoltorio
+      // (exit != 0) para que systemd (Restart=on-failure) recupere la
+      // unidad; sin esto el 503 era permanente. Un cierre DELIBERADO
+      // (señal de apagado) no cuenta.
+      if (!cierreDeliberado && typeof deps.alMorirHijo === 'function') {
+        deps.alMorirHijo();
+      }
     });
     log('hijo_lanzado', { puerto });
     // Espera activa de escucha (healthz refleja el estado mientras
@@ -628,6 +657,7 @@ export function crearServidor(env, deps = {}) {
   };
 
   const cerrar = () => {
+    cierreDeliberado = true;
     if (hijo) { hijo.kill('SIGKILL'); hijo = null; }
     server.closeAllConnections?.();
     return new Promise((resolve) => server.close(() => resolve()));
@@ -639,7 +669,16 @@ export function crearServidor(env, deps = {}) {
 // ---------- Entrada (node services/stt-turbo/servidor.mjs) ----------
 
 async function arrancar() {
-  const srv = crearServidor(process.env);
+  const srv = crearServidor(process.env, {
+    // H1 (corrección r1): hijo muerto -> el envoltorio baja con
+    // exit != 0 y systemd reinicia la unidad. Drenaje breve de lo en
+    // vuelo (fallan rápido con 503), sin esperas largas.
+    alMorirHijo: () => {
+      srv.log('envoltorio_baja', { causa: 'hijo_exit' });
+      srv.server.close(() => process.exit(1));
+      setTimeout(() => process.exit(1), 2000).unref();
+    },
+  });
   try {
     await srv.iniciar();
   } catch (e) {

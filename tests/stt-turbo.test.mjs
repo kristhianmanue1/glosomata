@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync }
+  from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -487,11 +488,69 @@ test('WAV con dos chunks data: la duración se calcula sobre la SUMA '
   } finally { await cerrar(); }
 });
 
+test('tokens: perms corregidos tarde se recuperan con sólo chmod (M1)',
+  async () => {
+    const ruta = join(dir, 'tokens-perms');
+    writeFileSync(ruta, TOKEN_A + '\n');
+    chmodSync(ruta, 0o644);
+    const { url, cerrar } = await arrancar({ STT_TURBO_TOKENS: ruta });
+    try {
+      assert.equal((await post(url, cuerpoChat(wavValidoB64))).estado, 401);
+      // chmod SIN reescribir: mismo mtime/tamaño/inodo, distinto modo.
+      chmodSync(ruta, 0o600);
+      assert.equal((await post(url, cuerpoChat(wavValidoB64))).estado, 200);
+      // El inverso: perms abiertos DESPUÉS de cargar re-chequean.
+      chmodSync(ruta, 0o644);
+      assert.equal((await post(url, cuerpoChat(wavValidoB64))).estado, 401);
+    } finally { await cerrar(); }
+  });
+
+test('clientes abortados: se descartan sin inferir y el server sigue '
+  + 'sano (M2)', async () => {
+  let liberar;
+  const compuerta = new Promise((resolve) => { liberar = resolve; });
+  const { url, hijo, cerrar } = await arrancar({}, {
+    cerrojo: {
+      // Adquisición en espera: da tiempo a que los clientes aborten
+      // antes (y durante) la espera del cerrojo.
+      acquire: async () => {
+        await compuerta;
+        return { ok: true, release() {} };
+      },
+    },
+  });
+  try {
+    const controladores = [0, 1, 2].map(() => new AbortController());
+    const promesas = controladores.map((ac) =>
+      fetch(`${url}/v1/chat/completions`, {
+        method: 'POST',
+        signal: ac.signal,
+        headers: { 'content-type': 'application/json',
+          authorization: `Bearer ${TOKEN_A}`, 'x-project-id': 'tequio' },
+        body: JSON.stringify(cuerpoChat(wavValidoB64)),
+      }));
+    // Manejador adjunto YA: los rechazos del abort no quedan huérfanos.
+    const resultadosPromise = Promise.allSettled(promesas);
+    await demora(60);
+    for (const ac of controladores) ac.abort();
+    await demora(40);
+    liberar();
+    const resultados = await resultadosPromise;
+    assert.ok(resultados.every((r) => r.status === 'rejected'));
+    // NINGUNA inferencia consumida por los muertos.
+    assert.equal(hijo.estado.solicitudes, 0);
+    // El servidor sigue sano para el siguiente cliente vivo.
+    const sana = await post(url, cuerpoChat(wavValidoB64));
+    assert.equal(sana.estado, 200);
+  } finally { await cerrar(); }
+});
+
 // ---------- Subproceso real del servidor (spawn + hijo falso binario) ----------
 
 function escribirHijoFalso(ruta) {
   writeFileSync(ruta, `#!/usr/bin/env node
 import http from 'node:http';
+import fs from 'node:fs';
 const args = process.argv;
 const puerto = Number(args[args.indexOf('--port') + 1]);
 const servidor = http.createServer((req, res) => {
@@ -503,7 +562,12 @@ const servidor = http.createServer((req, res) => {
     res.end(JSON.stringify({ text: 'MARCA-TRANSCRIPCION-7f3a' }));
   });
 });
-servidor.listen(puerto, '127.0.0.1');
+servidor.listen(puerto, '127.0.0.1', () => {
+  // El test de la baja por hijo muerto necesita el pid real.
+  if (process.env.FAKE_CHILD_PIDFILE) {
+    fs.writeFileSync(process.env.FAKE_CHILD_PIDFILE, String(process.pid));
+  }
+});
 `);
   chmodSync(ruta, 0o755);
 }
@@ -595,3 +659,46 @@ test('subproceso: sha256 del modelo distinto aborta el arranque', async () => {
     assert.notEqual(code, 0);
     assert.ok(texto.includes('modelo_sha_mismatch'));
   });
+
+test('subproceso: la muerte del hijo TUMBA el envoltorio con exit != 0 '
+  + '(H1)', async () => {
+  const modeloRuta = join(dir, 'modelo-falso-3.bin');
+  writeFileSync(modeloRuta, 'modelo-falso-3');
+  const hijoBin = join(dir, 'whisper-server-mortal');
+  escribirHijoFalso(hijoBin);
+  const pidfile = join(dir, 'hijo.pid');
+  const tokensSub = join(dir, 'tokens-mortal');
+  writeFileSync(tokensSub, TOKEN_A + '\n');
+  chmodSync(tokensSub, 0o600);
+  const [puerto, puertoInterno] = await Promise.all([puertoLibre(),
+    puertoLibre()]);
+  const url = `http://127.0.0.1:${puerto}`;
+  const stderr = [];
+  const proc = spawn(process.execPath,
+    ['services/stt-turbo/servidor.mjs'], {
+      env: { ...process.env,
+        STT_TURBO_PORT: String(puerto),
+        STT_TURBO_TOKENS: tokensSub,
+        STT_TURBO_WHISPER_BIN: hijoBin,
+        STT_TURBO_MODEL: modeloRuta,
+        STT_TURBO_INTERNAL_PORT: String(puertoInterno),
+        STT_TURBO_LOCK: 'none',
+        FAKE_CHILD_PIDFILE: pidfile },
+    });
+  proc.stderr.on('data', (t) => stderr.push(t));
+  const cerro = new Promise((resolve) => proc.once('close', resolve));
+  try {
+    assert.ok(await esperarSalud(url, 15000), 'healthz nunca llegó a 200');
+    const pidHijo = Number(readFileSync(pidfile, 'utf8').trim());
+    process.kill(pidHijo, 'SIGKILL');
+  } catch (e) {
+    proc.kill('SIGKILL');
+    throw e;
+  }
+  const { code } = await Promise.race([cerro,
+    demora(10000).then(() => ({ code: null }))]);
+  const texto = Buffer.concat(stderr).toString('utf8');
+  assert.notEqual(code, 0, 'el envoltorio sobrevivió a la muerte del hijo');
+  assert.ok(texto.includes('hijo_exit'));
+  assert.ok(texto.includes('envoltorio_baja'));
+});

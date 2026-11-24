@@ -24,8 +24,10 @@ generadas desde commits/PRs reales.
   `sleep`, liberar matándolo; no obtenido → 503 + `Retry-After: 2`;
   fail-closed sin flock/XDG salvo `STT_TURBO_LOCK=none` de desarrollo);
   concurrencia 1 con cola acotada (default 4 en espera, desborde 503);
-  idioma `STT_TURBO_LANG` fijo al hijo; muerte del hijo → 503 sin
-  reinicio (systemd); sha256 del modelo opcional en arranque
+  idioma `STT_TURBO_LANG` fijo al hijo; muerte del hijo → el
+  envoltorio baja con exit ≠ 0 y systemd reinicia la unidad
+  (corrección r1: antes quedaba 503 permanente); sha256 del modelo
+  opcional en arranque
   (fail-closed); logs stderr con ids/códigos/duraciones JAMÁS
   contenido; taxonomía de errores propia del artefacto (README).
   README de despliegue Dell (variables, unidad systemd `--user`,
@@ -51,6 +53,16 @@ generadas desde commits/PRs reales.
   y subproceso real con stderr AFIRMANDO sin transcripción ni token y
   stdout vacío — marcadores reales — más sha del modelo
   verificado/rechazado).
+  Corrección r1 (revisión independiente, fix-and-retry @a61525d, commit
+  aparte en la misma rama): H1 — la muerte del hijo tumba el
+  envoltorio (exit ≠ 0, drenaje ≤2 s) para que systemd lo recupere;
+  M1 — el MODO del archivo de tokens entra en la clave de caché (un
+  `chmod` tardío 0644↔0600 siempre re-evalúa); M2 — peticiones
+  abortadas por el cliente se descartan ANTES de adquirir el cerrojo
+  (aborto detectado con `res close` + `writableEnded` false: `req
+  close` dispara también en clientes sanos). Tests: +3 (baja real por
+  hijo muerto con subproceso, perms tardíos con chmod sin reescritura,
+  3 abortados → 0 inferencias).
 
 - docs: **ADR-014 (PROPUESTA): motor STT Whisper large-v3-turbo
   residente para tequio** (fase 2 de la orden del orquestador
