@@ -6,6 +6,49 @@ generadas desde commits/PRs reales.
 
 ## [Unreleased]
 
+- feat(diarize): **hints de rango de hablantes `--min-speakers` /
+  `--max-speakers`** (enmienda v1.7 del contrato de diarización,
+  autorizada por el Operador vía orquestador 2026-11-24; origen:
+  tequio fase 3 parte A, casos reales 3-con-2 / 2-de-3 / 15-en-2h).
+  Ambos opcionales, a lo sumo una vez cada uno, en cualquier orden
+  relativo; validación EN NODE fail-closed (exit 2 `usage`):
+  enteros ≥ 1 en decimal estricto (sin signo, decimales, `0` ni
+  ceros a la izquierda) y min ≤ max cuando ambos; `num_speakers`
+  NO se añade (sólo rango). El argv del subprocess pasa de 6 a 8
+  tokens tras el intérprete: `<min> <max>` con centinela `'0'` =
+  ausente; el script re-valida el mismo rango por defensa en
+  profundidad (exit 2) y pasa `min_speakers=`/`max_speakers=` al
+  pipeline (`None` con el centinela). **Semántica honesta**
+  (contrato §2/§9.7): el clustering VBx del motor corre AUTOMÁTICO
+  — los hints no lo guían —; sólo si el conteo cae fuera del
+  rango pyannote re-clusteriza con K-Means forzado a la cota
+  violada (constrained assignment desactivado) y recalcula
+  centroides: acotación del resultado, no garantía exacta (pyannote
+  además acota al número de embeddings); `min_speakers` no
+  «encuentra» hablantes que el clustering no separó. Verificado en
+  motor real (2 voces `say` de 34.4 s, mps): `--max-speakers 1` →
+  `num_speakers: 1` (11.5 s, camino K-Means real), `--min-speakers
+  3` → `3` (8.8 s); coseno de huellas min=2,max=2 vs sin hints
+  1.000000 (ese rango contiene el conteo automático 2: no
+  re-clusteriza); bajo re-clustering real min=3 parte una voz
+  (0.980/0.978 contra su original) y max=1 mezcla ambas (0.81/
+  0.72) — las huellas siguen emparejables, con la geometría
+  cambiada; borde de embeddings insuficientes: 0.93 s de audio con
+  `--min-speakers 5` → `num_speakers: 1` entregado sin fallo (el
+  motor acota al número de embeddings). Salida, schema/matriz,
+  embeddings, dispositivo,
+  cuarentena de stdout, stop/truncado y taxonomía SIN cambios
+  (usage existente cubre los rechazos). Tests: +14 herméticos en
+  `tests/diarize-hints.test.mjs` (suite nueva por el límite de 800
+  líneas del gate, precedente diar/stt-turbo: argv con centinela y
+  posiciones, usage de duplicados/no enteros/min>max, passthrough
+  sin acotar, huellas+hints) y argv de 8 tokens + defensa en
+  profundidad anclados en `tests/diarize-op.test.mjs`. Docs:
+  contrato de diarización → v1.7 (§2 superficie+validación, §4
+  argv 8 tokens, §9.7 límite declarado, §10 exclusión retirada,
+  historia); superficie sincronizada en el contrato de consumo y
+  en specs-y-contratos; `--help` del CLI actualizado.
+
 - feat(stt-turbo): **lock real del build dell-g7 y origen del sha256
   de q8_0 corregido a Hugging Face** — `build.lock.json` pasa de
   esqueleto `"PENDIENTE"` a los valores que Malintzin construyó en

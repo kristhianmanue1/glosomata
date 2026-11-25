@@ -156,19 +156,56 @@ function canonizarHuellas(embCrudo, etiquetas) {
   return { speakers, embedding_model: EMBEDDING_MODEL };
 }
 
-// Superficie ESTRICTA (contrato §2): `--file <valor>` y, opcional,
-// el flag sin valor `--embeddings` (enmienda 2026-11-17) — a lo sumo
-// una vez y en cualquiera de las dos posiciones admitidas.
+// Superficie ESTRICTA (contrato §2): `--file <valor>`, el flag sin
+// valor `--embeddings` (enmienda 2026-11-17) y los hints de rango
+// `--min-speakers N` / `--max-speakers N` (v1.7, enmienda
+// 2026-11-24) — cada uno a lo sumo UNA vez, en cualquier orden
+// relativo. Caminante de tokens: cualquier forma fuera de eso →
+// null (usage). Los hints son enteros ≥ 1 en DECIMAL ESTRICTO
+// (^[1-9][0-9]*$: sin signo, sin ceros a la izquierda, sin
+// decimales) y min ≤ max cuando ambos (comparación BigInt: sin
+// pérdida de precisión en tokens largos). El token canonizado
+// viaja tal cual al script (§4); `num_speakers` NO existe aquí.
 function parsearArgvDiarize(argv) {
-  const sinHuellas = argv.length === 2 && argv[0] === '--file';
-  const conHuellasA = argv.length === 3 && argv[0] === '--file'
-    && argv[2] === '--embeddings';
-  const conHuellasB = argv.length === 3 && argv[0] === '--embeddings'
-    && argv[1] === '--file';
-  if (!sinHuellas && !conHuellasA && !conHuellasB) return null;
-  const ruta = conHuellasB ? argv[2] : argv[1];
-  if (ruta === '' || ruta.startsWith('--')) return null;
-  return { ruta, huellas: !sinHuellas };
+  let ruta = null;
+  let huellas = false;
+  let min = null;
+  let max = null;
+  let i = 0;
+  while (i < argv.length) {
+    const t = argv[i];
+    if (t === '--file') {
+      if (ruta !== null) return null; // duplicado
+      const valor = argv[i + 1];
+      if (valor === undefined || valor === ''
+        || valor.startsWith('--')) return null;
+      ruta = valor;
+      i += 2;
+    } else if (t === '--embeddings') {
+      if (huellas) return null; // duplicado
+      huellas = true;
+      i += 1;
+    } else if (t === '--min-speakers') {
+      if (min !== null) return null; // duplicado
+      const valor = argv[i + 1];
+      if (valor === undefined || !/^[1-9][0-9]*$/.test(valor)) return null;
+      min = valor;
+      i += 2;
+    } else if (t === '--max-speakers') {
+      if (max !== null) return null; // duplicado
+      const valor = argv[i + 1];
+      if (valor === undefined || !/^[1-9][0-9]*$/.test(valor)) return null;
+      max = valor;
+      i += 2;
+    } else {
+      return null; // token desconocido o extra
+    }
+  }
+  if (ruta === null) return null;
+  if (min !== null && max !== null && BigInt(min) > BigInt(max)) {
+    return null;
+  }
+  return { ruta, huellas, min, max };
 }
 
 export async function diarize(argv, stopAtStart = stopGeneration(), opts = {}) {
@@ -180,7 +217,7 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
   if (parsed === null) {
     return { code: 2, data: { error: 'usage' } };
   }
-  const { ruta: rutaAudio, huellas } = parsed;
+  const { ruta: rutaAudio, huellas, min, max } = parsed;
   const cfg = await cargarMatriz();
   const d = cfg.engines?.diar;
   if (d === undefined) {
@@ -215,7 +252,7 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
   resetStop(stopAtStart);
   try {
     const r = await correrDiarizacion(d, rutaAudio, maxDurS, maxWallS,
-      huellas, dispositivo, () => stopPedido() || stopRemoto);
+      huellas, dispositivo, min, max, () => stopPedido() || stopRemoto);
     if (r.detenido) {
       // stop/señal: truncado espejo de speak — stdout, stderr vacío
       return { code: 1, data: { turns: null, truncated: true } };
@@ -273,18 +310,23 @@ async function diarizeRaw(argv, stopAtStart, opts = {}) {
 }
 
 function correrDiarizacion(d, rutaAudio, maxDurS, maxWallS, huellas,
-  dispositivo, detenido) {
+  dispositivo, min, max, detenido) {
   return new Promise((resolve) => {
     // Entorno del subprocess FIJADO (contrato §4, ADR-012): telemetría
     // OFF y sin red, SIN importar el ambiente del padre — argv sin
     // contenido: sólo rutas, el tope de duración (H-1: el límite
     // configurable viaja al script como 5º token), el modo de
-    // huellas como 6º (enmienda 2026-11-17) y el dispositivo de
+    // huellas como 6º (enmienda 2026-11-17), el dispositivo de
     // cómputo como 7º (petición 2026-11-21: cpu|cuda|mps; el EFECTIVO
-    // —tras la vuelta a CPU del script— viaja en la respuesta).
+    // —tras la vuelta a CPU del script— viaja en la respuesta) y los
+    // hints de rango como 8º y 9º (v1.7, enmienda 2026-11-24:
+    // <min> <max> con centinela '0' = ausente; glosomata YA validó
+    // enteros ≥ 1 con min ≤ max — el script re-valida por defensa
+    // en profundidad).
     const child = spawnGrupo(d.python,
       [d.script, d.pipeline, rutaAudio, String(maxDurS),
-        huellas ? '1' : '0', dispositivo],
+        huellas ? '1' : '0', dispositivo,
+        min ?? '0', max ?? '0'],
       { env: { ...process.env,
         PYANNOTE_METRICS_ENABLED: '0', HF_HUB_OFFLINE: '1' } });
     child.stdin.end(); // stdin cerrado: EOF limpio para el hijo

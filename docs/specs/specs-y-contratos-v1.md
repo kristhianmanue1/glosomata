@@ -62,9 +62,12 @@ sólo validate sobre input humano avanza turno (el agente lo aplica).
 
 Operaciones: speak --text [--engine] | speak --text-stdin [--engine];
 listen [--timeout] [--device nombre-exacto]; diarize --file
-ruta-audio [--embeddings] (ADR-012: turnos de hablante efímeros,
+ruta-audio [--embeddings] [--min-speakers N] [--max-speakers N]
+(ADR-012: turnos de hablante efímeros,
 fuera del canal; con --embeddings, una huella de voz por hablante —
-dato biométrico, sólo stdout, enmienda 2026-11-17; contrato:
+dato biométrico, sólo stdout, enmienda 2026-11-17; hints de rango
+2026-11-24: enteros ≥ 1 con min ≤ max, acotan el conteo sin
+garantizar exactitud; contrato:
 contrato-diarizacion-v1.md); stop; engines; devices
 (inventario de audio, `contrato-hardware-v1.md`); version; doctor;
 templates [--list|--show id]; session new [--template id]; validate

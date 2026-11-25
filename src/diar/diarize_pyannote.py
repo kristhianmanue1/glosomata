@@ -4,11 +4,15 @@
 Contrato con src/diar.mjs (contrato-diarizacion-v1.md §4):
 
 - argv: <este-script> <pipeline_dir> <audio_ruta> <max_duration_s>
-  <embeddings:0|1> <device:cpu|cuda|mps> — SIN contenido: sólo rutas,
-  el tope de duración (H-1, issue #43), el modo de huellas (enmienda
-  2026-11-17) y el dispositivo de cómputo (petición 2026-11-21:
+  <embeddings:0|1> <device:cpu|cuda|mps> <min_speakers:0|N>
+  <max_speakers:0|N> — SIN contenido: sólo rutas, el tope de
+  duración (H-1, issue #43), el modo de huellas (enmienda
+  2026-11-17), el dispositivo de cómputo (petición 2026-11-21:
   default cpu; si el pedido no está disponible vuelve a CPU y el
-  dispositivo EFECTIVO viaja en la salida como "device").
+  dispositivo EFECTIVO viaja en la salida como "device") y los
+  hints de rango de hablantes (v1.7, enmienda 2026-11-24: '0' es
+  centinela de AUSENTE; glosomata YA validó — defensa en
+  profundidad: este script re-valida el mismo rango).
 - Entorno: EXIGE PYANNOTE_METRICS_ENABLED=0 y HF_HUB_OFFLINE=1 (los
   fija glosomata; si no llegan, este script rehúsa — fail-closed, la
   telemetría OFF es decisión del Operador, no un deseo).
@@ -32,6 +36,7 @@ WeSpeaker 256-d en community-1).
 
 import json
 import os
+import re
 import sys
 
 
@@ -41,16 +46,31 @@ def mal_uso(mensaje: str) -> None:
     sys.exit(2)
 
 
+def hint_hablantes(arg: str) -> "int | None":
+    # Hints de rango (v1.7, enmienda 2026-11-24): '0' = AUSENTE
+    # (centinela del contrato §4); N = entero ≥ 1 en decimal
+    # estricto. Defensa en profundidad: glosomata YA rechazó todo
+    # esto en la CLI — el script re-valida y rehúsa (exit 2) sin
+    # confiar en su llamador.
+    if arg == "0":
+        return None
+    if not re.fullmatch(r"[1-9][0-9]*", arg):
+        mal_uso("hint de hablantes debe ser 0 (ausente) o entero >= 1")
+    return int(arg)
+
+
 def main() -> None:
     # sys.argv NO incluye al intérprete: [script, pipeline, audio, max,
-    # embeddings, device] son SEIS elementos (contrato §4: 7 tokens a
-    # nivel OS).
-    if len(sys.argv) != 6:
+    # embeddings, device, min, max] son OCHO elementos (contrato §4:
+    # 9 tokens a nivel OS).
+    if len(sys.argv) != 8:
         mal_uso(
             "uso: diarize_pyannote.py <pipeline_dir> <audio> "
-            "<max_duration_s> <embeddings:0|1> <device:cpu|cuda|mps>"
+            "<max_duration_s> <embeddings:0|1> <device:cpu|cuda|mps> "
+            "<min_speakers:0|N> <max_speakers:0|N>"
         )
-    _, pipeline_dir, audio_ruta, max_dur_arg, emb_arg, dev_arg = sys.argv
+    _, pipeline_dir, audio_ruta, max_dur_arg, emb_arg, dev_arg, \
+        min_arg, max_arg = sys.argv
 
     # Fail-closed sobre el entorno exigido (contrato §4/ADR-012).
     if os.environ.get("PYANNOTE_METRICS_ENABLED") != "0":
@@ -64,6 +84,18 @@ def main() -> None:
 
     if dev_arg not in ("cpu", "cuda", "mps"):
         mal_uso("device debe ser cpu, cuda o mps")
+
+    # Hints de rango (v1.7): defensa en profundidad, MISMO rango que
+    # la CLI — re-validar aquí mantiene fail-closed aunque el
+    # llamador cambie.
+    min_speakers = hint_hablantes(min_arg)
+    max_speakers = hint_hablantes(max_arg)
+    if (
+        min_speakers is not None
+        and max_speakers is not None
+        and min_speakers > max_speakers
+    ):
+        mal_uso("min_speakers no puede exceder a max_speakers")
 
     try:
         max_dur_s = float(max_dur_arg)
@@ -132,7 +164,19 @@ def main() -> None:
             else:
                 pipeline.to(torch.device(dispositivo))
 
-        salida = pipeline(audio_ruta)
+        # Hints de rango (v1.7, enmienda 2026-11-24): viajan como
+        # min_speakers=/max_speakers= (None = ausente; ambos None es
+        # la conducta de siempre: min 1 / max infinito internos).
+        # Semántica del motor (declarada en el contrato §2/§9.7): NO
+        # guían el clustering VBx — corre automático y, si el conteo
+        # queda FUERA del rango, re-clusteriza con K-Means forzado a
+        # la cota y recalcula los centroides. num_speakers NO se
+        # pasa (sólo rango).
+        salida = pipeline(
+            audio_ruta,
+            min_speakers=min_speakers,
+            max_speakers=max_speakers,
+        )
     finally:
         sys.stdout.flush()
         # búferes de libc (H1 r4): una librería C puede tener stdout

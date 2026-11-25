@@ -365,11 +365,13 @@ test('diarize: ok → turnos canónicos, modo exclusive y duration_ms', () => {
   assert.equal(d.mode, 'exclusive');
   assert.ok(Number.isInteger(d.duration_ms) && d.duration_ms >= 0);
   // H-1: el tope de duración viaja como 5º token del argv del script,
-  // el modo de huellas como 6º (enmienda 2026-11-17: '0' sin flag) y
-  // el dispositivo como 7º (petición 2026-11-21: default 'cpu')
+  // el modo de huellas como 6º (enmienda 2026-11-17: '0' sin flag),
+  // el dispositivo como 7º (petición 2026-11-21: default 'cpu') y los
+  // hints de rango como 8º y 9º (v1.7, enmienda 2026-11-24: centinela
+  // '0' = ausente cuando la CLI no los trae)
   const log = JSON.parse(readFileSync(rutaLog, 'utf8'));
   assert.deepEqual(log.argv,
-    [fixScript, fixPipeline, AUDIO_X, '14400', '0', 'cpu']);
+    [fixScript, fixPipeline, AUDIO_X, '14400', '0', 'cpu', '0', '0']);
 });
 
 test('diarize: entorno del subprocess FIJADO (telemetría OFF sin herencia)', () => {
@@ -437,9 +439,9 @@ test('diarize: stdout sobre el tope 16 MiB → inferencia_fallida (H-3 r1)', () 
 // del repo con python3 DEL SISTEMA (stdlib sólo; los imports de
 // pyannote viven DESPUÉS de estos guards): la forma exacta que
 // diar.mjs construye debe pasar el guard de argv, y los exits
-// tempranos (2/3) deben ser los contratados. Desde la petición
-// 2026-11-21 la forma son SEIS tokens tras el intérprete (con el
-// dispositivo).
+// tempranos (2/3) deben ser los contratados. Desde la enmienda
+// v1.7 (2026-11-24) la forma son OCHO tokens tras el intérprete
+// (dispositivo + hints de rango con centinela '0').
 test('script real: guard de argv y exits tempranos sin pyannote', () => {
   const script = new URL('../src/diar/diarize_pyannote.py',
     import.meta.url).pathname;
@@ -450,27 +452,48 @@ test('script real: guard de argv y exits tempranos sin pyannote', () => {
 
   // env sin las dos variables exigidas → exit 2 (rehúsa)
   const sinEnv = correr(
-    ['/no/pipeline', '/no/audio.wav', '14400', '0', 'cpu'],
+    ['/no/pipeline', '/no/audio.wav', '14400', '0', 'cpu', '0', '0'],
     { PYANNOTE_METRICS_ENABLED: undefined, HF_HUB_OFFLINE: undefined });
   assert.equal(sinEnv.status, 2);
 
-  // forma EXACTA de diar.mjs (6 tokens tras el intérprete): el
+  // forma EXACTA de diar.mjs (8 tokens tras el intérprete): el
   // guard acepta y el audio inexistente responde exit 3 ANTES de
   // importar
   const formaReal = correr(
-    ['/no/pipeline', '/no/audio.wav', '14400', '0', 'cpu'], ENV_OK);
+    ['/no/pipeline', '/no/audio.wav', '14400', '0', 'cpu', '0', '0'], ENV_OK);
   assert.equal(formaReal.status, 3);
+  const formaHints = correr(
+    ['/no/pipeline', '/no/audio.wav', '14400', '1', 'mps', '2', '4'], ENV_OK);
+  assert.equal(formaHints.status, 3);
 
-  // token extra o modo de huellas/dispositivo inválido → exit 2
+  // token de más, token de menos, modo de huellas o dispositivo
+  // inválido → exit 2
   const extra = correr(
-    ['/no/p', '/no/a.wav', '1', '0', 'cpu', 'extra'], ENV_OK);
+    ['/no/p', '/no/a.wav', '1', '0', 'cpu', '0', '0', 'extra'], ENV_OK);
   assert.equal(extra.status, 2);
-  const modoMalo = correr(['/no/p', '/no/a.wav', '14400', '2', 'cpu'],
+  const falta = correr(
+    ['/no/p', '/no/a.wav', '14400', '0', 'cpu', '0'], ENV_OK);
+  assert.equal(falta.status, 2);
+  const modoMalo = correr(['/no/p', '/no/a.wav', '14400', '2', 'cpu', '0', '0'],
     ENV_OK);
   assert.equal(modoMalo.status, 2);
   const dispMalo = correr(
-    ['/no/p', '/no/a.wav', '14400', '0', 'tpu'], ENV_OK);
+    ['/no/p', '/no/a.wav', '14400', '0', 'tpu', '0', '0'], ENV_OK);
   assert.equal(dispMalo.status, 2);
+
+  // hints inválidos (v1.7, defensa en profundidad — la CLI ya los
+  // rechaza; el script re-valida SIN confiar en su llamador): no
+  // '0' ni entero ≥ 1, o min > max → exit 2
+  for (const args of [
+    ['/no/p', '/no/a.wav', '14400', '0', 'cpu', 'x', '0'],
+    ['/no/p', '/no/a.wav', '14400', '0', 'cpu', '1.5', '0'],
+    ['/no/p', '/no/a.wav', '14400', '0', 'cpu', '-1', '0'],
+    ['/no/p', '/no/a.wav', '14400', '0', 'cpu', '0', '01'],
+    ['/no/p', '/no/a.wav', '14400', '0', 'cpu', '3', '2'],
+  ]) {
+    const r = correr(args, ENV_OK);
+    assert.equal(r.status, 2, JSON.stringify(args));
+  }
 });
 
 test('diarize: wall-clock evaluado → diar_failed/timeout_inferencia', () => {

@@ -123,13 +123,20 @@ original intacta. La preferencia por defecto
 `GLOSOMATA_CONFIG` — la matriz versionada del repo jamás lleva valores
 personales de hardware.
 
-Además `diarize --file <ruta-audio> [--embeddings]` (2026-11-12,
+Además `diarize --file <ruta-audio> [--embeddings] [--min-speakers N]
+[--max-speakers N]` (2026-11-12,
 D2/ADR-012; huellas opcionales 2026-11-17; `device` en la salida
-2026-11-21):
+2026-11-21; hints de rango 2026-11-24):
 turnos de hablante del archivo en modo EXCLUSIVO, efímero sin
 retención, FUERA del canal (sin `canal.lock`); superficie ESTRICTA
-(`--file` y a lo sumo un `--embeddings` sin valor; cualquier otra
-forma → exit 2 `usage`); sin `--embeddings` la salida es idéntica
+(`--file`, a lo sumo un `--embeddings` sin valor y los hints de
+rango `--min-speakers`/`--max-speakers` con valor — enteros ≥ 1
+con min ≤ max, validados en la CLI → exit 2 `usage`; cualquier
+otra forma → exit 2 `usage`); los hints son ACOTACIÓN del conteo,
+no garantía exacta — el motor corre su clustering automático y
+re-clusteriza con K-Means forzado sólo si el conteo cae fuera del
+rango; `min_speakers` no «encuentra» hablantes que el clustering
+no separó —; sin `--embeddings` la salida es idéntica
 byte a byte — salvo el campo aditivo `device` (v1.6), que viaja
 siempre; con él, `speakers` añade UNA huella de voz por etiqueta
 canónica (dato BIOMÉTRICO: sólo stdout, jamás logs/stderr/disco) y
@@ -137,8 +144,9 @@ canónica (dato BIOMÉTRICO: sólo stdout, jamás logs/stderr/disco) y
 EFECTIVO (`cpu|cuda|mps`, por matriz `engines.diar.device`, default
 cpu, vuelta a CPU si no disponible); semántica
 completa — formas, truncado, causas cerradas de `diar_failed`,
-entorno del subprocess con telemetría OFF, stop cross-process — en
-`contrato-diarizacion-v1.md`. Sin `engines.diar` declarado responde
+entorno del subprocess con telemetría OFF, stop cross-process,
+hints de rango — en `contrato-diarizacion-v1.md`. Sin
+`engines.diar` declarado responde
 `not_supported`.
 
 ## 4. Superficie MCP (S2)
@@ -466,3 +474,10 @@ cosa.
   núcleo (la CLI/MCP no lo ejecuta ni lo instala; ningún test del
   núcleo lo importa); primer artefacto `services/stt-turbo/`. Sin
   cambios de superficie CLI/MCP ni de taxonomía.
+- v1.10 (2026-11-24, enmienda v1.7 del contrato de diarización):
+  `diarize` gana los hints de rango opcionales
+  `--min-speakers`/`--max-speakers` (superficie §3 actualizada):
+  enteros ≥ 1 con min ≤ max, validados en la CLI (exit 2 `usage`);
+  acotación del conteo — clustering automático, re-clustering
+  K-Means forzado sólo fuera del rango —, no garantía exacta. Sin
+  cambios de salida, taxonomía ni contención.

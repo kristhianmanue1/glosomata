@@ -31,12 +31,33 @@ QUIÉN-CUÁNDO con pseudónimos locales a la respuesta.
 
 ## 2. Superficie CLI (única en v1)
 
-`glosomata diarize --file <ruta-audio> [--embeddings]` — superficie
-NUEVA ESTRICTA: `--file` con valor y, opcionalmente, el flag sin
-valor `--embeddings` (a lo sumo una vez, antes o después de
-`--file`); cualquier otra forma → exit 2 `usage` (no hereda la
-tolerancia legacy). SIN tool MCP en v1 (§10); sin flags de hints de
-hablantes; sin selección de modo.
+`glosomata diarize --file <ruta-audio> [--embeddings]
+[--min-speakers N] [--max-speakers N]` — superficie NUEVA ESTRICTA:
+`--file` con valor, el flag sin valor `--embeddings` (a lo sumo una
+vez) y los hints de rango `--min-speakers`/`--max-speakers` con
+valor (v1.7, enmienda 2026-11-24; a lo sumo UNA vez cada uno), en
+cualquier orden relativo entre sí; cualquier otra forma → exit 2
+`usage` (no hereda la tolerancia legacy). SIN tool MCP en v1 (§10);
+sin selección de modo.
+
+Validación de los hints EN NODE (fail-closed, exit 2 `usage`,
+código existente de la taxonomía): enteros ≥ 1 en DECIMAL ESTRICTO
+(sólo dígitos, sin signo, sin ceros a la izquierda — `0`, `-1`,
+`1.5`, `01`, `tres` o un flag en posición de valor: todos
+rechazados) y `min ≤ max` cuando ambos vienen. `num_speakers` NO
+se añade (v1.7 declara SÓLO el rango min/max; pedir el conteo
+exacto es una decisión que NO se tomó).
+
+Semántica honesta de los hints (declaración completa en §9.7): NO
+guían el clustering VBx del motor — éste corre automático y, si el
+conteo queda FUERA del rango pedido, pyannote RE-CLUSTERIZA con
+K-Means forzado a la cota violada (constrained assignment
+desactivado) y recalcula los centroides. El hint es una ACOTACIÓN
+del resultado, no una garantía exacta; las huellas de
+`--embeddings` SIGUEN válidas bajo re-clustering (centroides
+recalculados sobre el mismo espacio de embeddings). La salida no
+cambia de forma: `num_speakers` ya existe y refleja el conteo
+acotado tal como salga del motor.
 
 Forma de respuesta (exit 0, JSON por stdout) — SIN `--embeddings`
 (la de siempre más el campo aditivo `device`, v1.6; históricamente
@@ -152,16 +173,26 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
 ## 4. Motor y entorno del subprocess (EngineDiar)
 
 - Invocación: `<python> <script> <pipeline_dir> <audio_ruta>
-  <max_duration_s> <embeddings:0|1> <device:cpu|cuda|mps>` — argv sin
+  <max_duration_s> <embeddings:0|1> <device:cpu|cuda|mps>
+  <min_speakers:0|N> <max_speakers:0|N>` (OCHO tokens tras el
+  intérprete, 9 a nivel OS) — argv sin
   contenido alguno: sólo rutas (la del audio es exposición
   declarada, §8), el tope de duración en segundos (H-1 del issue
   #43: el límite configurable llega al motor como 5º token; el
   script reporta la duración ANTES de inferir y responde exit 4 si
-  excede), el modo de huellas como 6º (enmienda 2026-11-17) y el
+  excede), el modo de huellas como 6º (enmienda 2026-11-17), el
   dispositivo de cómputo como 7º (v1.6, petición 2026-11-21: el
-  EFECTIVO —tras la vuelta a CPU— viaja en la respuesta `device`).
-  Valor de dispositivo inválido → exit 2 del script (mal uso).
-  stdin cerrado (EOF limpio). stdout del
+  EFECTIVO —tras la vuelta a CPU— viaja en la respuesta `device`)
+  y los hints de rango como 8º y 9º (v1.7, enmienda
+  2026-11-24: `<min> <max>` con centinela `'0'` = AUSENTE; el
+  entero ≥ 1 viaja en decimal estricto tal como lo validó la CLI).
+  Valor de dispositivo inválido → exit 2 del script (mal uso). El
+  script RE-VALIDA los hints por defensa en profundidad (mismo
+  rango: `'0'` o entero ≥ 1, min ≤ max cuando ambos; incumplido →
+  exit 2) aunque glosomata ya los rechazó en la CLI: no confía en
+  su llamador. Con ambos hints ausentes (`'0'`,`'0'`) el pipeline
+  recibe `min_speakers=None`/`max_speakers=None` y su conducta es
+  la de siempre. stdin cerrado (EOF limpio). stdout del
   subprocess: UN objeto JSON con la forma `{"device": usado,
   "turns":[…]}` (etiquetas crudas; glosomata canóniza §2) y, con
   `embeddings=1`, además `{"embeddings": {"<etiqueta cruda>":
@@ -333,12 +364,45 @@ en la taxonomía (contrato de consumo §2.1) se ejecutó con la conducta
    de padding del motor para hablantes «extra») se rechaza
    fail-closed (`inferencia_fallida`): una huella no emparejable
    (coseno indefinido) no se entrega como si lo fuera.
+7. **Hints de rango: acotación, no exactitud** (v1.7, enmienda
+   2026-11-24): `--min-speakers`/`--max-speakers` NO participan en
+   el clustering VBx del motor — corre automático. Sólo si el
+   conteo automático queda FUERA del rango pedido, pyannote
+   re-clusteriza con K-Means FORZADO a la cota violada (constrained
+   assignment desactivado) y recalcula los centroides con los
+   miembros resultantes; el conteo instantáneo de hablantes también
+   se acota por `max_speakers`. El hint NO garantiza un conteo
+   exacto: pyannote además acota al número de embeddings del tramo
+   (un audio demasiado corto puede entregar MENOS que
+   `min_speakers` — el propio motor lo advierte — o no poder formar
+   los clusters pedidos, en cuyo caso la llamada falla
+   `inferencia_fallida`: fail-closed, sin resultado parcial;
+   verificado: 0.93 s de audio con `--min-speakers 5` →
+   `num_speakers: 1`, entregado sin fallo).
+   `min_speakers` NO «encuentra» hablantes que el clustering
+   automático no separó: sólo parte en más pedazos lo que ya estaba
+   junto — declarar 3 hablantes donde el motor «oye» 2 entrega una
+   tercera etiqueta con material de los otros dos, no un hablante
+   que estuviera oculto. Las HUELLAS de `--embeddings` siguen
+   válidas bajo re-clustering — son centroides del mismo espacio de
+   embeddings, recalculados —, pero su geometría CAMBIA con el
+   conteo forzado (verificado en motor real, historia v1.7): un
+   rango que CONTIENE el conteo automático no re-clusteriza (coseno
+   1.000000 contra la corrida sin hints); forzar MÁS clusters que
+   voces reales parte una voz en pedazos que siguen emparejando
+   alto con su original (0.98 en el ensayo) y añade una etiqueta
+   casi-duplicada; forzar MENOS mezcla las voces en un centroide
+   intermedio (0.72–0.81 contra cada original: ya no es «una de
+   las dos»).
 
 ## 10. Lo que v1 NO ofrece (pacto de no sorpresa)
 
 Sin tool MCP (una ruta de filesystem por MCP rompe la frontera curada;
 consumidor MCP real → decisión + ADR), sin scores o confianza en la
-salida, sin hints `num/min/max_speakers`, sin modo con
+salida, sin hint `num_speakers` (SÓLO el rango opcional
+`--min-speakers`/`--max-speakers` de la enmienda v1.7, autorizada
+2026-11-24 — la exclusión «sin hints num/min/max_speakers» de esta
+lista queda RETIRADA por esa enmienda), sin modo con
 solapes (regular), sin audio por stdin, sin streaming, sin cola, sin
 servidor, sin retención. Las huellas de voz SON opcionales desde la
 enmienda v1.5 (`--embeddings`, ADR-012 2026-11-17): aditivas, sólo
@@ -443,3 +507,38 @@ humana y ADR propios.
   la ronda r3, corregido). Guía de
   despliegue CUDA para el Dell en `docs/diarize-dispositivo-gpu.md`.
   El contrato SIGUE NORMATIVO.
+- v1.7 (2026-11-24): **hints de rango de hablantes opcionales**
+  (enmienda autorizada por el Operador vía orquestador
+  2026-11-24; origen: tequio fase 3 parte A, casos reales
+  3-con-2 / 2-de-3 / 15-en-2h): `--min-speakers`/`--max-speakers`
+  (enteros ≥ 1 en decimal estricto, min ≤ max cuando ambos,
+  validados EN NODE → exit 2 `usage`, código existente) viajan al
+  script como 8º y 9º tokens con centinela `'0'` = ausente; el
+  script los RE-VALIDA (defensa en profundidad, exit 2) y los pasa
+  al pipeline como `min_speakers=`/`max_speakers=`. Semántica
+  declarada §2/§9.7: el clustering VBx corre automático — el hint
+  NO lo guía — y sólo si el conteo cae fuera del rango pyannote
+  re-clusteriza con K-Means forzado y recalcula centroides:
+  acotación del resultado, no garantía exacta. RETIRADA la
+  exclusión «sin hints num/min/max_speakers» de §10 (el hint
+  `num_speakers` exacto sigue SIN añadirse). Sin cambios de
+  salida (num_speakers ya refleja el conteo acotado), schema/
+  matriz, embeddings, dispositivo, cuarentena de stdout, cerrojo,
+  stop/truncado ni taxonomía. **Verificado en motor real** (audio
+  sintético de 2 voces `say` Diego/Paulina, 34.4 s, mps — patrón
+  del ensayo D3 §9.4): `--max-speakers 1` → `num_speakers: 1`
+  (11.5 s de operación; camino K-Means real ejercitado),
+  `--min-speakers 3` → `num_speakers: 3` (8.8 s), sin hints → 2;
+  coseno de huellas min=2,max=2 vs sin hints sobre el mismo audio:
+  1.000000 (el conteo automático de ese audio ES 2: ese rango no
+  re-clusteriza); bajo re-clustering real, min=3 parte una voz
+  (cosenos 0.980/0.978 contra su original) y max=1 mezcla ambas
+  (0.81/0.72). Borde de embeddings insuficientes verificado: audio
+  de 0.93 s con `--min-speakers 5` → `num_speakers: 1`, entregado
+  sin fallo (el motor acota: el hint no conjura hablantes). Tests
+  herméticos: suite nueva
+  `tests/diarize-hints.test.mjs` (argv con centinela, posiciones
+  relativas, usage, passthrough sin acotar, huellas+hints) y el
+  argv de 8 tokens anclado en `tests/diarize-op.test.mjs`
+  (frontera Node↔script real incluida). El contrato SIGUE
+  NORMATIVO.
